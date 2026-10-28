@@ -66,6 +66,14 @@ case "$ABS_FILE" in
     ;;
 esac
 
+# A .git directory or file anywhere would let git load an attacker-written config.
+case "/$REL/" in
+  */.git/*)
+    echo "Write guard: writing into a .git directory or file ('$REL') is not permitted." >&2
+    exit 2
+    ;;
+esac
+
 for allowed in "$@"; do
   case "$allowed" in
     */) case "$REL" in "$allowed"*) exit 0 ;; esac ;;

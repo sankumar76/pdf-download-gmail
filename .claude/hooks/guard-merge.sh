@@ -35,7 +35,8 @@ fi
 EXPECTED="$(gh api "repos/$OWNER/$REPO/pulls/$PR" --jq '.changed_files' 2>/dev/null | tr -d '\r')" \
   || deny "could not read $OWNER/$REPO#$PR."
 # One line per file; renames also emit the old path so a move out of code is caught.
-LISTING="$(gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/files" --jq '.[] | "F \(.filename)", (select(.previous_filename) | "F \(.previous_filename)"), "#"' 2>/dev/null | tr -d '\r')" \
+# Names are JSON-encoded so a newline inside a filename cannot forge extra lines.
+LISTING="$(gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/files" --jq '.[] | "F \(.filename | @json)", (select(.previous_filename) | "F \(.previous_filename | @json)"), "#"' 2>/dev/null | tr -d '\r')" \
   || deny "could not list the files changed by $OWNER/$REPO#$PR."
 LISTED="$(printf '%s\n' "$LISTING" | grep -c '^#$')"
 # The files API stops at 3000 entries; a count mismatch means we did not see everything.
@@ -44,7 +45,7 @@ LISTED="$(printf '%s\n' "$LISTING" | grep -c '^#$')"
 FILES="$(printf '%s\n' "$LISTING" | sed -n 's/^F //p')"
 [ -n "$FILES" ] || deny "$OWNER/$REPO#$PR has no changed files listed."
 
-NON_DOCS="$(printf '%s\n' "$FILES" | grep -v '^docs/' || true)"
+NON_DOCS="$(printf '%s\n' "$FILES" | grep -v '^"docs/' || true)"
 if [ -n "$NON_DOCS" ]; then
   deny "MERGE_POLICY reserves code merges for a human. $OWNER/$REPO#$PR changes files outside docs/: $(printf '%s' "$NON_DOCS" | tr '\n' ' '). Label the PR awaiting-human-merge and stop."
 fi

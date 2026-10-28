@@ -30,22 +30,35 @@ PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 # Backslashes are dropped first because the shell would unescape g\it to git.
 is_git_word() { local w="${1//\\/}"; w="${w##*/}"; w="${w%.exe}"; [ "$w" = "git" ]; }
 
+is_project_root() {
+  local p="$1"
+  case "$p" in /*) ;; *) p="$PROJECT_ROOT/$p" ;; esac
+  [ "$(realpath -m "$p" 2>/dev/null)" = "$(realpath -m "$PROJECT_ROOT" 2>/dev/null)" ]
+}
+
 # Arguments: the words following "git". Returns 0 if the invocation is read-only.
 git_invocation_ok() {
-  # Skip harmless global options. -c / --config-env / --exec-path are deliberately
-  # absent: they can set aliases, pagers or helpers that run arbitrary commands.
+  # Skip harmless global options. -c, --config-env, --exec-path, --git-dir and
+  # --work-tree are deliberately absent: they can load a config (aliases, pager,
+  # fsmonitor) that runs arbitrary commands. -C may only point at the project root.
   while [ $# -gt 0 ]; do
     case "$1" in
-      -C|--git-dir|--work-tree|--namespace) shift 2 2>/dev/null || shift ;;
-      -C?*|--git-dir=*|--work-tree=*|--namespace=*|--no-pager|-P|--no-optional-locks|--bare|--literal-pathspecs|--no-replace-objects) shift ;;
+      -C) [ $# -ge 2 ] && is_project_root "$2" || return 1; shift 2 ;;
+      -C?*) is_project_root "${1#-C}" || return 1; shift ;;
+      --no-pager|-P|--no-optional-locks|--literal-pathspecs|--no-replace-objects) shift ;;
       *) break ;;
     esac
   done
   local sub="${1:-}"; [ $# -gt 0 ] && shift
-  local a
+  local a name d
   for a in "$@"; do                            # options that write files or run commands
+    case "$a" in -O*) return 1 ;; esac
     case "$a" in
-      --output*|-O*|--open-files-in-pager*|--upload-pack*|--exec*|--ext-diff|--textconv) return 1 ;;
+      --?*)                                    # git accepts unambiguous prefixes: --out == --output
+        name="${a%%=*}"
+        for d in --output --open-files-in-pager --upload-pack --exec --exec-path --ext-diff --textconv; do
+          case "$d" in "$name"*) return 1 ;; esac
+        done ;;
     esac
   done
   case "$sub" in
@@ -86,25 +99,40 @@ git_invocation_ok() {
 # bash -c "git push" is still seen as git push.
 SEGMENTS="$(printf '%s\n' "$CMD" | tr ';&|()`' '\n\n\n\n\n\n' | tr -d "\"'")"
 
+HAS_GIT=0 ENV_OR_CD=""
 while IFS= read -r segment; do
   read -r -a words <<< "$segment" || true
   [ "${#words[@]}" -eq 0 ] && continue
   for i in "${!words[@]}"; do
     w="${words[$i]}"
+    # Assignments (GIT_PAGER=…, export PAGER=…) and directory changes can point git at
+    # a different config; they are only rejected if the command also runs git.
+    if [[ "$w" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || [ "$w" = "cd" ] || [ "$w" = "pushd" ]; then
+      ENV_OR_CD="$w"
+    fi
     # Command position: the first word, or the word after a wrapper such as xargs.
     if [ "$i" = 0 ] || case "${words[$((i - 1))]}" in xargs|env|command|nohup|nice|time|sudo|builtin) true ;; *) false ;; esac; then
       case "$w" in
         *\$*|*\**|*\?*|*\[*|*\{*) block "command name '$w' uses expansion" ;;
       esac
     fi
+    # Anywhere else (e.g. find -exec g?t), a glob that could expand to "git" counts as git.
+    # A lone * is left alone so that ls * and cat docs/* keep working.
+    base="${w//\\/}"; base="${base##*/}"
+    if [ "$base" != "*" ] && [[ "$base" == *[\*\?\[]* ]] && [[ git == $base || git.exe == $base ]]; then
+      block "'$w' could expand to git"
+    fi
     case "$w" in
       eval|exec) block "'$w' is not permitted" ;;
       *=git|*=*/git|*=git.exe) block "assigning git to a variable" ;;
     esac
     if is_git_word "$w"; then
+      HAS_GIT=1
       git_invocation_ok "${words[@]:$((i + 1))}" || block "non-read-only git command"
     fi
   done
 done <<< "$SEGMENTS"
+
+[ "$HAS_GIT" = 1 ] && [ -n "$ENV_OR_CD" ] && block "'$ENV_OR_CD' cannot be combined with git; run git from the project root without environment overrides"
 
 exit 0
