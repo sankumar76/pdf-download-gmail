@@ -67,12 +67,25 @@ case "$ABS_FILE" in
 esac
 
 # A .git directory or file anywhere would let git load an attacker-written config.
-case "/$REL/" in
-  */.git/*)
-    echo "Write guard: writing into a .git directory or file ('$REL') is not permitted." >&2
+# Windows also opens .GIT, ".git." / ".git " (trailing dots and spaces dropped),
+# the 8.3 short name GIT~1 and .git::$INDEX_ALLOCATION as the same directory.
+case "$REL" in
+  *:*)
+    echo "Write guard: ':' is not allowed in a path ('$REL')." >&2
     exit 2
     ;;
 esac
+IFS='/' read -r -a SEGS <<< "$REL"
+for seg in "${SEGS[@]}"; do
+  seg="${seg,,}"
+  while [[ "$seg" == *[.\ ] ]]; do seg="${seg%?}"; done
+  case "$seg" in
+    .git|git~[0-9]*)
+      echo "Write guard: writing into a .git directory or file ('$REL') is not permitted." >&2
+      exit 2
+      ;;
+  esac
+done
 
 for allowed in "$@"; do
   case "$allowed" in

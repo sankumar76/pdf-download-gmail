@@ -13,8 +13,10 @@ set -u
 INPUT="$(cat)"
 if command -v jq >/dev/null 2>&1; then
   CMD="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')"
+  CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // empty')"
 elif command -v python3 >/dev/null 2>&1; then
   CMD="$(printf '%s' "$INPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tool_input",{}).get("command",""))')"
+  CWD="$(printf '%s' "$INPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("cwd",""))' | tr -d '\r')"
 else
   echo "Git guard: neither jq nor python3 is installed; command blocked. Install jq." >&2
   exit 2
@@ -27,13 +29,21 @@ block() {
 
 PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 
-# Backslashes are dropped first because the shell would unescape g\it to git.
-is_git_word() { local w="${1//\\/}"; w="${w##*/}"; w="${w%.exe}"; [ "$w" = "git" ]; }
+# Backslashes are dropped first because the shell would unescape g\it to git;
+# lowercased because Windows resolves GIT and Git.EXE to git.exe.
+is_git_word() { local w="${1//\\/}"; w="${w##*/}"; w="${w,,}"; w="${w%.exe}"; [ "$w" = "git" ]; }
+
+# Canonical absolute path; cygpath maps Windows forms (C:\x, C:/x) to /c/x first.
+norm_path() {
+  local p="$1"
+  command -v cygpath >/dev/null 2>&1 && p="$(cygpath -u "$p" 2>/dev/null || printf '%s' "$p")"
+  realpath -m "$p" 2>/dev/null
+}
 
 is_project_root() {
   local p="$1"
-  case "$p" in /*) ;; *) p="$PROJECT_ROOT/$p" ;; esac
-  [ "$(realpath -m "$p" 2>/dev/null)" = "$(realpath -m "$PROJECT_ROOT" 2>/dev/null)" ]
+  case "$p" in /*|[A-Za-z]:*) ;; *) p="$PROJECT_ROOT/$p" ;; esac
+  [ "$(norm_path "$p")" = "$(norm_path "$PROJECT_ROOT")" ]
 }
 
 # Arguments: the words following "git". Returns 0 if the invocation is read-only.
@@ -118,7 +128,7 @@ while IFS= read -r segment; do
     fi
     # Anywhere else (e.g. find -exec g?t), a glob that could expand to "git" counts as git.
     # A lone * is left alone so that ls * and cat docs/* keep working.
-    base="${w//\\/}"; base="${base##*/}"
+    base="${w//\\/}"; base="${base##*/}"; base="${base,,}"
     if [ "$base" != "*" ] && [[ "$base" == *[\*\?\[]* ]] && [[ git == $base || git.exe == $base ]]; then
       block "'$w' could expand to git"
     fi
@@ -133,6 +143,13 @@ while IFS= read -r segment; do
   done
 done <<< "$SEGMENTS"
 
+# The shell's working directory persists between Bash calls, so a cd in an earlier
+# call could point git at a planted (possibly bare) repository. Pin git to the root.
+if [ "$HAS_GIT" = 1 ]; then
+  CWD_REAL="$(norm_path "${CWD:-$(pwd)}")"
+  [ -n "$CWD_REAL" ] && [ "$CWD_REAL" = "$(norm_path "$PROJECT_ROOT")" ] \
+    || block "git must run from the project root (current directory: ${CWD:-unknown}); cd back to the project root first"
+fi
 [ "$HAS_GIT" = 1 ] && [ -n "$ENV_OR_CD" ] && block "'$ENV_OR_CD' cannot be combined with git; run git from the project root without environment overrides"
 
 exit 0
