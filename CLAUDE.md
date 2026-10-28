@@ -64,7 +64,9 @@ them) follows the rules in this file. Role-specific behaviour lives in
 | `qa-engineer`          | Test plan, acceptance verification, regression, defects     | `docs/07-qa/**`, `tests/**`    |
 
 Agents must **not** write outside their "Writes to" area. Write guards in
-`.claude/hooks/restrict-writes.sh` enforce this for non-developer roles.
+`.claude/hooks/restrict-writes.sh` enforce this for non-developer roles;
+`.claude/hooks/block-git-writes.sh` keeps read-only roles to read-only git commands, and
+`.claude/hooks/guard-merge.sh` enforces `MERGE_POLICY` on every PR merge.
 
 ---
 

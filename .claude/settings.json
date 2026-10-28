@@ -36,6 +36,12 @@
       "Bash(git push * master*)",
       "Bash(git push * develop*)",
       "Bash(git push * release/*)",
+      "Bash(git push *:*)",
+      "Bash(git push *+*)",
+      "Bash(git push --all*)",
+      "Bash(git push * --all*)",
+      "Bash(git push --mirror*)",
+      "Bash(git push * --mirror*)",
       "Bash(git push --delete*)",
       "Bash(git push * --delete*)",
       "Bash(git merge*)",
@@ -50,11 +56,26 @@
       "mcp__github__delete_file",
       "mcp__github__create_repository",
       "mcp__github__fork_repository",
+      "mcp__github__push_files",
+      "mcp__github__create_or_update_file",
       "Read(./.env)",
       "Read(./.env.*)",
       "Read(./**/secrets/**)",
       "Read(./**/*.pem)",
       "Read(./**/*.key)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__github__merge_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-merge.sh\""
+          }
+        ]
+      }
     ]
   },
   "env": {

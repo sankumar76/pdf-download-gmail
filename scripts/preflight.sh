@@ -16,6 +16,8 @@ ok "Claude Code: $(claude --version 2>/dev/null | head -1)"
 command -v jq >/dev/null || command -v python3 >/dev/null || fail "Install jq (needed by the write guards)."
 ok "JSON parser available"
 
+command -v gh >/dev/null || warn "GitHub CLI (gh) not found — the merge guard will block all agent merges, including docs PRs."
+
 [ -n "${GITHUB_PAT:-}" ] || fail "GITHUB_PAT is not set (fine-grained token: contents, pull requests, issues = read/write; metadata = read)."
 ok "GITHUB_PAT set"
 

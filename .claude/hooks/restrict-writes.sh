@@ -18,9 +18,9 @@ INPUT="$(cat)"
 
 extract_path() {
   if command -v jq >/dev/null 2>&1; then
-    printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty'
+    printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.notebook_path // .tool_input.path // empty'
   elif command -v python3 >/dev/null 2>&1; then
-    printf '%s' "$INPUT" | python3 -c 'import sys,json; t=json.load(sys.stdin).get("tool_input",{}); print(t.get("file_path") or t.get("path") or "")'
+    printf '%s' "$INPUT" | python3 -c 'import sys,json; t=json.load(sys.stdin).get("tool_input",{}); print(t.get("file_path") or t.get("notebook_path") or t.get("path") or "")'
   else
     echo "__NO_PARSER__"
   fi
@@ -33,8 +33,12 @@ if [ "$FILE_PATH" = "__NO_PARSER__" ]; then
   exit 2
 fi
 
-# Nothing to check (tool call without a path) — allow.
-[ -z "$FILE_PATH" ] && exit 0
+# This hook only runs for write tools, so a missing path means an unrecognised
+# input shape — fail closed rather than let an unchecked write through.
+if [ -z "$FILE_PATH" ]; then
+  echo "Write guard: could not determine the target path of this write, so it is blocked. Allowed locations: $*" >&2
+  exit 2
+fi
 
 PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 
