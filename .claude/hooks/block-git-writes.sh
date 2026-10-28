@@ -25,18 +25,29 @@ block() {
   exit 2
 }
 
-is_git_word() { local w="${1##*/}"; w="${w%.exe}"; [ "$w" = "git" ]; }
+PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+
+# Backslashes are dropped first because the shell would unescape g\it to git.
+is_git_word() { local w="${1//\\/}"; w="${w##*/}"; w="${w%.exe}"; [ "$w" = "git" ]; }
 
 # Arguments: the words following "git". Returns 0 if the invocation is read-only.
 git_invocation_ok() {
-  while [ $# -gt 0 ]; do                       # skip git's global options
+  # Skip harmless global options. -c / --config-env / --exec-path are deliberately
+  # absent: they can set aliases, pagers or helpers that run arbitrary commands.
+  while [ $# -gt 0 ]; do
     case "$1" in
-      -C|-c|--git-dir|--work-tree|--namespace) shift 2 2>/dev/null || shift ;;
-      -C*|-c*|--git-dir=*|--work-tree=*|--namespace=*|--no-pager|-P|--no-optional-locks|--bare|--literal-pathspecs|--no-replace-objects) shift ;;
+      -C|--git-dir|--work-tree|--namespace) shift 2 2>/dev/null || shift ;;
+      -C?*|--git-dir=*|--work-tree=*|--namespace=*|--no-pager|-P|--no-optional-locks|--bare|--literal-pathspecs|--no-replace-objects) shift ;;
       *) break ;;
     esac
   done
   local sub="${1:-}"; [ $# -gt 0 ] && shift
+  local a
+  for a in "$@"; do                            # options that write files or run commands
+    case "$a" in
+      --output*|-O*|--open-files-in-pager*|--upload-pack*|--exec*|--ext-diff|--textconv) return 1 ;;
+    esac
+  done
   case "$sub" in
     status|diff|log|show|blame|grep|ls-files|ls-tree|rev-parse|describe|shortlog|cat-file|merge-base|fetch) return 0 ;;
     remote)
@@ -55,16 +66,18 @@ git_invocation_ok() {
         esac
       done
       return 0 ;;
-    checkout|switch)                           # move to an existing ref only — no create, discard or force
-      local refs=0 a
+    checkout|switch)                           # move to an existing commit only — no create, discard or force
+      local ref=""
       for a in "$@"; do
         case "$a" in
           --detach|-q|--quiet) ;;
-          -*|.) return 1 ;;
-          *) refs=$((refs + 1)) ;;
+          -*) return 1 ;;
+          *) [ -z "$ref" ] || return 1; ref="$a" ;;
         esac
       done
-      [ "$refs" = 1 ] ;;
+      # A path (git checkout file.py) would discard local changes; require a real commit-ish.
+      [ -n "$ref" ] && [ ! -e "$PROJECT_ROOT/$ref" ] \
+        && git -C "$PROJECT_ROOT" rev-parse --verify --quiet "$ref^{commit}" >/dev/null 2>&1 ;;
     *) return 1 ;;
   esac
 }
@@ -76,11 +89,14 @@ SEGMENTS="$(printf '%s\n' "$CMD" | tr ';&|()`' '\n\n\n\n\n\n' | tr -d "\"'")"
 while IFS= read -r segment; do
   read -r -a words <<< "$segment" || true
   [ "${#words[@]}" -eq 0 ] && continue
-  case "${words[0]}" in
-    \$*) block "indirect command name '${words[0]}'" ;;
-  esac
   for i in "${!words[@]}"; do
     w="${words[$i]}"
+    # Command position: the first word, or the word after a wrapper such as xargs.
+    if [ "$i" = 0 ] || case "${words[$((i - 1))]}" in xargs|env|command|nohup|nice|time|sudo|builtin) true ;; *) false ;; esac; then
+      case "$w" in
+        *\$*|*\**|*\?*|*\[*|*\{*) block "command name '$w' uses expansion" ;;
+      esac
+    fi
     case "$w" in
       eval|exec) block "'$w' is not permitted" ;;
       *=git|*=*/git|*=git.exe) block "assigning git to a variable" ;;
