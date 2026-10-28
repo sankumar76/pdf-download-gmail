@@ -37,7 +37,7 @@ them) follows the rules in this file. Role-specific behaviour lives in
 | Jira status mapping | Draft=To Do, Ready=Ready for Dev, In Progress=In Progress, In Review=In Review, Changes Requested=In Progress, In QA=In QA, Rejected=In Progress, Done=Done, Blocked=Blocked | Must match your workflow's status names |
 | Delivery lead Jira user | Santhosh | @-mentioned when human approval is needed |
 | GitHub repository | sankumar76/PDF-Download-Gmail | |
-| Base branch | <<main>> | |
+| Base branch | main | |
 | `AUTOMATION_LEVEL` | **full** | `full` = no prompts between phases; agents stop only at `HUMAN_APPROVAL_POINTS` or hard blockers. `gated` = orchestrator asks before each phase. |
 | `HUMAN_APPROVAL_POINTS` | **G8** | Comma list of gates that wait for a human (e.g. `G2,G3,G8`). |
 | `MERGE_POLICY` | **docs-auto, code-human** | `docs-auto, code-human` = orchestrator merges docs-only PRs after GO; code PRs wait for a human. `all-auto` = orchestrator also merges code PRs after G7 GO. |
