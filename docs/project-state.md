@@ -14,7 +14,7 @@
 | Next gate          | G4 Backlog Ready (G3 conditions C7–C10 due; C11 gates R2 GUI stories) |
 | Current sprint     | —                        |
 | Overall health     | 🟢 Green                 |
-| Last updated       | 2026-10-29 by orchestrator |
+| Last updated       | 2026-10-29 by master (D-29..D-34) |
 
 ## Request (G0 Intake)
 
@@ -47,6 +47,11 @@
 
 | ID | Question | Raised by | Owner | Needed by | Status |
 |----|----------|-----------|-------|-----------|--------|
+| Q-01 | Target date or deadline for the MVP and the GUI? | business-analyst | Santhosh | G2 | ✅ Answered 2026-10-29: as soon as possible, no fixed date; R1 (core + CLI) first (D-33) |
+| Q-02 | Which operating systems must be supported? | business-analyst | Santhosh | G2 | ✅ Answered 2026-10-29: Windows 11 is the target OS (D-33) |
+| Q-04 | Personal Gmail or Workspace? Consent screen in Testing or In production? | business-analyst | Santhosh | G8 (D-28) | ⏳ Delivery lead unsure. ASSUMPTION-04 stands (Testing, 7-day token expiry); re-check at G8 (D-34) |
+| Q-10 | Retention, clean-up and privacy expectations for downloads, logs and CSV reports? | business-analyst | Santhosh | G8 (PA-08) | ⏳ Delivery lead unsure. The assumption stands (the user manages retention, no telemetry); re-check at G8 (D-34) |
+| Q-12 | Current manual effort and volume, for a measured baseline? | business-analyst | Santhosh | G2 (nice to have) | ✅ Answered 2026-10-29: about 30 s per PDF done by hand; this is the time-saved baseline (D-33) |
 
 ## Blockers
 
@@ -58,13 +63,14 @@
 
 | ID | Item | Owner | Status |
 |----|------|-------|--------|
-| T-01 | Append the Jira key correction (PDG → PGD) and the product-form decision to CLAUDE.md. CLAUDE.md is append-only, and the orchestrator is write-guarded from it. | Santhosh (human) | ✅ Done (key fixed in CLAUDE.md §1/§1a; working-copy change, commit pending by Santhosh) |
+| T-01 | Append the Jira key correction (PDG → PGD) and the product-form decision to CLAUDE.md. CLAUDE.md is append-only, and the orchestrator is write-guarded from it. | Santhosh (human) | ✅ Done (key fixed in CLAUDE.md §1/§1a; committed on `main` as 52ff508; RISK-002 closed 2026-10-29) |
 | T-02 | Jira workflow status categories look wrong: "Blocked" is in the *done* category and "Done" is in the *in-progress* category. JQL and reports that use `statusCategory` will mislead. | Santhosh (Jira admin) | ✅ Done (verified by master via Jira statuses; RISK-004 closed) |
 
 ## Activity Log (newest first)
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-10-29 | master | Recorded the delivery lead's decisions of 2026-10-29 (PGD-1 c.10108) as D-29..D-34. D-29: shadcn/ui is not used; supersedes the shadcn part of D-20. D-30: coverage ≥ 80 % on changed code and ≥ 80 % for the whole package; supersedes the D-24 thresholds. D-31: D-25 pragma exceptions are obsolete. D-32: coding-standards §10 now carries the no-overwrite `_1`/`_2` rule and §7 has no web budgets; supersedes D-26, and the G3 standards follow-up is done (e71302b, 834f7d2, 481a46f). D-33: Q-01 (ASAP, no fixed date), Q-02 (Windows 11) and Q-12 (≈ 30 s per PDF) answered. D-34: Q-04 and Q-10 stay assumptions until the G8 re-check. Closed RISK-002 (52ff508 on `main`) and RISK-019 | docs/00-governance/decision-log.md, risk-register.md; docs/project-state.md; PGD-1 |
 | 2026-10-29 | master | G3 Solution Design: **CONDITIONAL GO** (attempt 1). All mandatory checks passed. G2 C6 closed; C5(c) (needed-by dates) carried into C7. Conditions C7–C10 due at G4; C11 blocks R2 GUI stories until spike S-02 passes and ADR-001 is Accepted. Logged D-14..D-28: PD-11..16; ADR rulings (PySide6 Proposed, exit codes 0–3, dry run fetches no bytes, default paths, coverage gates); standards rulings on `# pragma: no cover` (two exceptions allowed, one rejected) and on file writes (no-clobber move, exclusive create, `os.replace` only for app-owned files); Q-04 moved to G8. Registered RISK-014..019; reduced RISK-001, 007 and 008 | docs/00-governance/gate-log.md, decision-log.md, risk-register.md; PGD-1 |
 | 2026-10-29 | master | G2 Product Definition: **CONDITIONAL GO** (attempt 1). The four mandatory checks passed: 66/66 FRs trace to goals, the NFRs are quantified, MVP R1+R2 is defined with MoSCoW, and success metrics exist. G1 C1–C4 closed. Conditions C5 and C6 due at G3. Logged D-04..D-13 and registered RISK-010..013 | docs/00-governance/gate-log.md, decision-log.md, risk-register.md; PGD-1 |
 | 2026-10-29 | master | G1 Discovery: **CONDITIONAL GO** (attempt 1). All mandatory checks passed (37/37 source IDs catalogued). Conditions C1–C4 due at G2. Registered RISK-007..009; logged D-03 (Q-11 performance part moves to G2) | docs/00-governance/gate-log.md, risk-register.md, decision-log.md; PGD-1 |
