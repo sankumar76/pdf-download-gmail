@@ -10,11 +10,11 @@
 | Project            | PDF-Download-gmail — Gmail PDF Attachment Downloader |
 | Jira Intake issue  | [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1) (project key **PGD**) |
 | Current phase      | G4 Backlog Ready (epics and sprint-1 stories) |
-| Last gate passed   | G3 Solution Design (CONDITIONAL GO, 2026-10-29) |
-| Next gate          | G4 Backlog Ready (G3 conditions C7–C10 due; C11 gates R2 GUI stories) |
+| Last gate passed   | G4 Backlog Ready, sprint 01 (CONDITIONAL GO, 2026-10-29) |
+| Next gate          | G5/G6/G7 per story, starting with PGD-12 (STORY-02.01). Conditions C11–C14 are open (see the G4 row) |
 | Current sprint     | —                        |
 | Overall health     | 🟢 Green                 |
-| Last updated       | 2026-10-29 by master (D-29..D-34) |
+| Last updated       | 2026-10-29 by master (G4 CONDITIONAL GO; D-35..D-39) |
 
 ## Request (G0 Intake)
 
@@ -35,7 +35,7 @@
 | G1 Discovery            | ✅ CONDITIONAL GO | 2026-10-29 | `docs/00-governance/gate-log.md` (G1, attempt 1); conditions C1 (business-analyst: brief §10 risk table), C2–C4 (product-manager: audit-trail metric, quantified performance NFR per D-03, confirm GOAL-09), all due G2; risks RISK-007..009; decision D-03; [PGD-1 comment 10088](https://sankumar76.atlassian.net/browse/PGD-1?focusedCommentId=10088) (decision), [10089](https://sankumar76.atlassian.net/browse/PGD-1?focusedCommentId=10089) (risks) |
 | G2 Product Definition   | ✅ CONDITIONAL GO | 2026-10-29 | `docs/00-governance/gate-log.md` (G2, attempt 1). G1 C1–C4 all closed. Conditions: C5 (business-analyst: mirror GOAL-10 in the brief, resolve Q-05/06/09/13/Q-11-perf, move the Q-01/02/10 needed-by dates) and C6 (product-manager: reconcile NFR-022 coverage with coding-standards §6 and the DoD; correct the FR-039..044 references), both due G3. Decisions D-04..D-13 (PD-01..09, GOAL-10). Risks RISK-010..013. [PGD-1 comment 10095](https://sankumar76.atlassian.net/browse/PGD-1?focusedCommentId=10095) (decision), [10096](https://sankumar76.atlassian.net/browse/PGD-1?focusedCommentId=10096) (risks) |
 | G3 Solution Design      | ✅ CONDITIONAL GO | 2026-10-29 | `docs/00-governance/gate-log.md` (G3, attempt 1). All 5 mandatory checks passed (FR 66/66 and NFR 25/25 covered, checked by script; ADR-001..007 with alternatives; security §8; UX covers all 66 FRs with states; accessibility target). G2 C6 closed; C5 partly closed, rest carried into C7. Conditions, all due G4: C7 (business-analyst: Q needed-by dates, Q-03/07/08/11 resolved, DR-005 Confidential), C8 (product-manager: NFR-009/AR-03, FR-032 vs GOAL-10/AQ-03, AQ-04/AA-07/08/11, PRD §12 closures), C9 (ux-expert: UX-I-01..06, refresh rate, UA-05), C10 (solution-architect: v0.2 refs and D-25/D-26 alignment). C11 (solution-architect: S-02 passes and ADR-001 Accepted before any EPIC-09/10 story is Ready; no later than W4). Decisions D-14..D-28 (PD-11..16, ADR rulings, standards rulings D-25/D-26). Risks RISK-014..019; RISK-001/007/008 reduced. PGD-1 gate and risk comments |
-| G4 Backlog Ready        | ⏳ Pending | | |
+| G4 Backlog Ready        | ✅ CONDITIONAL GO (sprint 01) | 2026-10-29 | `docs/00-governance/gate-log.md` (G4 Sprint 01, attempt 1). All 3 mandatory checks passed (0 Critical; 7/7 stories DoR READY, master read PGD-12/13/15 in full; all trace to epics and FR/NFR). G3 **C7, C8, C9, C10 closed**; C11 carried (open by design). New conditions: C12 (solution-architect + qa-engineer: CC-02 ADR-007 gate vs NFR-002, before STORY-02.09 is Ready), C13 (PM/UX/SA: Minor CC-03..05, 07, 10..12; sprint-02 G4), C14 (scrum-master/PO: stale "Status: Draft" text in story descriptions and backlog.md; sprint-02 G4). Decisions D-35..D-39. RISK-020 registered; RISK-010/014 re-assessed. [PGD-1 comment 10135](https://sankumar76.atlassian.net/browse/PGD-1?focusedCommentId=10135) (decision), [10136](https://sankumar76.atlassian.net/browse/PGD-1?focusedCommentId=10136) (risks) |
 | G8 Release Readiness    | ⏳ Pending | | |
 
 ## Story Board (current sprint)
@@ -77,6 +77,7 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-10-29 | master | G4 Backlog Ready (sprint 01): **CONDITIONAL GO** (attempt 1). G3 C7–C10 verified closed against 5dc3289, 6ea45af, 4f1536f and 4892c8c; C11 carried. New conditions C12 (CC-02), C13 (Minor CC items) and C14 (stale status text). D-35..D-38 log PD-17..20 (NFR-009, unreadable-manifest audit trail, AQ-04/AA-07/08/11, GOAL-11). D-39 accepts the `points-N`/`sprint-01` labels and the EPIC-02 enablers. RISK-020 registered; RISK-010 and RISK-014 (8 → 4) re-assessed. No human approval needed (G4 is not in HUMAN_APPROVAL_POINTS) | docs/00-governance/gate-log.md, decision-log.md, risk-register.md; docs/project-state.md; PGD-1 |
 | 2026-10-29 | scrum-master | PGD-12..18 moved to **Ready for Dev** (checked by JQL). CC-13 sub-task references fixed. Sprint plan updated with the A-1..A-6 decisions and the follow-ups for later stories. Orchestrator committed the plan and briefed master for G4 | docs/05-backlog/sprint-01-plan.md; PGD-1 c.10133 |
 | 2026-10-29 | product-owner | DoR validation: all 7 sprint-01 stories are READY (PGD-12..18, comments 10124–10130). ACs amended on PGD-13, 15, 16 and 18. A-1..A-6 decided. New Minor issues CC-10..13. Totals: 0 Critical, 2 Major, 11 Minor. Orchestrator committed 8d4d01e and briefed scrum-master to transition the stories to Ready | docs/05-backlog/consistency-report.md; PGD-1 c.10131, 10132 |
 | 2026-10-29 | scrum-master | Sprint-01 plan: 7 stories in Jira, all Draft. PGD-12 (02.01), PGD-13 (01.01), PGD-14 (01.02), PGD-15 (02.02), PGD-16 (02.03), PGD-17 (02.06) and PGD-18 (03.01, stretch); 29 of 30 points committed. 44 sub-tasks (PGD-19..62) and 8 Blocks links. STORY-02.09 held (CC-02); no EPIC-09/10 story (C11). Orchestrator committed d1f1358. Briefed product-owner for DoR validation | docs/05-backlog/sprint-01-plan.md; PGD-1 c.10121–10123 |
