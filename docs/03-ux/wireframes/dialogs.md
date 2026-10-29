@@ -110,7 +110,9 @@ Text box is read-only, selectable and focusable (scrolls with arrow keys). Conte
 Esc = Keep running. After `Stop and close` the window shows `Stopping...` and closes when the run has ended (NFR-004: within 5 s).
 
 ## DLG-07 Google setup help (from Help button or F1)
-Same content and layout as W-03's step list (shared component `SetupSteps`), in a scrollable dialog 560 wide, title `Set up Google access`, buttons `[ Open Google Cloud Console ]` (secondary) `[ Close ]` (primary). Also contains, below the steps, the subheading `Remove access later` with: `In your Google Account, open Security, then Third-party apps with account access, and remove this app. Then delete the token file in the folder above.` (RD 2.1). Esc = Close.
+Same content and layout as W-03's step list (shared component `SetupSteps`), in a scrollable dialog 560 wide, title `Set up Google access`, buttons `[ Open Google Cloud Console ]` (secondary) `[ Close ]` (primary). Also contains, below the steps, two sections (each a Subheading plus Body text, plain selectable text, no monospace). First, the subheading `Use the same sign-in in the command line` with: `To share sign-in with the command line, set GMAIL_CREDENTIALS_PATH and GMAIL_TOKEN_PATH.` (UX-I-04; the README carries the same sentence). Second, the subheading `Remove access later` with: `In your Google Account, open Security, then Third-party apps with account access, and remove this app. Then delete the token file in the folder above.` (RD 2.1). Esc = Close.
+
+When the credentials file fails the Desktop-app check (UJ-01, UA-05), the dialog shows the same danger Notice as SCR-03 above the steps: `This file is not a Desktop app OAuth client. Download it again as a Desktop app OAuth client.`
 
 ## DLG-08 (R3) Sign out
 ```

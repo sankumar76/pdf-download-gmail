@@ -90,6 +90,15 @@ Each column scrolls on its own; the action bar and header never scroll away. Bel
 ```
 `[ Check again ]` is primary; the others are secondary. The step list uses a real ordered list. Same content, in a dialog, is DLG-07 (Help).
 
+**Variant: file found but not a Desktop app client (UA-05, ADR-003 section 4).** The footer line `Not found yet: credentials.json` is replaced by a danger Notice (error icon + text), the path of the file sits under it as Small label text, and Dry run and Run stay disabled:
+```
+|                                 |  [ Check again ] [ Open Google Cloud Console ]               |
+|                                 |  (!) This file is not a Desktop app OAuth client. Download   |
+|                                 |      it again as a Desktop app OAuth client.                 |
+|                                 |      C:\Users\you\AppData\Local\...\secrets\credentials.json |
+```
+Same text if Google rejects the client during sign-in. No file content or parser message is ever shown.
+
 ## W-04 SCR-04 Dry-run results (regular and wider)
 
 ```
