@@ -41,13 +41,14 @@ Variant `denied` (user chose Deny or closed Google's page): title `Sign-in was n
 +--------------------------------------------------+
 | Download history cannot be read                  |
 |                                                  |
-| The file .manifest.json in your output folder    |
-| is damaged or unreadable. To protect your saved  |
-| files, nothing was downloaded and the file was   |
-| not changed.                                     |
+| .manifest.json in your output folder cannot be   |
+| read. To protect your saved files, nothing was   |
+| downloaded and the file was not changed.         |
 |                                                  |
-| What to do: restore the file from a backup, or   |
-| move it out of the folder, then run again.       |
+| What to do: restore it from a backup, or choose  |
+| a new output folder. If you move or delete the   |
+| file instead, every PDF in this folder is        |
+| downloaded again with _1, _2 ... endings.        |
 | See the README section "Download history".       |
 |                                                  |
 | Folder: C:\Users\you\Downloads\Gmail PDFs        |
@@ -65,9 +66,10 @@ Esc = Close. Focus starts on `Close`.
 |                                                  |
 | The output folder contains 42 PDFs saved by date |
 | but has no download history file. If you       |
-| continue, every PDF is downloaded again, and     |
-| names that match get a _1, _2 ... ending.        |
-| Existing files are never replaced.               |
+| continue, every PDF is saved again, and names    |
+| that match get a _1, _2 ... ending. Existing     |
+| files are never replaced. To avoid this, choose  |
+| a new output folder.                             |
 |                                                  |
 | [ Choose another folder ] [ Continue ] [ Cancel ]|  primary, secondary, secondary
 +--------------------------------------------------+

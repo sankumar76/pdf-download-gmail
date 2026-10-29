@@ -28,6 +28,7 @@ Companion to [../ux-spec.md](../ux-spec.md) (spec for every region, state, text 
 | [x] Include Spam and Trash      |                                                              |
 |                                 |                                                              |
 | [ Dry run ]  [ Run ]            |                                                              |  pinned action bar
+| Enter: Dry run   Ctrl+Enter: Run|                                                              |  shortcut hint (PD-15)
 +---------------------------------+--------------------------------------------------------------+
 | Ready                                                                              Version 0.0  |  STATUS BAR 32
 +------------------------------------------------------------------------------------------------+
@@ -35,7 +36,7 @@ Companion to [../ux-spec.md](../ux-spec.md) (spec for every region, state, text 
 ```
 `[ Dry run ]` is secondary, `[ Run ]` is primary. Header `[Sign in]` and `(o) Not signed in` are shown only when the token is missing; when signed in the chip reads `(v) Signed in`. The account address is never shown (no API call is allowed to fetch it: NFR-011).
 
-## W-02 Shell at minimum size (800 × 560), view SCR-02
+## W-02 Shell at minimum size (800 × 560; on a smaller work area the window clamps to it and each column scrolls, PD-12), view SCR-02
 
 ```
 +------------------------------------------------------------------------+
@@ -100,7 +101,8 @@ Each column scrolls on its own; the action bar and header never scroll away. Bel
 |                                 |      opened in a dry run, so a file that is not really a     |
 |                                 |      PDF can only be found in a real run.                    |
 |                                 |  [!] 2 files in the download history are no longer in the    |
-|                                 |      folder. They will not be downloaded again.   (MW-2)     |
+|                                 |      folder, so they are not downloaded again. To get them   |
+|                                 |      again, choose a new output folder.           (MW-2)     |
 |                                 |                                                              |
 |                                 |  Would save 6 | Renamed 1 | Already downloaded 1 | Scanned 9 |
 |                                 |                                                              |
@@ -149,7 +151,8 @@ While the search is still listing messages the bar is indeterminate and the line
 | again)                          |  2026-01-01 to 2026-01-31, Asia/Kolkata                      |
 |                                 |  [x] 2 PDFs could not be saved. The other 308 were handled.  |
 |                                 |  [!] 2 files in the download history are no longer in the    |
-|                                 |      folder. They were not downloaded again.       (MW-2)   |
+|                                 |      folder, so they were not downloaded again. To get them  |
+|                                 |      again, choose a new output folder.            (MW-2)    |
 |                                 |                                                              |
 |                                 |  Messages scanned  1,000      Total size   412.3 MB          |
 |                                 |  PDFs saved          301      Elapsed      00:09:58          |
@@ -166,4 +169,4 @@ While the search is still listing messages the bar is indeterminate and the line
 | [ Dry run ]  [ Run ]            |                                                              |
 +---------------------------------+--------------------------------------------------------------+
 ```
-Banner text and icon per outcome: `Run complete` (success), `Run finished with errors` (danger), `Run cancelled` (warning), `No PDFs found` (info), `Could not sign in` (danger). `[ Run again ]` is secondary and reuses the same settings (already saved files are skipped). `Errors` table appears only when errors > 0.
+Banner text and icon per outcome: `Run complete` (success), `Run finished with errors` (danger), `Run cancelled` (warning), `No PDFs found` (info), `Could not sign in` (danger), `Unexpected failure` (danger). Cancel, unreadable history and internal failure each have a distinct first line, the same as the CLI (PD-13). `[ Run again ]` is secondary and reuses the same settings (already saved files are skipped). `Errors` table appears only when errors > 0.

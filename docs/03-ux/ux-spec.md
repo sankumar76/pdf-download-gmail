@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.1 |
+| Version | 0.2 (aligned to PRD v0.3: PD-11..16) |
 | Owner | ux-expert |
 | Status | In Review (G3) |
-| Inputs | PRD v0.1 (FR-001..066, NFR-017..021, PD-01..09), project brief v0.1 (P-01, P-02), requirements catalogue GUI-01..19, decision log D-01..D-13, CLAUDE.md §9, RD §2.1 and §3 |
+| Inputs | PRD v0.3 (FR-001..066, NFR-017..021, PD-01..09), project brief v0.1 (P-01, P-02), requirements catalogue GUI-01..19, decision log D-01..D-13, CLAUDE.md §9, RD §2.1 and §3 |
 | Jira | [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1) |
 | Supporting files | [wireframes/main-window.md](wireframes/main-window.md) (W-01..W-06), [wireframes/dialogs.md](wireframes/dialogs.md) (DLG-01..08, SCR-07) |
 
@@ -15,11 +15,12 @@
 
 | Item | Answer |
 |------|--------|
-| **PQ-03 minimum window size** | **800 × 560 logical px**, not 800 × 600. At 1920 × 1080 with 200 % scaling the desktop is 960 × 540 logical px; a 600 px minimum would not fit. Below 640 px of height each column scrolls, so nothing is ever clipped (NFR-021). Default size on first launch: 1100 × 720, clamped to 90 % of the work area, centred. (UA-01, SA to confirm feasible) |
+| **PQ-03 minimum window size (closed by PD-12)** | **800 × 560 logical px.** Where the work area is smaller than that (1920 × 1080 at 200 % scaling: desktop 960 × 540, work area about 960 × 520 after the taskbar), the window is **clamped to the work area and content scrolls**; nothing is clipped (NFR-021). The clamp rule, not the number, protects that display. Below 640 px of height each column scrolls. Default size on first launch: 1100 × 720, clamped to 90 % of the work area, centred. (UA-01: SA confirms the framework can clamp or scroll below its own minimum) |
 | **PQ-03 default folders when launched by double-click** | The GUI never uses the working directory (it is unpredictable on double-click). Defaults: credentials and token in a per-user private app-data folder under the user profile (SEC-04), e.g. `%LOCALAPPDATA%\GmailPdfDownloader\secrets\` on Windows; output folder `<user Downloads>\Gmail PDFs`. Reason: inside the profile, private by default, and not in a cloud-synced Documents folder (RISK-009). `GMAIL_CREDENTIALS_PATH` and `GMAIL_TOKEN_PATH` still override (FR-002). The CLI keeps `./secrets/` and `./downloads` (RD §3). SCR-03 always shows the exact expected path. (UA-02, SA confirms base folders and permissions in the ADR) |
 | **PQ-01 dry run and bytes** | Spec works for both outcomes. Working assumption (PRD): metadata only, so SCR-04 shows the notice "PDFs are not opened in a dry run" and cannot show `Not a PDF`. If the SA decides to fetch bytes, delete that notice and add the `Not a PDF` result (UA-03) |
-| **PQ-02 exit codes** | Unreadable download history and internal failure exit 1 with a redacted message (PRD assumption kept). A run stopped by Ctrl+C also exits **1** (incomplete range must not look like success to a script). UA-04, needs PM and SA confirmation |
-| **Dark theme** | Not in R2. One light palette: halves the contrast and screenshot matrix (NFR-018, NFR-021), and nothing in the PRD asks for dark. Tokens are semantic, so a dark set can be added later without touching screens (UQ-09) |
+| **PQ-02 outcomes (PD-13)** | Cancelled run, unreadable download history and unexpected internal failure are neither success nor an attachment error. Each exits non-zero (not 2 or 3; PM position 1, the numeric mapping is the SA's) and each has its own first line, **identical in GUI and CLI** (table in section 12). No stack trace, no secret |
+| **Dark theme (PD-14)** | Won't in R2. One light palette: halves the contrast and screenshot matrix (NFR-018, NFR-021). Tokens are semantic, so a dark set can be added later without touching screens |
+| **Re-fetching a deleted file (PD-11)** | The only advice anywhere in the UI, CLI and README pointer is "choose a new output folder". Deleting or moving `.manifest.json` is never advised: it makes every PDF in the folder download again with `_1`, `_2` endings (until FR-034, R3) |
 | **Account address** | Not shown. Reading it needs `users.getProfile`, outside the allowed methods (NFR-011). Header shows only `Signed in` / `Not signed in` |
 
 ## 1. Design Principles
@@ -74,7 +75,7 @@ No new personas.
 | History unreadable | DLG-03 | Restore or move the file, run again |
 | One attachment fails | SCR-06 Errors table, `Show details` (DLG-05) | Optionally `Run again` (errors are retried because they are not in the history, UA-06) |
 | Sign-in fails during a run | SCR-06 `Could not sign in`; run log and CSV exist (GOAL-10) | `Open run log`, sign in again |
-| Unexpected internal failure | SCR-06 `Run stopped unexpectedly` + `Show details` (redacted) | Copy details, report |
+| Unexpected internal failure | SCR-06 `Unexpected failure` + `Show details` (redacted) | Open run log, copy details, report |
 - **Success:** every message names the next step and contains no secret (sentinel-secret test, NFR-012).
 
 ### UJ-06 Cancel (P-01) — FR-037, 051
@@ -160,7 +161,7 @@ IDLE --submit--> VALIDATING --invalid--> IDLE (errors shown)
 | DONE_ERRORS | Editable | Enabled | n/a | SCR-06 `Run finished with errors` | `Finished with errors` | `Run finished with errors. 2 errors.` (assertive) |
 | DONE_NOTHING | Editable | Enabled | n/a | SCR-06 `No PDFs found` | `No PDFs found` | `No PDFs found` (polite) |
 | DONE_CANCELLED | Editable | Enabled | n/a | SCR-06 `Run cancelled` | `Run cancelled` | `Run cancelled. N saved so far.` (polite) |
-| DONE_SIGNIN_FAILED / stopped | Editable | Enabled | n/a | SCR-06 `Could not sign in` / `Run stopped unexpectedly` | same | assertive |
+| DONE_SIGNIN_FAILED / stopped | Editable | Enabled | n/a | SCR-06 `Could not sign in` / `Unexpected failure` | same | assertive |
 | DRY_RESULT | Editable | Enabled | n/a | SCR-04 | `Dry run complete` | `Dry run complete. 6 PDFs would be saved.` (polite) |
 | DRY_RESULT stale | Editable | Enabled | n/a | SCR-04 plus notice `Settings changed since this preview. Choose Dry run to refresh.` | `Ready` | none |
 
@@ -171,8 +172,8 @@ Rules: **Validation timing**: a field is checked on blur; an errored field re-ch
 | ID | Condition | Shown | Text |
 |----|-----------|-------|------|
 | MW-0 | History readable and consistent | nothing | none |
-| MW-1 | No history file; output folder holds `YYYYMMDD_*.pdf` files | DLG-04 (real run); warning notice in SCR-04 and SCR-06 | Notice: `This folder has 42 PDFs but no download history file. Without it, PDFs are downloaded again and names that match get a _1, _2 ... ending.` |
-| MW-2 | History lists N files that are not in the folder | warning notice in SCR-04 and SCR-06 | `N files in the download history are no longer in the folder. They are not downloaded again. See the README section "Deleted files".` |
+| MW-1 | No history file; output folder holds `YYYYMMDD_*.pdf` files | DLG-04 (real run); warning notice in SCR-04 and SCR-06 | Notice: `This folder has 42 PDFs but no download history file. If you continue, every PDF is saved again and names that match get a _1, _2 ... ending. Nothing is overwritten. To avoid this, choose a new output folder.` |
+| MW-2 | History lists N files that are not in the folder | warning notice in SCR-04 and SCR-06 | `N files in the download history are no longer in the folder, so they are not downloaded again. To get them again, choose a new output folder. See the README section "Deleted files".` |
 | MW-3 | History exists but cannot be read | DLG-03 (blocks run and dry run) | see dialogs.md |
 
 **6.A Components (map to the design system in section 7).** AppButton (the only button), TextField, DateField, ComboBox, Checkbox, FolderField (TextField + secondary AppButton), Notice (info/success/warning/danger), StatusChip, ProgressBar, StatGroup, DataTable, Dialog, SetupSteps (shared by SCR-03 and DLG-07 and the README text), Header, StatusBar. A third-party control may be used only if it takes its look entirely from tokens.
@@ -202,9 +203,10 @@ Standard messages:
 | Credentials rejected | `Google did not accept the credentials file. Download it again as a Desktop app OAuth client.` |
 | Attachment error row | `Could not download it.` / `Could not save it in the output folder.` / `Gmail did not respond after several tries.` |
 | Zero matches | `No PDF attachments were found from 2026-01-01 to 2026-01-31 (Asia/Kolkata). Check the dates, time zone and extra search text.` |
-| Cancelled | `Stopped by you. 120 PDFs were saved. Run again to carry on: files already saved are skipped.` |
+| Cancelled (first line `Run cancelled`, PD-13) | `Run cancelled. 120 PDFs were saved and kept; the date range was not completed. Run the same range again to carry on: files already saved are skipped.` |
+| Download history unreadable (first line, GUI and CLI) | `<folder>\.manifest.json cannot be read.` then `Nothing was downloaded and the file was not changed. Restore it from a backup, or choose a new output folder.` |
 | Sign-in failed | `Google sign-in did not finish, so nothing was downloaded. Open the run log for details.` |
-| Unexpected failure | `Something went wrong and the run stopped. Your saved files are safe. Choose Show details and share the text.` |
+| Unexpected failure (first line, GUI and CLI) | `Unexpected failure, see the run log. Your saved files are safe.` (GUI adds `Show details`) |
 
 ### SCR-01 Main window shell and Download settings
 Wireframes W-01, W-02. **Components:** Header, FolderField, DateField x2, ComboBox, TextField, Checkbox, AppButton x2 (Dry run secondary, Run primary), StatusBar.
@@ -237,7 +239,7 @@ Helper text (Small label, always visible): Time zone `Dates and file names use t
 | Disabled | Dry run and Run disabled when credentials are missing or a run is active; fields read-only (not disabled) during a run so text stays readable and copyable |
 | Permission denied | Output folder not writable on a real run: folder error; sign-in denied: DLG-02 `denied` |
 
-**Interactions.** Enter inside any field = Dry run (the safe action). Ctrl+Enter = Run. `Browse...` opens the OS folder picker, returns focus to the field with the chosen path. Editing any field after a result adds the stale notice (only SCR-04). Pressing Dry run or Run while not signed in starts sign-in first (DLG-01) then continues with the chosen action; pressing while credentials are missing is impossible (buttons disabled, SCR-03 shown).
+**Interactions.** Enter inside any field = Dry run (the safe action, writes nothing). Ctrl+Enter = Run, so a stray Enter can never start writing files (PD-15). A bare Enter on a focused button activates that button only. Both shortcuts are shown on screen as helper text (Small label) under the action buttons: `Enter: Dry run   Ctrl+Enter: Run`, and neither is the only way to start anything. `Browse...` opens the OS folder picker, returns focus to the field with the chosen path. Editing any field after a result adds the stale notice (only SCR-04). Pressing Dry run or Run while not signed in starts sign-in first (DLG-01) then continues with the chosen action; pressing while credentials are missing is impossible (buttons disabled, SCR-03 shown).
 
 **Responsive.** 800-999 sidebar 320, 1000+ sidebar 360; panel takes the rest. Above content max width 1440 the whole layout stays 1440 wide and centred. Sidebar body scrolls; Dry run/Run are pinned at its bottom (sticky) and focused fields scroll into view above them (WCAG 2.4.11). Start and End sit side by side at all sizes (each ≥ 138 px wide).
 
@@ -264,13 +266,13 @@ W-04. **Components:** Heading, summary line (Body), Notice (0-3: PQ-01 notice, M
 ### SCR-05 Run in progress
 W-05. **Components:** Heading, phase line, ProgressBar, current-item line, StatGroup (Scanned, Saved, Renamed, Skipped, Errors), AppButton Cancel (secondary), helper text.
 **Content:** heading `Downloading PDFs` (dry run: `Checking your mailbox`). Phase line `Message 412 of 1,000` plus elapsed time right-aligned; the percentage is shown as text beside the bar. Before the total is known: `Searching Gmail...` with an indeterminate bar (UQ-02: needs a total from the core after listing). Current-item line `Now: 20260115_Invoice_1.pdf`, truncated in the middle. Counts use the Heading role for numbers and Small label for captions.
-**States:** Default running; Loading = signing in (`Waiting for Google sign-in`, bar indeterminate); Partial = some errors (Errors count turns `color.danger` and shows the error icon; text stays); Cancelling = `Stopping...`; Error: if the core fails fatally the view moves to SCR-06 `Run stopped unexpectedly`; Success: moves to SCR-06.
+**States:** Default running; Loading = signing in (`Waiting for Google sign-in`, bar indeterminate); Partial = some errors (Errors count turns `color.danger` and shows the error icon; text stays); Cancelling = `Stopping...`; Error: if the core fails fatally the view moves to SCR-06 `Unexpected failure`; Success: moves to SCR-06.
 **Interactions:** Cancel needs no confirmation and acts once (second press ignored). Counts refresh ≤ 4 times per second; screen-reader announcements throttled (matrix).
 **Responsive:** StatGroup is five columns at ≥ 480 px panel width, wraps 3 + 2 below. **Accessibility:** programmatic focus lands on the heading when the view opens; next Tab is Cancel. Progress bar exposes value, min, max and text `412 of 1,000 messages`. Reduced motion: no moving bar; show `Working...` and the changing numbers only.
 
 ### SCR-06 Run summary
 W-06. **Components:** Heading, subline (range and time zone), outcome Notice (success, danger, warning or info), conditional history Notice (MW-1, MW-2), StatGroup with the seven LOG-04 fields (Messages scanned, PDFs saved, Renamed, Skipped, Errors, Total size, Elapsed), three AppButtons (secondary) Open output folder, Open run log, Open CSV report, Errors DataTable (only when errors > 0), `Show details`, `Run again` (secondary).
-**Variants:** `Run complete` (success: `301 PDFs saved.`); `Run finished with errors` (danger: `2 PDFs could not be saved. The others were handled.`); `Run cancelled` (warning, text in 6.B); `No PDFs found` (info, zero-match text; counts still shown, "messages scanned" visible for the recall gap, PD-06); `Could not sign in` (danger); `Run stopped unexpectedly` (danger). Open buttons appear only for files that exist (a stopped-before-writing run shows only what was written). Errors table columns: Original name, Email date, What happened (one of the 6.B phrases).
+**Variants:** `Run complete` (success: `301 PDFs saved.`); `Run finished with errors` (danger: `2 PDFs could not be saved. The others were handled.`); `Run cancelled` (warning, text in 6.B); `No PDFs found` (info, zero-match text; counts still shown, "messages scanned" visible for the recall gap, PD-06); `Could not sign in` (danger); `Unexpected failure` (danger, text per 6.B). Each outcome has its own heading, so cancel, unreadable history (DLG-03) and internal failure are never confused with each other or with `Run complete` (PD-13). Open buttons appear only for files that exist (a stopped-before-writing run shows only what was written). Errors table columns: Original name, Email date, What happened (one of the 6.B phrases).
 **States:** Default (above); Loading: none; Empty: `No PDFs found` variant; Partial: `finished with errors`; Error: `stopped`; Success: `complete`; Disabled: an Open button whose target was moved or deleted shows the status-bar message `That file is no longer there.`; Permission denied: `The folder could not be opened.` (status bar).
 **Interactions:** open buttons call the OS shell; `Run again` repeats the run with current settings; focus is moved to the heading on arrival.
 **Accessibility:** outcome Notice has a role announced on arrival (matrix); count pairs are label + value in reading order; tab order: three open buttons, Show details, Run again, Errors table.
@@ -334,7 +336,7 @@ States for all variants: default, hover, pressed, focus-visible (ring `color.foc
 Field: height 40, border `color.border`, radius, error state border `color.danger` plus icon plus message, read-only fill `color.surface-sunken`. Notice: fill `*-bg`, 16 px icon in the semantic colour, text `color.text`. DataTable: header `type.label` on `color.surface-sunken`, rows separated by `color.divider`, selected row = `color.info-bg` fill plus a 4 px leading bar in `color.accent` plus the focus ring when focused.
 
 ### 7.6 Layout, reflow and high-DPI (FR-058, 059; NFR-021)
-- **Window:** resizable, minimum 800 × 560, maximise allowed. If the screen is smaller than the minimum the OS clamps the window; below 800 px wide the layout stacks (sidebar above panel) with one vertical scroll.
+- **Window:** resizable, minimum 800 × 560 (PD-12), maximise allowed. If the work area is smaller than the minimum the window is clamped to the work area and content scrolls instead of clipping; below 800 px wide the layout stacks (sidebar above panel) with one vertical scroll.
 - **Reflow:** 800-999 compact (sidebar 320); 1000-1439 regular (sidebar 360); 1440+ content stops at `layout.content.max`, centred, extra space becomes gutter and the table gains rows, not stretched columns. Table columns follow the rules in SCR-04.
 - **Overflow:** names truncate in the middle; no horizontal page scroll at ≥ 800 px; only the table and DLG-05 text may scroll horizontally if needed.
 - **High-DPI:** every size is logical px; icons are vector; the app must be per-monitor DPI aware and re-lay out when moved between monitors; 1 px borders stay 1 logical px. If the OS text size is increased, layouts must grow, not clip (best effort, Should).
@@ -345,7 +347,7 @@ Field: height 40, border `color.border`, radius, error state border `color.dange
 | 1366 × 768 | 100 % | 1366 × 768 | regular layout |
 | 1920 × 1080 | 100 % | 1920 × 1080 | content capped at 1440 |
 | 1920 × 1080 | 150 % | 1280 × 720 | regular layout |
-| 1920 × 1080 | 200 % | 960 × 540 | window clamped below min height; columns scroll; no clipping |
+| 1920 × 1080 | 200 % | 960 × 540 (work area about 960 × 520) | **PD-12:** window clamped to the work area, below the 560 minimum; columns scroll; nothing clipped (FR-058 screenshot) |
 | 3840 × 2160 | 100 % | 3840 × 2160 | content capped and centred |
 | 3840 × 2160 | 200 % | 1920 × 1080 | as 1920 × 1080 |
 | any | 100 / 150 / 200 % | min window 800 × 560 | W-02 intact |
@@ -357,14 +359,15 @@ Field: height 40, border `color.border`, radius, error state border `color.dange
 |-----|--------|
 | Tab / Shift+Tab | Next / previous control in the order of SCR-01 |
 | Enter in a field | Dry run |
-| Ctrl+Enter | Run (when enabled) |
+| Ctrl+Enter | Run (when enabled); shown on screen with Enter (PD-15) |
+| Enter on a focused button | Activates that button only |
 | Space / Enter on a button | Activate |
 | F1 | Help (DLG-07) |
 | Esc | Close the open dialog with its safe action; never cancels a run |
 | Alt+Down | Open ComboBox list or date calendar |
 | Up/Down, Home/End, Page Up/Down | Move in table, lists, combo list |
 | Alt+letter access keys | Should (platform convention), listed in the ADR |
-Ctrl+Enter is a UX proposal (UA-10); no shortcut is the only way to do something. No keyboard trap anywhere (dialogs cycle but Esc exits).
+Enter and Ctrl+Enter are fixed by PD-15; no shortcut is the only way to do something. No keyboard trap anywhere (dialogs cycle but Esc exits).
 
 ### 8.2 Focus
 Visible ring (`color.focus`, 2 px, offset 2, ≥ 3:1) on 100 % of focusable controls; never removed or covered (sticky action bar must not hide the focused field). Moves: open dialog → first button listed; close → opener; view change → new view's heading (focusable, not in tab order); failed submit → first invalid field; run start → results heading; run end → summary heading; `Choose another folder` → Browse button.
@@ -451,30 +454,30 @@ Small sample (one real user plus two proxy testers, UA-11); results are findings
 
 | ID | Item | Owner | Needed by | Working assumption |
 |----|------|-------|-----------|--------------------|
-| UA-01 | Min window 800 × 560 feasible in the chosen framework | SA | G3 ADR | Yes |
+| UA-01 | Framework can clamp the window to the work area and scroll below its own minimum (PD-12 fixed 800 × 560; only feasibility is open) | SA | G3 ADR | Yes |
 | UA-02 | GUI default folders (section 0) | SA | G3 | As stated; CLI unchanged |
 | UA-03 | Dry run fetches no bytes (PQ-01) | SA | G3 | Notice in SCR-04 |
-| UA-04 | Exit 1 for cancel, unreadable history, internal failure | PM, SA | G3 | As stated |
+| UA-04 | **Closed (PD-13)** for the product rule: non-zero, not 2/3, distinct first line. Only the numeric mapping is open (PM position 1) | SA | G3 | 1 for all three |
 | UA-05 | Distinguish a wrongly-typed credentials file | SA | R2 | Message only if Google rejects it |
 | UA-06 | Errored attachments are not recorded in the history, so a re-run retries them | SA | G3 | Yes |
-| UA-07 | Size units decimal MB | PM | G8 | Yes |
-| UA-08 | No sort or filter in the dry-run table | PM | G8 | Not needed for one user |
-| UA-09 | Light theme only | PM | G8 | Yes |
-| UA-10 | Enter = Dry run, Ctrl+Enter = Run | PM | G8 | Yes |
+| UA-07 | **Closed (PD-14a)** decimal MB | | | |
+| UA-08 | **Closed (PD-14b)** no sort or filter in R2 | | | |
+| UA-09 | **Closed (PD-14c)** light theme only | | | |
+| UA-10 | **Closed (PD-15)** Enter = Dry run, Ctrl+Enter = Run, shortcuts shown on screen | | | |
 | UA-11 | Small-sample usability testing | qa-engineer | G7 | Yes |
 | UQ-02 | Core emits a total after listing, the current item name and per-attachment error reason (for SCR-05/06) | SA | G3 | Yes; otherwise indeterminate bar for the whole run |
-| UQ-05 | Remember last-used folder and Spam/Trash choice (needs a preferences file) | PM, SA | R2 planning | Not remembered; defaults each launch |
+| UQ-05 | **Closed (PD-14d)** last folder and Spam/Trash choice not remembered | | | |
 | UQ-06 | Timeout for DLG-01 | SA | G3 | UX only needs Cancel always available |
-| UQ-09 | Dark theme | PM | post-MVP | No |
-| UQ-10 | `--help` is allowed although FR-045 says no other flags | PM | G3 | Yes, standard parser help only |
+| UQ-09 | **Closed (PD-14c)** no dark theme in R1/R2 | | | |
+| UQ-10 | **Closed (PD-16)** `--help` / `-h` allowed, exits 0, no network or credential access | | | |
 | UQ-12 | `Open Google Cloud Console` opens the system browser (no app network call; consistent with NFR-014) | SA | G3 | Yes |
 
 **Framework requirements to test in the RISK-012 spike (SA):** full token-driven theming (no per-widget literals), one custom button component with the three variants, per-monitor DPI awareness and re-layout, visible customisable focus ring, tab order control, minimum window size, keyboard-navigable table with one tab stop, status/live announcements (UIA notifications or equivalent), accessible names and roles (R3), reduced-motion signal, native folder picker, opening files and folders in the OS shell, a time zone list from the chosen time zone data package (Q-08).
 
 **Issues for other roles**
-- **product-manager:** (1) FR-058 minimum 800 × 600 should read 800 × 560 (section 0). (2) PD-02 says deleting the manifest is the documented way to re-fetch a deleted file, but with no manifest MW-1 applies and every remaining PDF is downloaded again with `_1` endings until FR-034 (R3). Consider promoting FR-034 or rewording the README advice; UX text therefore only points to the README section. (3) Confirm UA-04, UA-07..10.
-- **solution-architect:** UA-01..06, UQ-02, UQ-06, UQ-10, UQ-12, and the spike list above; the core must emit progress events (total, current item, counts) and an error reason per attachment, and a cancel signal that ends within 5 s.
-- **product-owner / scrum-master:** stories should reference SCR/DLG IDs; SetupSteps is a shared component that the README must reuse as text.
+- **product-manager:** all earlier UX issues are closed by PRD v0.3 (PD-11..16). Nothing open for the PM from this spec.
+- **solution-architect:** UA-01 (clamp/scroll below the framework minimum), UA-02, UA-03, UA-04 numeric mapping, UA-05, UA-06, UQ-02, UQ-06, UQ-12, and the spike list above; the core must emit progress events (total, current item, counts) and an error reason per attachment, and a cancel signal that ends within 5 s.
+- **product-owner / scrum-master:** stories should reference SCR/DLG IDs; SetupSteps is a shared component that the README must reuse as text. The README sections the UI points to ("Deleted files", "Download history") must give the PD-11 advice: choose a new output folder; do not delete or move `.manifest.json`.
 
 ## 12. CLI Interaction (P-02; FR-043, 045, 046, 015, 037, 064)
 
@@ -490,7 +493,7 @@ Small sample (one real user plus two proxy testers, UA-11); results are findings
 | `--dry-run` | off | writes nothing |
 | `--credentials`, `--token` | `./secrets/...` or `GMAIL_CREDENTIALS_PATH`, `GMAIL_TOKEN_PATH` | option beats env var beats default |
 | `--log-level` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-Unknown flags exit 2 (FR-045); `--help` prints this table (UQ-10).
+Unknown flags exit 2 (FR-045). `--help` / `-h` (PD-16) prints this table with defaults and exits 0, without contacting Google or reading credentials. No `--version` or other extra flag.
 
 **Streams.** stdout carries the dry-run list and the final summary (safe to redirect to a file). stderr carries progress, warnings and errors. No colour is needed; if added later it must honour `NO_COLOR` and never be the only signal.
 
@@ -518,18 +521,28 @@ Output folder: ./downloads
 Run log:       ./downloads/logs/run_20260129_101500.log
 CSV report:    ./downloads/logs/report_20260129_101500.csv
 ```
-First line varies: `Run complete`, `Run finished with errors`, `Run cancelled`, `No PDFs found` (also prints `0 PDFs found.`). History notices (MW-1, MW-2) print as `warning:` lines before and in the summary.
+First line varies: `Run complete`, `Run finished with errors`, `Run cancelled`, `No PDFs found` (also prints `0 PDFs found.`). History notices (MW-1, MW-2) print as `warning:` lines before and in the summary, with the same text as the GUI (section 6.0), including the new-output-folder advice (PD-11).
 
 **Errors (stderr), one line each:** `error: --start: Enter the date as YYYY-MM-DD, for example 2026-01-31.`; `error: Start date must be on or before the end date. (--start 2026-03-31 --end 2026-01-01)`; `warning: End date is in the future. Only mail received so far is included.`; credentials missing prints the eight SCR-03 steps (plain text) after `error: Credentials file not found: <path>`. Stack traces never print; at `DEBUG` the same redaction applies.
 
 **Cancel.** First Ctrl+C: `Stopping: finishing the current file and saving progress...` then the summary as `Run cancelled`. A second Ctrl+C prints `Already stopping, please wait.` and is otherwise ignored (closing the terminal is a safe hard kill, FR-028/030).
+
+**First lines for outcomes the RD does not name (PD-13; identical wording in the GUI heading or dialog text).**
+
+| Outcome | CLI first line | GUI |
+|---------|----------------|-----|
+| Cancelled | `Run cancelled` (then the summary) | SCR-06 heading `Run cancelled` |
+| History unreadable | `error: <folder>/.manifest.json cannot be read. Nothing was downloaded and the file was not changed. Restore it from a backup, or choose a new output folder.` | DLG-03 |
+| Internal failure | `error: unexpected failure, see the run log` | SCR-06 `Unexpected failure` |
+| Attachment errors | `Run finished with errors` | SCR-06 same |
+No stack trace and no secret in any of them (FR-005).
 
 **Exit codes (LOG-05, FR-043).**
 
 | Code | Meaning | Output |
 |------|---------|--------|
 | 0 | Success, including 0 PDFs found and dry run | Summary |
-| 1 | At least one attachment errored; also cancelled, unreadable history, unexpected failure (UA-04) | Summary or redacted `error:` line |
+| 1 (PM position; numeric mapping is the SA's, PD-13) | At least one attachment errored; also cancelled, unreadable history, unexpected failure. Never 0, 2 or 3 for these | See first-line table below |
 | 2 | Bad arguments or unknown flag | One-line `error:` plus hint |
 | 3 | Credentials missing or authentication failed | Setup steps or `error: Google sign-in did not finish.` |
 
@@ -537,3 +550,4 @@ First line varies: `Run complete`, `Run finished with errors`, `Run cancelled`, 
 | Version | Date | Change |
 |---------|------|--------|
 | 0.1 | 2026-10-29 | Initial UX spec for G3: PQ-03 answered, tokens, 6 views, 8 dialogs, CLI interaction |
+| 0.2 | 2026-10-29 | Aligned to PRD v0.3: PD-11 MW-1/MW-2/DLG-03/DLG-04 text now advises a new output folder, never deleting the manifest; PD-12 clamp-to-work-area rule and 1920 × 1080 / 200 % matrix row; PD-13 distinct first lines for cancel, unreadable history and internal failure (GUI and CLI); PD-14 UA-07..09, UQ-05, UQ-09 closed; PD-15 shortcuts shown on screen; PD-16 `--help` / `-h`. Closed UA-04 (product rule), UA-07..10, UQ-05, UQ-09, UQ-10 |
