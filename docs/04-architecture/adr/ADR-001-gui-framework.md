@@ -8,7 +8,7 @@
 | Related | D-01, CLAUDE.md §9, FR-047..060, FR-062..064, NFR-004, NFR-017..021, NFR-023, RISK-001, RISK-012, ux-spec §7, §8, §11 |
 
 ## Context
-D-01 makes the product a desktop GUI plus CLI on one core. CLAUDE.md §9 requires shared tokens (exactly four type roles, one spacing scale, one palette), one reusable button component with variants, resizable windows with a minimum size, and crisp rendering under OS scaling. The ux-spec (v0.1) adds: minimum window 800 × 560, per-monitor DPI awareness, a 2 px focus ring with 2 px offset, a keyboard-navigable table with one tab stop, live announcements, accessible names/roles (R3), a native folder picker, opening files and folders in the OS shell, and an IANA time-zone list. The RD allows no third-party dependencies "unless justified" (NFR-023), so whatever is chosen needs this ADR. The user's global instructions also say "leverage shadcn ui components for the ui", a React/web component library.
+D-01 makes the product a desktop GUI plus CLI on one core. CLAUDE.md §9 requires shared tokens (exactly four type roles, one spacing scale, one palette), one reusable button component with variants, resizable windows with a minimum size, and crisp rendering under OS scaling. The ux-spec (v0.1; unchanged in this respect through v0.3, commit 4f1536f) adds: minimum window 800 × 560, per-monitor DPI awareness, a 2 px focus ring with 2 px offset, a keyboard-navigable table with one tab stop, live announcements, accessible names/roles (R3), a native folder picker, opening files and folders in the OS shell, and an IANA time-zone list. The RD allows no third-party dependencies "unless justified" (NFR-023), so whatever is chosen needs this ADR. Windows 11 is the confirmed target OS (Q-02).
 
 ## Decision Drivers
 - §9.2/§9.3 compliance with **no per-widget literals** (FR-054..057, GOAL-08)
@@ -31,8 +31,8 @@ D-01 makes the product a desktop GUI plus CLI on one core. CLAUDE.md §9 require
 - Cons: Large binary dependency (tens of MB; mitigated by the `PySide6-Essentials` wheel, which omits add-on modules); LGPL-3.0 obligations if the app is ever frozen into an executable; QSS gaps: no `outline-offset`, no transitions, no `line-height` (handled in UX-I-01..03).
 - Cost / effort: moderate; one dependency; best fit for §9.
 
-### Option C — pywebview + shadcn/ui (React, Tailwind, Radix) frontend
-- Pros: Literally satisfies the user-level "shadcn ui" preference; shadcn's CSS-variable tokens and `Button` with `cva` variants map naturally to §9.2; WebView2 on Windows 11 handles high-DPI; Radix primitives are accessible.
+### Option C — pywebview + web frontend (React, Tailwind, Radix)
+- Pros: CSS-variable tokens and a variant-based `Button` component map naturally to §9.2; WebView2 on Windows 11 handles high-DPI; Radix primitives are accessible.
 - Cons: Two languages and two tool chains (Node/npm build of React + Tailwind + Radix, hundreds of npm packages in the build supply chain); on Windows pywebview depends on `pythonnet` and the .NET runtime (AA, verify); a JS↔Python bridge exposes Python functions to page script, which becomes an attack path for untrusted email text (subjects, names) rendered in HTML (TB-4); mypy/pytest coverage covers only half the UI code; packaging and CI double in size; it renders a web page in a window, which sits uneasily with CLAUDE.md §9 "not a website".
 - Cost / effort: high; adds the most moving parts.
 
@@ -46,7 +46,8 @@ We will build the GUI with **PySide6 Qt Widgets** (`PySide6-Essentials`, Qt ≥ 
 2. **Generated stylesheet.** `theme/stylesheet.py` renders one application-wide QSS string from the tokens (string template) and builds the four `QFont` roles; screens never call `setStyleSheet` with literals.
 3. **One button.** `widgets/button.py::AppButton` with `Variant` = `PRIMARY | SECONDARY | DESTRUCTIVE`, fixed height/min width from tokens, busy state, and a custom-painted focus ring (2 px, offset 2) because QSS lacks `outline-offset`.
 4. **High-DPI.** Leave Qt 6 defaults (high-DPI on, `PassThrough`); layouts only (no absolute geometry); vector icons (SVG via `QIcon`).
-5. **Design language.** The palette and component shapes follow the ux-spec, which is in the spirit of shadcn/ui (neutral surfaces, 6 px radius, accent primary, outline secondary, destructive). We adopt shadcn's **design language**, not its React components (AQ-02 to Santhosh, FYI at G8).
+5. **Visual design.** Palette, type, spacing and component shapes come only from the ux-spec §7 tokens. No external component library or design language is adopted (D-29, delivery-lead decision 2026-10-29, PGD-1 c.10108).
+6. **Count refresh (ux-spec R-COUNT).** `RunWorker` forwards `Progress` to the UI thread at most 10 times a second (latest wins); the window redraws counts at most **4 times a second** (250 ms `QTimer`); every other event is forwarded and drawn at once (architecture §4.3).
 
 ## Capability checklist (ux-spec §11) — desk-check at G3, proof in S-02
 | # | Capability | PySide6 means | Desk-check | S-02 proof needed |
@@ -61,11 +62,11 @@ We will build the GUI with **PySide6 Qt Widgets** (`PySide6-Essentials`, Qt ≥ 
 | 7 | Keyboard table, one tab stop | `QTableView` + plain-text model | Pass | Yes |
 | 8 | Live announcements (polite/assertive) | `QAccessibleAnnouncementEvent` (Qt ≥ 6.8 — verify) or status-bar `QAccessible` value change | Unverified | Yes (Narrator) |
 | 9 | Accessible names and roles (R3) | `setAccessibleName/Description`; UIA bridge | Pass (docs) | Narrator smoke in S-02, full test R3 |
-| 10 | Reduced-motion signal | Not needed: QSS has no transitions (UX-I-01) | Pass (n/a) | — |
+| 10 | Reduced-motion signal | Needed for the indeterminate progress bar only (QSS has no transitions, UX-I-01): Windows `SPI_GETCLIENTAREAANIMATION` read once via `ctypes`; other OS: motion allowed | Pass (design) | Yes — toggle Windows "Animation effects"; if unreliable, the bar's motion is accepted as essential feedback (ux-spec v0.3 §0.1) |
 | 11 | Native folder picker | `QFileDialog.getExistingDirectory` | Pass | — |
 | 12 | Open files/folders in OS shell | `QDesktopServices.openUrl(QUrl.fromLocalFile(…))` | Pass | — |
 | 13 | IANA time-zone list | `zoneinfo.available_timezones()` with `tzdata` (ADR-002), not Qt's `QTimeZone` | Pass | — |
-| 14 | Responsive during runs | Core on `QThread`; queued signals; ≤ 10 Hz coalescing | Pass | Heartbeat test (NFR-004) |
+| 14 | Responsive during runs | Core on `QThread`; queued signals; R-COUNT (`Progress` ≤ 10 Hz to the UI thread, redraw ≤ 4 times a second) | Pass | Heartbeat test (NFR-004) |
 | 15 | Rich-text injection safety | `Qt.TextFormat.PlainText` on every label/model showing email text | Pass | Test with `<b>` subject |
 | 16 | Tabular figures, Segoe UI Variable | `QFont` OpenType features (Qt ≥ 6.7 — verify) | Unverified | Yes (UX-I-06, optional) |
 | 17 | Scrim behind dialogs | Overlay widget | Partial | Yes (UX-I-03, optional) |
@@ -78,8 +79,14 @@ We will build the GUI with **PySide6 Qt Widgets** (`PySide6-Essentials`, Qt ≥ 
 
 ## Consequences
 - Positive: §9 compliance is structural (one token file, one stylesheet generator, one button class), enforceable by tests; GUI and CLI share the core with no GUI-specific logic in it; R3 accessibility is reachable without a framework change.
-- Negative / trade-offs accepted: one large runtime dependency (justified by NFR-023 ADR rule); LGPL obligations if a frozen executable is ever produced (ADR-005); three QSS gaps handled by custom painting or token reinterpretation (UX-I-01..03); the literal shadcn/ui component library is not used (AQ-02).
-- Follow-up actions: S-02 (developer, before W4); confirm AQ-02 with Santhosh at G8 (orchestrator FYI); ux-expert acknowledges UX-I-01..06.
+- Negative / trade-offs accepted: one large runtime dependency (justified by NFR-023 ADR rule); LGPL obligations if a frozen executable is ever produced (ADR-005); three QSS gaps handled by custom painting or token reinterpretation (UX-I-01..03).
+- Follow-up actions: S-02 (developer, before W4; G3 condition C11); ux-expert acknowledges UX-I-01..06 in ux-spec v0.3 (C9).
 
 ## Verification
 S-02 report attached to this ADR (status → Accepted). Ongoing: GUI token-literal test and `AppButton`-only test in CI; screenshot matrix at G7 (ux-spec §7.6); NFR-004 instrumented test.
+
+## Change Log
+| Date | Change |
+|------|--------|
+| 2026-10-29 | Proposed at G3 (commit 75b7e47) |
+| 2026-10-29 | v0.2 (G3 C10): external component-library and "design language" references removed; the delivery lead ruled them not applicable to this project (D-29, PGD-1 c.10108, supersedes that part of D-20; AQ-02 and RISK-019 closed). Option C kept as a considered web-frontend alternative. Count refresh follows ux-spec v0.3 R-COUNT (commit 4f1536f; decision item 6, checklist item 14). Checklist item 10: reduced-motion signal needed for the progress bar only (UX-I-01 counter-point accepted). Windows 11 confirmed as target (Q-02). Status unchanged: Proposed until S-02 |

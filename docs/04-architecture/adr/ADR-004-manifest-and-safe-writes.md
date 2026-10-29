@@ -5,7 +5,7 @@
 | Status | Accepted |
 | Date | 2026-10-29 |
 | Deciders | solution-architect |
-| Related | FR-026..035, FR-037, NFR-003, NFR-007, NFR-010, BR-003/005/006/007, PD-02 (D-05), RISK-008, coding-standards §10 |
+| Related | FR-026..035, FR-037, NFR-003, NFR-007, NFR-010, BR-003/005/006/007, PD-02 (D-05), PD-18, RISK-008, coding-standards §10, D-32 |
 
 ## Context
 RD FR-16/17 require temp-file + atomic rename, never overwrite, and a manifest `downloads/.manifest.json` keyed by `messageId` + `partId`. PD-02 makes the manifest authoritative, stops on an unreadable one, warns on a missing one and adds recovery in R3. NFR-007 requires 0 duplicates and 0 lost attachments after 100 hard kills; NFR-010 requires ≤ 50 ms p95 per update with 10,000 entries and capacity ≥ 50,000. No database is allowed.
@@ -52,7 +52,13 @@ NFR-007, NFR-010, NFR-003, FR-028, FR-032, RISK-008, no new dependency.
 ## Consequences
 - Positive: meets NFR-007/010 without a database; crash windows are closed by the pending/commit pair; manifest is inspectable.
 - Negative: two extra `fsync`s per PDF (budgeted in NFR-003); the POSIX FAT fallback has a race (single-user tool; documented); `.bak` is one generation only.
-- **Standards note:** coding-standards §10 says "temp file + atomic `os.replace`; never overwrite". For user-visible files these conflict; this ADR's no-clobber move is the rule, `os.replace` is limited to app-owned files (snapshot, token). Raised to reviewer-standards/master.
+- **Standards note (resolved 2026-10-29):** the conflict between "atomic `os.replace`" and "never overwrite" was ruled in D-26, now superseded by D-32: coding-standards §10 reads "never overwrite; next copy `_1`, `_2`, … via a no-clobber move; `os.replace` only for the app's own state files (manifest, token)". Write paths under this ADR and architecture §10.2: **PDFs**: temp + `fsync` + `move_no_clobber` (step 4), never `os.replace`; **run log and CSV** (streamed, user-visible): opened with exclusive create (`"x"` mode) under a unique `_n` name, never appended to or replaced; **`os.replace`**: only for the manifest snapshot (compaction) and the token (ADR-003). The POSIX FAT/exFAT fallback in step 4 is the only exception and is accepted debt (AR-04, D-27, issue #4); it never runs on Windows 11. Master found this design conforming to the amended §10 (D-32).
 
 ## Verification
 100-iteration kill-point loop (NFR-007) with `os._exit` injected after each step 2–6; manifest micro-benchmark at 10,000/50,000 entries (NFR-010); corrupt-snapshot, corrupt-middle-journal and torn-last-line fixtures (FR-032); FAT fallback unit-tested with a fake `os.link` raising `EPERM`.
+
+## Change Log
+| Date | Change |
+|------|--------|
+| 2026-10-29 | Accepted at G3 (commit 75b7e47) |
+| 2026-10-29 | G3 C10: standards note aligned with the amended coding-standards §10 (D-32, supersedes D-26) and the architecture §10.2 write-path rule; PD-18 (unreadable manifest: no PDF, manifest untouched, log and header-only CSV) linked. No change to the decision |

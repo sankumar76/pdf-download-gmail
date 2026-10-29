@@ -2,15 +2,15 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.1 |
+| Version | 0.2 |
 | Owner | solution-architect |
 | Date | 2026-10-29 |
-| Status | In Review (G3) |
-| Inputs | PRD v0.3 (commit f1ba385; PD-10..PD-16), release-plan v0.1, requirements-catalog v0.1, RD (Oct 28, 2026), decisions D-01..D-13, RISK-001..013, coding-standards, DoD, **UX spec v0.1** + wireframes (commit 7159423; reconciled in §17) |
+| Status | In Review (G3 condition C10 closed; G4 entry). C9 outcome: ux-spec v0.3 (4f1536f) accepts UX-I-01..06 and defines R-COUNT, adopted here (§17.4) |
+| Inputs | **PRD v0.4** (commit 5dc3289; PD-17..PD-20; current; v0.3 f1ba385 was the version reviewed at G3), release-plan v0.2, requirements-catalog v0.2+, RD (Oct 28, 2026), decisions D-01..D-34 (D-29: shadcn/ui not used), delivery-lead decisions of 2026-10-29 (PGD-1 comment 10108), RISK-001..019, coding-standards and DoD as amended (commits e71302b, 834f7d2, 481a46f), **UX spec v0.3** (commit 4f1536f; current; C9 outcome and R-COUNT; v0.2 d200c27 was the version reviewed at G3) + wireframes (reconciled in §17), G3 record (gate-log, conditions C9–C11) |
 | Jira | [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1) |
 | Companions | [ADR index](#13-architecture-decisions) · [test-strategy.md](test-strategy.md) |
 
-**ID conventions.** `AQ-` = architecture open question; `AA-` = architecture assumption; `AR-` = architecture risk (proposed to master for the register); `S-` = spike. FR/NFR IDs are PRD v0.2 IDs.
+**ID conventions.** `AQ-` = architecture open question; `AA-` = architecture assumption; `AR-` = architecture risk (proposed to master for the register); `S-` = spike. FR/NFR IDs are PRD v0.4 IDs (FR-001..066, NFR-001..025; the same ID set as v0.3). The change log is in §18.
 
 ---
 
@@ -26,7 +26,7 @@
 7. **Maintainability** — small dependency set (NFR-023), strict typing and coverage (NFR-022).
 
 ### 1.2 Constraints
-CONSTRAINT-01..10 (catalogue): `gmail.readonly` only; Python 3.10–3.12; Google libraries only unless an ADR justifies another; **no database**; GUI + CLI on one core; CLAUDE.md §9; local processing; 25 MB attachments; pytest/ruff/mypy-strict, package `gmail_pdf`; secret files never read during development (SEC-08). D-04: no `config.yaml`/`.env` settings file (CFG-11 Won't).
+CONSTRAINT-01..10 (catalogue): `gmail.readonly` only; Python 3.10–3.12; Google libraries only unless an ADR justifies another; **no database**; GUI + CLI on one core; CLAUDE.md §9; local processing; 25 MB attachments; pytest/ruff/mypy-strict, package `gmail_pdf`; secret files never read during development (SEC-08). D-04: no `config.yaml`/`.env` settings file (CFG-11 Won't). **Target OS confirmed: Windows 11** (Q-02, delivery lead 2026-10-29); macOS/Linux stay best effort (NFR-020). **Schedule:** as soon as possible, no fixed date (Q-01); R1 (core + CLI) ships first and does not depend on the GUI framework spike (ADR-001, C11).
 
 ### 1.3 Simplicity statement
 The product is **one Python package** run as a local process. There is no server, no database, no message broker and no background service. Each additional moving part below is justified where it appears: the GUI toolkit (ADR-001), time-zone data (ADR-002), a manifest journal instead of a single JSON rewrite (ADR-004).
@@ -169,18 +169,18 @@ flowchart TB
 |-----------|----------------|
 | `args.py` | RD §3 flags exactly (FR-045) plus argparse's standard `-h/--help` (PD-16: prints the flag table with defaults, exits 0, parsed before any path resolution, credential read, logging setup or network call); unknown flag → exit 2; env-var precedence for paths (FR-002) |
 | `console.py` | `EventSink` that prints progress lines (stderr) and the final summary (stdout), dry-run plan table |
-| `main.py` | `main(argv) -> int`: install redaction hooks, build `RunRequest`, call `runner.run`, SIGINT → `cancel.set()` (second Ctrl+C = hard exit after flushing), return `ExitCode` |
+| `main.py` | `main(argv) -> int`: install redaction hooks, build `RunRequest`, call `runner.run`, SIGINT → `cancel.set()` (a second Ctrl+C prints `Already stopping, please wait.` once and is otherwise ignored; closing the terminal is the safe hard kill — UX-I-05, §6.9), return `ExitCode` |
 | `gmail_pdf/__main__.py`, repo-root `gmail_pdf_downloader.py` | Thin shims calling `cli.main.main` (RD invocation `python gmail_pdf_downloader.py --start …` keeps working) |
 
 ### 4.3 GUI adapter (`gmail_pdf/gui/`) — R2
 | Component | Responsibility |
 |-----------|----------------|
-| `theme/tokens.py` | **Single source of truth** (FR-054..057): 4 typography roles, spacing scale, palette, radii, focus ring, min window size. Pure Python constants, no Qt import |
+| `theme/tokens.py` | **Single source of truth** (FR-054..057): 4 typography roles, spacing scale, palette, radii, focus ring, min window size, `layout.stat.min` (minimum count-tile width, so counts never jump; ux-spec v0.3 §7.2, UX-I-06) and `motion.fast` = **0** in R2 (no transitions; token kept for a later build, UX-I-01). Pure Python constants, no Qt import |
 | `theme/stylesheet.py` | Generates the application QSS and `QFont`s from tokens; nothing else contains a colour, size or spacing literal |
 | `widgets/button.py` | `AppButton(QPushButton)` with `Variant` = PRIMARY / SECONDARY / DESTRUCTIVE (FR-056); the only button class used |
 | `widgets/*` | Field row with inline error label, date edit, zone combo (IANA list), folder picker, count tiles, results table (plain-text model) |
 | `view_model.py` | Qt-free presenter: holds form state, calls `domain.validation`, maps events to display state, decides enabled/disabled controls. Unit-testable without Qt |
-| `worker.py` | `RunWorker(QObject)` on a `QThread`; runs `runner.run`; forwards events through a queued `Signal(object)`; coalesces count updates to ≤ 10 Hz (NFR-004) |
+| `worker.py` | `RunWorker(QObject)` on a `QThread`; runs `runner.run`; forwards events through a queued `Signal(object)`; implements ux-spec **R-COUNT** in two stages: (1) the worker's sink forwards `Progress` at most every 100 ms (**≤ 10 Hz**, latest value wins, checked with `time.monotonic()` inside the sink because the worker thread is busy in `run()`), which protects the UI thread's input queue (NFR-004 stall ≤ 200 ms); (2) the view redraws counts, bar, elapsed time and current-item line **at most 4 times a second** (UI-thread `QTimer`, 250 ms, latest value wins, no queue). Every other event (`PhaseChanged`, `CancelRequested`, `OutcomeRecorded`, `RunFinished`, …) is forwarded and drawn at once, in order, so the final screen equals the summary and the CSV |
 | `main_window.py`, `dialogs/setup_help.py`, `dialogs/summary.py` | Screens per the UX spec; setup help shows RD §2.1 steps when `credentials.json` is missing (FR-006) |
 | `app.py` | `main()`: rounding policy, install redaction hooks + Qt message handler, apply stylesheet, show window (lazy-import Google libraries after first paint for NFR-004 launch time) |
 
@@ -257,11 +257,11 @@ erDiagram
 | Saved PDF | `<out>/YYYYMMDD_<name>[_n].pdf` | Raw bytes, unchanged | Temp `<out>/.gmail_pdf-<uuid4>.part` → `fsync` → no-clobber move (ADR-004) |
 | Manifest snapshot | `<out>/.manifest.json` (RD FR-17 name kept) | JSON: `{"schema_version":1,"app_version":…,"entries":{key:{…}},"messages":{id:{…}}}` | Compaction at run end/cancel: temp + `os.replace` (overwrite intended); previous snapshot kept as `.manifest.json.bak` (last good) |
 | Manifest journal | `<out>/.manifest.journal` | JSON Lines, one record per event: `{"op":"pending"|"commit"|"message_done", …}` | Append + flush + `fsync` per record; truncated after successful compaction |
-| Run log | `<out>/logs/run_<YYYYMMDD_HHMMSS>.log` | UTF-8 text, `%(asctime)s %(levelname)s %(message)s`, control characters escaped | Line-buffered; redaction filter on the handler |
-| CSV report | `<out>/logs/report_<YYYYMMDD_HHMMSS>.csv` | UTF-8 with BOM (Excel opens Unicode correctly — AA-07), header = LOG-02 order exactly, RFC 4180 quoting | One row per outcome, `flush()` after each row (GOAL-10 ≤ 1 row lost on hard kill) |
+| Run log | `<out>/logs/run_<YYYYMMDD_HHMMSS>[_n].log` | UTF-8 text, `%(asctime)s %(levelname)s %(message)s`, control characters escaped | Opened with **exclusive create** (`logging.FileHandler(path, mode="x", encoding="utf-8")`); never appended to or replaced; line-buffered; redaction filter on the handler (coding-standards §10; D-32) |
+| CSV report | `<out>/logs/report_<YYYYMMDD_HHMMSS>[_n].csv` | UTF-8 with BOM (Excel opens Unicode correctly — AA-07), header = LOG-02 order exactly, RFC 4180 quoting | Opened with **exclusive create** (`open(path, "x", newline="", encoding="utf-8-sig")`); never appended to or replaced. One row per outcome, `flush()` after each row (GOAL-10 ≤ 1 row lost on hard kill) (coding-standards §10; D-32) |
 | Token | `token.json` (path per FR-002) | `google.oauth2.credentials.Credentials.to_json()` | Temp + `os.replace`; POSIX `0600`; ADR-003 |
 
-Timestamps in file names use the **run's chosen zone** at run start (AA-08). Two runs started in the same second get `_1` on the log/CSV names (same allocator rule, never overwrite).
+Timestamps in file names use the **run's chosen zone** at run start (AA-08). If the log or CSV name already exists (two runs started in the same second, or a user file with that name), exclusive create raises `FileExistsError` and the next free `_1`, `_2`, … name is used (coding-standards §10; never overwrite).
 
 ### 5.3 Classification, ownership, retention
 
@@ -286,7 +286,8 @@ Timestamps in file names use the **run's chosen zone** at run start (AA-08). Two
 ```python
 def validate(form: RawInputs, today: date) -> ValidationResult: ...   # errors + warnings, same text in CLI and GUI
 def resolve_paths(inputs: PathInputs, env: Mapping[str, str], front_end: FrontEnd) -> ResolvedPaths: ...
-def auth_status(paths: ResolvedPaths) -> AuthStatus: ...               # local only, no network: NO_CREDENTIALS | NOT_SIGNED_IN | SIGNED_IN
+def check_client_file(paths: ResolvedPaths) -> ClientFileStatus: ...  # local only, no flow, no network: MISSING | BAD_CLIENT_FILE | OK (UA-12)
+def auth_status(paths: ResolvedPaths) -> AuthStatus: ...               # local only, no network: NO_CREDENTIALS | BAD_CLIENT_FILE | NOT_SIGNED_IN | SIGNED_IN
 def sign_in(paths: ResolvedPaths, sink: EventSink, cancel: CancelToken) -> AuthStatus: ...  # loopback consent (DLG-01)
 def preflight(request: RunRequest, deps: Deps) -> PreflightReport: ... # read-only: manifest state (OK | MISSING_WITH_PDFS | UNREADABLE), missing-file count
 def run(request: RunRequest, deps: Deps, sink: EventSink, cancel: CancelToken) -> RunSummary: ...
@@ -294,7 +295,8 @@ def run(request: RunRequest, deps: Deps, sink: EventSink, cancel: CancelToken) -
 
 - `run` is **synchronous and thread-agnostic**: the CLI calls it on the main thread; the GUI calls it on a worker `QThread`. It never touches UI objects.
 - `preflight` lets the GUI show DLG-03 (history unreadable) and DLG-04 (PDFs but no history, confirm) **before** starting; `run` re-checks the same conditions itself, so the CLI (which warns and continues, FR-033) and the GUI cannot diverge in behaviour (FR-064).
-- `auth_status` reads only the local token file (no API call). The account e-mail address is **never** fetched: `users.getProfile` is outside the NFR-011 allow-list, and adding `openid email` scopes would break FR-001.
+- **Client-file check (UA-12, ux-spec v0.3).** `check_client_file` parses `credentials.json` structurally (JSON object with an `installed` key; ADR-003 §4) **without starting the OAuth flow** and without network. The GUI calls it at launch and on `Check again`, so the wrong-file Notice appears before any sign-in. `auth_status` calls it first, and `sign_in`/`run` call it again before `InstalledAppFlow` is created. In the CLI a wrong file stops the run before any flow with the fixed `BAD_CLIENT_FILE` message and **exit 3** (§6.5). File contents are never logged or shown.
+- `auth_status` reads only the local credentials and token files (no API call). The account e-mail address is **never** fetched: `users.getProfile` is outside the NFR-011 allow-list, and adding `openid email` scopes would break FR-001.
 - `RunSummary` holds the seven FR-042 fields, `result: RunResult` (`COMPLETED`, `COMPLETED_WITH_ERRORS`, `CANCELLED`, `FAILED`, `AUTH_FAILED`), warnings, paths of the log and CSV (or `None` for dry runs), and `exit_code`.
 - `Deps` (built by `bootstrap.build_deps`) holds the port implementations; tests substitute fakes.
 
@@ -367,14 +369,14 @@ sequenceDiagram
 | Success, no errors (including 0 PDFs found, FR-016) | `COMPLETED` | 0 | Yes (non-dry run) |
 | ≥ 1 `ERROR` row (FR-036) | `COMPLETED_WITH_ERRORS` | 1 | Yes |
 | Bad arguments / validation (FR-015, 045) | — | 2 | No (input validation not passed, GOAL-10 scope) |
-| `credentials.json` missing, consent failed, `RefreshError` mid-run (FR-003, 006) | `AUTH_FAILED` | 3 | Yes (log + header-only or partial CSV) |
-| **Manifest unreadable or newer schema (FR-032)** | `FAILED` | **1** | Log + header-only CSV; **no PDF written, manifest untouched** |
+| `credentials.json` missing or **not a Desktop app OAuth client** (UA-12, checked before any flow), consent failed, `RefreshError` mid-run (FR-003, 006) | `AUTH_FAILED` | 3 | Yes (log + header-only or partial CSV) |
+| **Manifest unreadable or newer schema (FR-032, PD-18)** | `FAILED` | **1** | Log + header-only CSV; **no PDF written, manifest untouched** |
 | **Unexpected internal exception** | `FAILED` | **1** | Yes; redacted one-line message on console/GUI; redacted traceback in the log at `DEBUG` only |
 | User cancel (Ctrl+C, Cancel) (FR-037) | `CANCELLED` | **1** | Yes |
 
 **Distinct first lines (PD-13, PRD v0.3):** cancel → `Run cancelled` (plus "saved files are kept; run the same range again to continue"); unreadable manifest → `error: <path to .manifest.json> cannot be read …` with restore/move-aside steps and the new-folder route (PD-11); internal failure → `error: unexpected failure, see the run log: <path>`. None prints a stack trace or secret. The GUI banner uses the same wording (single text table in `domain/messages.py`).
 
-**Decision (PQ-02, numeric mapping owned by SA under PD-13):** the exit-code set stays **closed at 0–3** (the LOG-05 contract scripts depend on). Exit 1 means "the run did not complete cleanly; read the summary". The `result` field and the summary's first line disambiguate. Rationale: adding codes 4/130 widens a sponsor contract with no requirement asking for it. qa-engineer to confirm (PRD PQ-02 co-owner). **Interpretation flagged to PM:** FR-032 "no files written" is read as "no PDFs and no manifest change"; the run log and a header-only CSV are still written so GOAL-10 (a)(b) holds (AQ-03).
+**Decision (PQ-02, numeric mapping owned by SA under PD-13):** the exit-code set stays **closed at 0–3** (the LOG-05 contract scripts depend on). Exit 1 means "the run did not complete cleanly; read the summary". The `result` field and the summary's first line disambiguate. Rationale: adding codes 4/130 widens a sponsor contract with no requirement asking for it. qa-engineer to confirm (PRD PQ-02 co-owner; cancel = exit 1 confirmed by PD-19). **FR-032 (PD-18, PRD v0.4):** an unreadable manifest writes no PDF and leaves the manifest untouched, but the run log and a header-only CSV are written, so GOAL-10 covers this outcome (AQ-03 closed).
 
 User-facing error text comes only from `redaction.safe_message(exc)` (§8.4): one line, no traceback, no secret, an action hint where known.
 
@@ -402,7 +404,7 @@ All events are frozen dataclasses in `domain/events.py`; every string is already
 | `SignInWaiting` / `SignInFinished` | `timeout_s` / `result` (`OK`, `DENIED`, `TIMED_OUT`, `CANCELLED`, `BAD_CLIENT_FILE`) | DLG-01, DLG-02 |
 | `PhaseChanged` | `phase` = `SIGNING_IN`, `LISTING`, `PLANNING`, `DOWNLOADING`, `FINALISING` | Phase line; indeterminate bar while `LISTING` |
 | `TotalKnown` | `messages_total` (after listing, de-duplicated across both queries), `baseline`, `sweep_extra` | **UQ-02**: `Message N of TOTAL` |
-| `Progress` | `messages_done`, `messages_total`, counts `saved/renamed/skipped/not_pdf/errors`, `bytes_saved`, `elapsed_s` | Counts, bar (coalesced ≤ 10 Hz GUI, ≤ 1 Hz CLI) |
+| `Progress` | `messages_done`, `messages_total`, counts `saved/renamed/skipped/not_pdf/errors`, `bytes_saved`, `elapsed_s` | Counts, bar (GUI: R-COUNT, ≤ 10 Hz to the UI thread, redrawn ≤ 4 times a second, §4.3; CLI progress line ≤ 1 per second) |
 | `ItemStarted` | `message_id`, `part_id`, `planned_name` (or original name before allocation) | **UQ-02**: `Now: <name>` |
 | `OutcomeRecorded` | the CSV `Outcome` + `error_code` + `error_reason` (one redacted sentence, `None` unless `ERROR`) | Results/errors table, DLG-05 details |
 | `PlannedName` | dry-run row: `would-save`, `would-save-renamed`, `already-downloaded`, names, dates | SCR-04, CLI dry-run list |
@@ -422,17 +424,17 @@ Semantic versioning of the package (`v0.9.0` R1, `v1.0.0` R2). The CLI flags, ex
 
 ## 7. NFR Tactics
 
-| NFR | Target (PRD v0.2) | Tactic(s) | Component(s) | Verification |
+| NFR | Target (PRD v0.4, commit 5dc3289) | Tactic(s) | Component(s) | Verification |
 |-----|-------------------|-----------|--------------|--------------|
 | NFR-001 | 1,000 msgs ≤ 15 min at 300 ms/call | Two calls per new message (one `messages.get`, one `attachments.get`); list pages of 500; one client reused; no per-message disk scans (in-memory occupied-name set); FR-038 worker seam if missed. Budget: 1,000 × 2 × 0.3 s ≈ 10 min + recall-sweep extras (ADR-007) | planner, downloader, gateway | Benchmark test with the latency mock (test-strategy §7); W3 real timing recorded |
 | NFR-002 | Re-run / dry run 1,000 msgs ≤ 8 min | Re-run: messages marked `complete` are skipped **without** `messages.get` (list calls only, ≈ seconds). Dry run: one `messages.get` per message, no bytes (≈ 5 min) | planner, manifest | Benchmark test (re-run and dry run variants) |
 | NFR-003 | ≤ 50 ms overhead/message p95 | O(1) set lookups; streaming SHA-256; one `fsync` for the file + two small journal `fsync`s; CSV flush without `fsync`; no JSON rewrite per update | downloader, manifest, audit | Zero-latency mock, 1,000 messages, per-message timer histogram |
-| NFR-004 | Window ≤ 3 s; stall ≤ 200 ms; Cancel ≤ 5 s | Core on a `QThread`; queued signals; count updates coalesced to ≤ 10 Hz; Google libraries imported lazily after first paint; cancel-aware sleeps | gui.worker, gui.app, retry | Instrumented pytest-qt test (event-loop heartbeat timer); 10 cold launches stopwatch on Windows 11 |
-| NFR-005 | 100 % reconcile; ≤ 1 row lost after hard kill | Log + CSV opened before auth; one row per outcome, flushed; summary counts computed from the same outcome stream | audit, runner | Reconciliation test over 6 scripted outcomes + hard-kill subprocess test, CLI and GUI |
+| NFR-004 | Window ≤ 3 s; stall ≤ 200 ms; Cancel ≤ 5 s | Core on a `QThread`; queued signals; R-COUNT (`Progress` ≤ 10 Hz to the UI thread, redraw ≤ 4 times a second, §4.3); Google libraries imported lazily after first paint; cancel-aware sleeps | gui.worker, gui.app, retry | Instrumented pytest-qt test (event-loop heartbeat timer); 10 cold launches stopwatch on Windows 11 |
+| NFR-005 | 100 % reconcile; ≤ 1 row lost after hard kill | Log + CSV opened before auth and before the manifest is loaded (so an unreadable manifest still leaves both, PD-18); one row per outcome, flushed; summary counts computed from the same outcome stream | audit, runner | Reconciliation test over 8 scripted outcomes (incl. unreadable manifest and internal failure) + hard-kill subprocess test, CLI and GUI |
 | NFR-006 | 6 attempts, 1–64 s, jitter, `Retry-After` | Own retry helper (§6.4); library retry disabled | retry, gateway | Fake clock + scripted 429/503/403-rate-limit responses; attempts and delays asserted |
 | NFR-007 | 100 kill points: 0 partial finals, ≤ 1 temp, 0 dup/lost | Temp + `fsync` + no-clobber move; two-phase journal (pending/commit) with hash verification of pending entries on load; leftover `.gmail_pdf-*.part` ignored and counted as a warning | file_store, manifest | Fault-injection loop (100 iterations) with `os._exit` at injected points in a subprocess |
 | NFR-008 | Faults at fetch/decode/write: others saved, exit 1 | Per-message and per-candidate `try/except` for specific exceptions (`HttpError`, `binascii.Error`, `OSError`, `ValueError`) → `ERROR` row, continue | runner, downloader | Fault-injection test, one fault at each of 4 points |
-| NFR-009 | ≤ 300 MB peak with 25 MB attachment; growth ≤ 10 % 500 → 10,000 msgs | One attachment in memory at a time (≈ 4–5 × 25 MB transient: response bytes, JSON string, decoded bytes); decode then write in 1 MiB chunks with incremental hashing; payloads dropped after planning; compact slotted `MessagePlan`. **Q-11 answer below** | gateway, planner, downloader | `tracemalloc` + RSS sampling in a memory test; **growth clause challenged (AR-03)** |
+| NFR-009 | ≤ 300 MB peak with 25 MB attachment; retained growth **≤ 2 KB per candidate message and per manifest entry** between the 500- and 10,000-message fixtures (≈ 19 MB over 9,500 messages); no attachment bytes kept after a message is finished (PRD v0.4, PD-17) | One attachment in memory at a time (≈ 4–5 × 25 MB transient: response bytes, JSON string, decoded bytes); decode then write in 1 MiB chunks with incremental hashing; payloads dropped after planning; compact slotted `MessagePlan`. **Q-11 answer below** | gateway, planner, downloader | `tracemalloc` + RSS sampling in a memory test: peak ≤ 300 MB; (retained bytes at 10,000 − at 500) ÷ (candidate messages + manifest entries added) ≤ 2 KB (AR-03 resolved) |
 | NFR-010 | 10,000 msgs; ≥ 50,000 entries; update ≤ 50 ms p95 | Journal append O(1); compaction once per run; dict keyed by `messageId:partId` | manifest | Large-fixture run; manifest micro-benchmark |
 | NFR-011 | 1 scope; 0 write calls | Scope constant `SCOPES = ("https://www.googleapis.com/auth/gmail.readonly",)` in one place; gateway exposes only 3 read methods; import-boundary test forbids other `users()` calls | auth, gateway | Recording mock asserts scopes and every method; AST test |
 | NFR-012 | 0 sentinel occurrences anywhere | Single redaction path (§8.4); secrets registered at load; credentials objects never formatted | redaction, audit, cli, gui | Sentinel matrix test (test-strategy §6); gitleaks in CI |
@@ -443,16 +445,16 @@ Semantic versioning of the package (`v0.9.0` R1, `v1.0.0` R2). The CLI flags, ex
 | NFR-017 | 100 % keyboard + visible focus | Native Qt focus chain, explicit tab order, focus-ring token in QSS (`:focus`), mnemonics/shortcuts | gui | pytest-qt tab-order test + manual walkthrough |
 | NFR-018 | Contrast ≥ 4.5:1 text, ≥ 3:1 focus/borders | Palette token pairs declared in `tokens.py` | gui.theme | Unit test computing WCAG ratios from tokens |
 | NFR-019 | Screen reader (R3) | Qt UI Automation support; `setAccessibleName` on every control from day one (cheap) | gui | Narrator walkthrough (R3) |
-| NFR-020 | Win 11 full; macOS/Linux best effort; Py 3.10–3.12 | Pure-Python core; `pathlib`; OS branches only in `infra/paths.py` and `file_store`; CI matrix | all | CI matrix (test-strategy §9) |
+| NFR-020 | Win 11 full (target OS confirmed, Q-02); macOS/Linux best effort; Py 3.10–3.12 | Pure-Python core; `pathlib`; OS branches only in `infra/paths.py` and `file_store`; CI matrix | all | CI matrix (test-strategy §9) |
 | NFR-021 | 0 clipped controls min size → 4K at 100/150/200 % | Qt 6 high-DPI (always on, cannot be disabled — Qt docs via context7); layouts only (no absolute geometry); `PassThrough` rounding (Qt default); min size token | gui | Screenshot matrix (`QT_SCALE_FACTOR` 1/1.5/2 in CI + manual on Windows) |
-| NFR-022 | Tests pass; changed code 100 %; package ≥ 85 %; ruff; mypy strict | Pure domain functions; ports with fakes; `diff-cover` gate; `--cov-fail-under=85` | all | CI (test-strategy §5) |
+| NFR-022 | Tests pass; changed code **≥ 80 %**; package **≥ 80 %**; ruff; mypy strict (coding-standards §6 as amended 2026-10-29; PRD v0.4 NFR-022 / PD-10; D-30 supersedes the 100 %/85 % of D-24; D-31 makes the D-25 pragma exceptions obsolete) | Pure domain functions; ports with fakes; `diff-cover --fail-under=80` on combined coverage; `--cov-fail-under=80`; no `# pragma: no cover` | all | CI (test-strategy §5) |
 | NFR-023 | 0 unapproved runtime deps | ADR-002 allow-list; CI check compares installed top-level runtime deps with the list | build | CI dependency check; G6 review |
 | NFR-024 | English; `YYYY-MM-DD` input; Unicode names kept | Strict `date.fromisoformat` with regex `^\d{4}-\d{2}-\d{2}$`; NFC + Unicode-aware sanitiser | validation, naming | Table-driven tests |
 | NFR-025 | Not applicable (Won't) | — | — | — |
 
 **Q-11 remainder (NFR-05 "stream each PDF to disk") — answer.** `users.messages.attachments.get` returns the bytes as a base64url string inside a JSON body (`MessagePartBody.data`, confirmed in the API reference via context7); there is no media-download variant for attachments, so true end-to-end streaming is not available. ASSUMPTION-16 is therefore **confirmed**: "bounded memory per attachment, one message and one attachment at a time". Expected peak for a 25 MB PDF ≈ 34 MB response + 34 MB string + 25 MB bytes + runtime ≈ 150–200 MB, within NFR-009's 300 MB (to be measured in W1). Writing to disk is chunked after decode.
 
-**AR-03 (challenge to NFR-009 growth clause, scope-change proposal to PM).** FR-014 requires sorting every candidate by `internalDate` before naming, so retained metadata grows linearly (≈ 0.5–1 KB per candidate message, plus ≈ 0.5 KB per manifest entry). At 10,000 messages that is ≈ 10–15 MB, which can exceed "≤ 10 % growth" of a ≈ 60–80 MB baseline. Proposed wording: "growth ≤ 2 KB per candidate message and per manifest entry between the 500- and 10,000-message fixtures; no attachment bytes retained across messages". To be measured in W1 before the PM decides.
+**AR-03 (NFR-009 growth clause) — resolved by PD-17 (PRD v0.4).** FR-014 requires sorting every candidate by `internalDate` before naming, so retained metadata grows linearly (≈ 0.5–1 KB per candidate message, plus ≈ 0.5 KB per manifest entry). At 10,000 messages that is ≈ 10–15 MB, which could exceed the former "≤ 10 % growth" of a ≈ 60–80 MB baseline. PRD v0.4 adopted the proposed wording: "≤ 2 KB per candidate message and per manifest entry between the 500- and 10,000-message fixtures; no attachment bytes kept after a message is finished". The estimate leaves ≥ 2× headroom; the W1 benchmark records the real figure (RISK-014).
 
 ---
 
@@ -583,7 +585,12 @@ PDF-Download-Gmail/
 - `snake_case` modules/functions, `PascalCase` classes, `UPPER_CASE` constants; ports end in `Port`/`Provider`/`Sink`/`Store`.
 - Records: `@dataclass(frozen=True, slots=True)`; enums for statuses; `Path` for every path; aware datetimes only.
 - Errors: domain errors subclass `GmailPdfError`; adapters translate library exceptions at the boundary; user text only via `safe_message`.
-- **Write-path rule (refines coding-standards §10 "atomic `os.replace`"):** PDFs and CSV/log files are **never** written with `os.replace` (it overwrites). Use `file_store.move_no_clobber`. `os.replace` is allowed only for files the app owns and intends to replace: manifest snapshot, token. (Flagged to reviewer-standards, §16.)
+- **Write-path rule (coding-standards §10 as amended; D-32, which supersedes D-26).** Never overwrite an existing file (§10). If a target name exists, use the first free `_1`, `_2`, … name. The app also never deletes a user-visible file; it deletes only its own temp files and the token (on `invalid_grant` or sign-out).
+  - **PDFs:** temp file in the output folder → `fsync` → `file_store.move_no_clobber` (fails if the target exists; `FileExistsError` → next suffix). Never `os.replace`.
+  - **Run log and CSV report** (streamed, user-visible): opened with **exclusive create** (`open(..., "x")` / `FileHandler(mode="x")`) under a unique name; `FileExistsError` → next suffix. Never appended to, replaced or moved over.
+  - **`os.replace`** only for app-owned state the app intends to replace: the **manifest snapshot** (and its `.bak`) and the **token** file. The manifest journal is app-owned and append-only, truncated only after a successful compaction.
+  - The only exception is the POSIX FAT/exFAT fallback in ADR-004 step 4 (no hard links), accepted debt AR-04/D-27 (issue #4, RISK-015); it never runs on Windows 11.
+  - reviewer-standards checks every `open(`, `os.replace`, `os.rename`, `shutil.move` and `unlink` in a diff against this rule.
 - GUI: no literal colour, font size, weight or spacing outside `gui/theme/tokens.py`; only `AppButton` creates buttons (checked by a test that greps `gui/` for `QPushButton(` outside `widgets/button.py` and for colour/px literals outside `theme/`).
 
 ---
@@ -609,7 +616,7 @@ Licence compatibility: all permissive except PySide6 (LGPL-3.0), which is compat
 
 ## 12. Coverage Matrix
 
-Every PRD v0.2 FR and NFR maps to at least one component.
+Every PRD v0.4 FR and NFR (commit 5dc3289) maps to at least one component (FR-001..066, NFR-001..025). The ID set is the one master checked by script against v0.3 at G3 (0 gaps); v0.4's wording changes (FR-032/039/040/043/044, NFR-005/009/016/022) need no new component and are applied in §6.5 and §7.
 
 | Requirement | Component(s) | Notes |
 |-------------|--------------|-------|
@@ -695,7 +702,7 @@ Every PRD v0.2 FR and NFR maps to at least one component.
 |----|-------------|--------|------------|--------------|
 | AR-01 (RISK-007) | Recall sweep cost on the real mailbox unknown (ratio of non-`filename:pdf` attachment messages) | NFR-001 miss or residual recall gap | ADR-007 cost gate; S-01 measurement in W3; FR-038 fallback | EPIC-02; GitHub issue (architecture) |
 | AR-02 (RISK-012) | PySide6 fails a §9 check (e.g. QSS cannot express a token need, fractional-scaling artefacts) | R2 rework | S-02 spike before W4; fallback ranking in ADR-001 | EPIC-10; GitHub issue (architecture) |
-| AR-03 (RISK-011) | NFR-009 growth clause unattainable with deterministic sort | False NFR failure | Scope-change proposal (§7); measure in W1 | EPIC-02/05 benchmark story |
+| AR-03 (RISK-014) | NFR-009 growth clause unattainable with deterministic sort | False NFR failure | **Resolved by PD-17 (PRD v0.4):** NFR-009 now says ≤ 2 KB per candidate message and per manifest entry, peak ≤ 300 MB; measured in W1 | EPIC-02/05 benchmark story |
 | AR-04 | No-clobber move needs hard links on POSIX; FAT/exFAT volumes lack them | Narrow race window (check-then-replace fallback) on such volumes | Windows uses `os.rename` (fails if target exists, no race); POSIX fallback documented; single-user tool | EPIC-05; GitHub issue (tech-debt) |
 | AR-05 | `attachmentId` staleness during long runs | Spurious ERROR rows | Re-fetch message once (§6.2) | EPIC-03 |
 | AR-06 | `\\?\` long-path handling on Windows untested | Write failures for deep folders | W1 test on Windows CI | EPIC-04 |
@@ -708,37 +715,47 @@ Every PRD v0.2 FR and NFR maps to at least one component.
 
 | ID | Question / assumption | Owner | Needed by | Working position |
 |----|----------------------|-------|-----------|------------------|
-| AQ-01 | GUI setup help shows resolved credential/token/output paths and how to share them with the CLI (env vars) | ux-expert | G3 reconciliation | **Closed:** SCR-03 always shows the exact path (ux-spec §0); env-var sharing to be added to DLG-07 help text (§17 UX-I-04) |
-| AQ-02 | Global user preference "leverage shadcn ui components" (user CLAUDE.md) vs a native desktop GUI: is shadcn-derived **design language** in Qt acceptable? | Santhosh (FYI, G8) | G8 | Yes — ADR-001 Option C records the trade-off |
-| AQ-03 | FR-032 "no files written" read as "no PDFs/manifest change"; log + header-only CSV still written (GOAL-10) | product-manager | G4 | As stated |
-| AQ-04 | Cancelled run exits 1 (closed 0–3 set) | qa-engineer, PM | G4 | As stated (§6.5) |
-| AQ-05 | Reconcile with ux-spec | solution-architect + ux-expert | G3 | **Closed** — §17 |
+| AQ-01 | GUI setup help shows resolved credential/token/output paths and how to share them with the CLI (env vars) | ux-expert | G3 reconciliation | **Closed.** SCR-03 always shows the exact path (ux-spec §0); the env-var sharing line is in DLG-07 per UX-I-04 (ux-spec v0.3, 4f1536f, C9). No architecture change |
+| AQ-02 | Does a user-level UI component-library preference apply to this desktop GUI? | Santhosh | — | **Superseded by D-29 (closed).** shadcn/ui is not used on this project, neither as components nor as a design language (PGD-1 c.10108; supersedes that part of D-20; RISK-019 closed). The UI follows CLAUDE.md §9.2 and the ux-spec §7 tokens only (ADR-001) |
+| AQ-03 | FR-032 "no files written" read as "no PDFs/manifest change"; log + header-only CSV still written (GOAL-10) | product-manager | G4 (C8) | **Closed by C8 — PD-18 (PRD v0.4, 5dc3289; FR-032, FR-040, GOAL-10):** an unreadable manifest writes a run log and a header-only CSV, no PDF, manifest untouched, exit 1 |
+| AQ-04 | Cancelled run exits 1 (closed 0–3 set) | qa-engineer, PM | G4 (C8) | **Closed by C8 — PD-19 (PRD v0.4, 5dc3289; FR-043)** and D-21 (§6.5); qa-engineer confirms in the test plan |
+| AQ-05 | Reconcile with ux-spec | solution-architect + ux-expert | G3 | **Closed.** §17 reconciles ux-spec v0.2 (d200c27) and the C9 outcome in v0.3 (4f1536f); every item is Aligned (§17.4); the S-02 items are tracked under C11 |
 | AA-01 | Gmail epoch `after:`/`before:` boundary semantics undocumented → ±1 s widening + local filter | SA | W1 | — |
 | AA-02 | `attachmentId` from a recent `messages.get` remains fetchable for the run | SA | W1/W3 | Re-fetch fallback |
 | AA-03 | `build()` uses bundled static discovery docs (no discovery fetch) | developer | W1 | Verify with pinned version |
 | AA-04 | Gmail per-user quota far above ≈ 200 calls/min | developer | W1 | Verify current Google docs |
 | AA-05 | 60 s HTTP timeout acceptable | SA | W1 | Library default (`DEFAULT_HTTP_TIMEOUT_SEC = 60`) |
 | AA-06 | `\\?\` prefix works with `os.rename`/`os.link` on Windows 11 | developer | W1 | Test on Windows CI |
-| AA-07 | CSV written as UTF-8 with BOM | PM (format), developer | G4 | BOM chosen for Excel; LOG-02 unchanged |
-| AA-08 | Log/CSV timestamp in the run's zone | PM | G4 | As stated |
+| AA-07 | CSV written as UTF-8 with BOM | PM (format), developer | G4 (C8) | **Confirmed — PD-19.** BOM chosen for Excel; LOG-02 unchanged |
+| AA-08 | Log/CSV timestamp in the run's zone | PM | G4 (C8) | **Confirmed — PD-19** |
 | AA-09 | `run_local_server` supports a timeout parameter in the pinned version | developer | W2 | Verify; else wrap with a cancellable thread |
 | AA-10 | Google token prefixes (`ya29.`, `1//`, `GOCSPX-`) are heuristics; registry is the primary control | SA | — | Defence in depth only |
-| AA-11 | Full `--query` text logged only at DEBUG (may contain e-mail addresses) | PM | G4 | As stated |
+| AA-11 | Full `--query` text logged only at DEBUG (may contain e-mail addresses) | PM | G4 (C8) | **Confirmed — PD-19** |
+| UA-12 (ux-spec v0.3) | The client-file check runs on its own, without starting the OAuth flow | SA | G4 | **Yes** — `check_client_file()` / `auth_status()` (§6.1, ADR-003 §4) |
 
 ---
 
 ## 16. Issues for Other Roles
-- **product-manager:** AR-03 (NFR-009 growth wording); AQ-03, AQ-04, AA-07/08/11 confirmations; PQ-01/PQ-02 answered (ADR-006, §6.5) — please mark resolved in PRD §12.
-- **business-analyst:** DR-005 now holds `from`/`subject`, `internal_date_ms`, per-message records → classification Confidential; Q-03, Q-07, Q-08, Q-11 remainder answered by ADR-005, ADR-007, ADR-002, §7.
-- **master (G3 decision requested):** test-strategy §5 proposes a narrow `# pragma: no cover` exception list (entry-point guards, crash-handler last resort, OS branch with no CI leg), each reported in CI and accepted by reviewer-standards. This relaxes coding-standards §6 (100 % changed code) slightly; approve or reject. GUI glue is **not** exempt.
-- **reviewer-standards / master:** coding-standards §10 "Write files via temp file + atomic `os.replace`" conflicts with "never overwrite" for PDFs; this architecture uses a no-clobber move (§10.2). Suggest a standards clarification. Coding-standards §7 budgets (API latency, LCP) are web-oriented and not applicable.
-- **ux-expert:** issues UX-I-01..06 in §17; tokens map 1:1 to `gui/theme/tokens.py` (ADR-001 §Token contract).
-- **product-manager (from UX reconciliation):** PD-12 (800 × 560 + clamp), PD-13 (exit 1 for all three, distinct first lines), PD-15 and PD-16 are implemented as specified — no further PRD change needed; PQ-02 and PQ-03 can be closed. PQ-04/UQ-05 preferences file (if ever adopted: one small JSON in the app-data folder, no new dependency).
-- **Santhosh (delivery lead):** AQ-02. CLAUDE.md §1 build command installs runtime pins only; developers/CI need `pip install -r requirements-dev.txt` (append a note to CLAUDE.md if agreed — file is append-only).
+
+Status as of v0.2 (2026-10-29). Items resolved at G3 or by the delivery lead stay listed for traceability.
+
+| To | Item | Status |
+|----|------|--------|
+| product-manager | AR-03 (NFR-009 growth wording); AQ-03, AQ-04, AA-07/08/11 confirmations; mark PQ-01..03 resolved in PRD §12 | **Closed** — PRD v0.4 (PD-17, PD-18, PD-19), applied here |
+| product-manager | NFR-022 thresholds → ≥ 80 % changed code and ≥ 80 % whole package (delivery-lead decision, D-30) | **Closed** — PRD v0.4 NFR-022 / PD-10; applied in §7 and test-strategy §5 |
+| product-manager | PD-12, PD-13, PD-15 and PD-16 are implemented as specified. PQ-04/UQ-05 preferences file, if ever adopted: one small JSON in the app-data folder, no new dependency | Info |
+| business-analyst | DR-005 → Confidential, with From, Subject, `internal_date_ms` and per-message records. Q-03, Q-07, Q-08 and the Q-11 remainder are answered by ADR-005, ADR-007, ADR-002 and §7 | **Closed by C7** — catalogue v0.3 (5dc3289, 6ea45af) |
+| ux-expert | UX-I-01..06; count-refresh rule R-COUNT (adopted here); UJ-01/UA-05 local wrong-client-file check (ADR-003 §4) | **Closed by C9** — ux-spec v0.3 (4f1536f) answers all; architecture aligned (§17.4) |
+| master | `# pragma: no cover` exception list | **Withdrawn.** D-31 supersedes D-25 in full: with the 80 %/80 % gates (D-30) no pragma exception is defined. A pragma in a diff is an ordinary review point under coding-standards §6 (test-strategy §5) |
+| master / reviewer-standards | coding-standards §10 `os.replace` vs "never overwrite"; §7 web budgets | **Resolved** — D-32 (supersedes D-26): amended coding-standards §10 and §7 (e71302b, 834f7d2); §10.2 applies it and master found the design conforming |
+| Santhosh (delivery lead) | AQ-02 (UI component-library preference) | **Closed** — ruled not applicable (D-29) |
+| Santhosh (delivery lead) | The CLAUDE.md §1 build command installs runtime pins only; developers and CI also need `pip install -r requirements-dev.txt` (optional append-only note) | Optional FYI |
 
 ---
 
-## 17. UX Reconciliation (ux-spec v0.1, commit 7159423)
+## 17. UX Reconciliation (ux-spec v0.3, commit 4f1536f; C9 outcome)
+
+v0.1 of this section reconciled ux-spec v0.1 (7159423). ux-spec v0.2 (d200c27, the version master reviewed at G3) changed nothing that §17.1–17.3 decided. ux-spec v0.3 is the C9 outcome: it accepts UX-I-01..06 and defines one count-refresh rule, R-COUNT, which this architecture adopts. §17.4 records the item-by-item position; all items are Aligned.
 
 ### 17.1 Decisions on UX assumptions and questions
 | Item | Architecture decision | Where |
@@ -770,3 +787,30 @@ Summary (detail and evidence status in ADR-001 §Capability checklist): PySide6 
 | UX-I-04 | SCR-03 shows the GUI path, but a CLI user would sign in again unless both use the same files | Add one help line (DLG-07): "To share sign-in with the command line, set `GMAIL_CREDENTIALS_PATH` and `GMAIL_TOKEN_PATH`." |
 | UX-I-05 | CLI second Ctrl+C: architecture originally proposed a hard exit; ux-spec ignores it | **Adopted the ux-spec behaviour** (§6.9); no change requested |
 | UX-I-06 | Tabular figures for counts need `QFont` OpenType feature support (Qt ≥ 6.7) and Segoe UI Variable support | S-02 item; if unavailable, counts use the default figures (no layout jump because count tiles have a fixed minimum width from tokens) |
+
+### 17.4 G3 condition C9 — outcome and architecture position
+ux-expert closed C9 with ux-spec v0.3 (commit 4f1536f; §0.1 and change log there). It accepts UX-I-01..06, defines one count-refresh rule (R-COUNT, ux-spec §0.1 and §6.0) and moves the wrong-client-file check before sign-in (UA-05, UA-12). This table was re-checked against the committed v0.3 and records the architecture position for each item. Where v0.3 asked for an architecture change (its issues for solution-architect, items 1–6), this version makes it.
+
+| Item | ux-spec v0.3 | Architecture position (binding for implementation) | Status |
+|------|--------------|-----------------------------------------------------|--------|
+| Count refresh (G3 check 8b) | **R-COUNT:** worker up to 10 Hz; window redraws counts, bar, elapsed time and current item at most 4 times a second (250 ms, latest wins); phase changes and final values drawn at once; announcements ≤ 1 per 10 s; CLI ≤ 1 per second | **Adopted as the single rule** (§4.3, §6.8, §7 NFR-004, ADR-001 decision 6 and row 14). The 10 Hz stage is a technical guard for the UI thread's input queue; the user-facing limit is 4 per second. Closes UA-13 | Aligned |
+| UX-I-01 motion | Accepted: `motion.fast` = 0 in R2. Counter-point: the indeterminate progress bar still honours the OS reduced-motion setting | **Accepted.** ADR-001 row 10 now reads "needed for the progress bar only": on Windows the app reads `SPI_GETCLIENTAREAANIMATION` once at start-up (one `ctypes` call, no dependency); elsewhere motion is allowed (best effort). If S-02 finds it unreliable, the bar's motion is accepted as essential feedback (ux-spec fallback) | Aligned; S-02 (C11) |
+| UX-I-02 line heights | Accepted: size and weight are the contract | No change | Aligned |
+| UX-I-03 scrim | Accepted with fallback (dialog border) | No change; S-02 item | Aligned; S-02 |
+| UX-I-04 env-var line | Accepted: DLG-07 and README sentence | No change | Aligned |
+| UX-I-05 second Ctrl+C | ux-spec behaviour kept; asks §4.2 to match | **Fixed** in §4.2 `main.py` | Aligned |
+| UX-I-06 tabular figures | Accepted with the architecture fallback (`layout.stat.min`) | No change; S-02 item | Aligned; S-02 |
+| UJ-01 / UA-05 wrong client file | Local check before sign-in | As ADR-003 §4 | Aligned |
+| UA-12 / UA-13 | Client-file check runs on its own; R-COUNT cited instead of a second number | `check_client_file()` (§6.1); R-COUNT cited in §4.3, §6.8, §7 NFR-004 and ADR-001 | Aligned |
+| Design kit | No third-party design kit or component library (D-29) | ADR-001 decision 5; AQ-02 superseded | Aligned |
+
+A later ux-spec change to any row above is re-checked by the solution-architect before the G4 of the sprint it affects.
+
+---
+
+## 18. Change Log
+
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| 0.1 | 2026-10-29 | solution-architect | First version for G3 (commit 75b7e47) |
+| 0.2 | 2026-10-29 | solution-architect | Closes G3 **C10**. Cites the current ux-spec v0.3 (4f1536f, C9 outcome) and PRD v0.4 (5dc3289) in the header, Inputs, §7, §12 and §17, naming v0.2 / v0.3 as the versions reviewed at G3; §17.4 records the C9 outcome against the committed v0.3. §5.2 and §10.2: run log and CSV opened with exclusive create and never replaced; PDFs by no-clobber move; `os.replace` only for the manifest snapshot and the token (coding-standards §10 `_1`/`_2` rule; D-32 supersedes D-26). §7 NFR-022: ≥ 80 % changed code and ≥ 80 % whole package (D-30), no pragma exceptions (D-31). Count refresh adopts ux-spec v0.3 R-COUNT: worker ≤ 10 Hz, window redraw ≤ 4 times a second (§4.3, §6.8, §7, §17.4); UX-I-05 fixed in §4.2; UX-I-01 counter-point accepted (ADR-001 row 10). AQ-01, AQ-02 (D-29) and AQ-05 closed; AQ-03/04 and AA-07/08/11 linked to C8 and closed by PD-18/PD-19 (PRD v0.4); NFR-009 and AR-03 take the PD-17 wording. UI component-library preference ruled not applicable (D-29). Windows 11 confirmed (Q-02); ASAP with R1 first (Q-01). §16 is now a status table |

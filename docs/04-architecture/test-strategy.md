@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.1 |
+| Version | 0.2 |
 | Owner | solution-architect (technical strategy); qa-engineer owns the test plan and acceptance (`docs/07-qa/test-plan.md`) |
 | Date | 2026-10-29 |
-| Status | In Review (G3) |
-| Inputs | [architecture.md](architecture.md), ADR-001..007, PRD v0.3 (NFR-022 / PD-10), ux-spec v0.1, coding-standards §6 and §11, definition-of-done |
+| Status | In Review (G3 condition C10 closed; G4 entry) |
+| Inputs | [architecture.md](architecture.md) v0.2, ADR-001..007, PRD v0.4 (commit 5dc3289; NFR-022 / PD-10, PD-18, PD-19), ux-spec v0.3 (commit 4f1536f; R-COUNT), coding-standards §6, §10 and §11 and definition-of-done as amended (commits e71302b, 834f7d2, 481a46f), D-21..D-34 (D-30 coverage, D-31 pragmas, D-32 file writes) |
 
 ## 1. Principles
 - **No live Gmail in automated tests** (coding-standards §10). Every automated test runs on synthetic fixtures; the only real-mailbox activity is the sponsor's acceptance run (TR-006, PA-04).
@@ -41,7 +41,7 @@ The test-only fake-mailbox hook is the one production seam added for testing; it
 
 ## 4. GUI Testing Approach (R2)
 1. **Presenter first:** `gui/view_model.py` holds all decisions (validation, enabled states, event→display mapping, wording) and is unit-tested without Qt.
-2. **Widget tests with pytest-qt** (`QT_QPA_PLATFORM=offscreen`): form validation inline errors (FR-048), dry-run list equals core plan (FR-049), live counts change under a slow fake (FR-050), Cancel → `Stopping...` → summary within 5 s (FR-051, NFR-004), open-folder/log/CSV calls `QDesktopServices.openUrl` (patched) with the right paths (FR-052), tab order and focus ring presence (FR-060), shortcuts Enter/Ctrl+Enter (PD-15), PlainText rendering of a `<b>`-subject (TB-4).
+2. **Widget tests with pytest-qt** (`QT_QPA_PLATFORM=offscreen`): form validation inline errors (FR-048), dry-run list equals core plan (FR-049), live counts change under a slow fake; R-COUNT holds under a 1,000-event burst (≤ 10 `Progress` signals per second reach the UI thread, ≤ 4 redraws per second, phase changes and the final values drawn at once so the last screen equals the summary) (FR-050, ux-spec v0.3 §0.1, architecture §4.3), Cancel → `Stopping...` → summary within 5 s (FR-051, NFR-004), open-folder/log/CSV calls `QDesktopServices.openUrl` (patched) with the right paths (FR-052), tab order and focus ring presence (FR-060), shortcuts Enter/Ctrl+Enter (PD-15), PlainText rendering of a `<b>`-subject (TB-4).
 3. **Responsiveness (NFR-004):** a 50 ms `QTimer` heartbeat records gaps while a 1,000-message fake run emits events; max gap ≤ 200 ms. Launch time measured in a subprocess (`gmail-pdf-gui --exit-after-first-paint` test flag, inert without `GMAIL_PDF_TESTING=1`).
 4. **Design-system guards (FR-054..057, GOAL-08):** static tests scan `gmail_pdf/gui/**` (excluding `theme/`) for colour literals (`#[0-9a-fA-F]{3,8}`, `rgb(`), `px`/point-size literals, `QFont(` with sizes, `setStyleSheet(` with literals, and `QPushButton(` outside `widgets/button.py`. A test asserts `tokens.py` defines exactly four type roles.
 5. **Contrast (NFR-018):** a unit test computes WCAG ratios for the token pairs listed in ux-spec §7.3.
@@ -49,16 +49,19 @@ The test-only fake-mailbox hook is the one production seam added for testing; it
 
 ## 5. Coverage Policy (NFR-022 / PD-10) and Tooling
 
+Thresholds follow coding-standards §6, the DoD and PRD v0.4 NFR-022 / PD-10, as amended by the delivery lead on 2026-10-29 (D-30). D-30 supersedes the 100 %/85 % thresholds of D-24; D-24's measurement method (combined legs, `diff-cover` against `origin/main`, GUI not exempt) is kept.
+
 | Gate | Rule | Command | Where |
 |------|------|---------|-------|
-| Package floor | Line coverage of `gmail_pdf` ≥ 85 % | `pytest -q --cov=gmail_pdf --cov-branch --cov-report=xml --cov-fail-under=85` | Every PR, every OS leg |
-| **Changed code** | **100 % of changed/added lines** in `gmail_pdf/**` covered, measured against `main` | `diff-cover coverage.xml --compare-branch=origin/main --fail-under=100` | Every PR (Windows leg, after combining coverage) |
-| DoD | ≥ 90 % changed code | Implied by the 100 % gate | — |
+| **Changed code** | **≥ 80 %** of changed/added lines in `gmail_pdf/**` covered, measured against `origin/main` | `diff-cover coverage.xml --compare-branch=origin/main --fail-under=80` | Every PR, `coverage` job, on coverage **combined** from the Windows and Ubuntu legs |
+| **Whole package** | **≥ 80 %** coverage of `gmail_pdf` (branch coverage included) | `pytest -q --cov=gmail_pdf --cov-branch --cov-report=xml --cov-fail-under=80` | Every PR on the Windows leg (target OS, full suite incl. GUI), and re-checked on the combined data with `coverage report --fail-under=80`. Developers run the same command locally |
+| DoD | ≥ 80 % changed code and ≥ 80 % whole package | Same two gates | — |
 
 - **Tool:** `diff-cover` (Apache-2.0, dev-only; ADR-002 dev list). It reads Cobertura `coverage.xml` from `pytest-cov` and the git diff; CI checks out with full history (`fetch-depth: 0`).
-- **Cross-OS branches:** coverage data from the Windows and Ubuntu legs is combined (`coverage combine` of uploaded `.coverage.*` files) before `diff-cover`, so `if os.name == "nt"` branches are covered by the leg that runs them rather than excluded.
+- **Cross-OS branches:** coverage data from the Windows and Ubuntu legs is combined (`coverage combine` of uploaded `.coverage.*` files) before `diff-cover`, so `if os.name == "nt"` branches are covered by the leg that runs them. The macOS leg (core + CLI only) reports coverage but has no threshold, because it does not run the GUI suite.
 - **GUI code is not exempt.** Thanks to the Qt-free view model and offscreen pytest-qt, GUI glue is executable in CI; it counts toward both gates.
-- **`# pragma: no cover` policy — flagged for master decision.** Default: **not allowed**. Proposed narrow exceptions, each with an inline reason (`# pragma: no cover - <reason>`): (a) `if __name__ == "__main__":` guards in entry shims; (b) the last-resort handler body that runs only when the process is already crashing inside the excepthook itself; (c) a platform branch for an OS that no CI leg runs (none expected — macOS runs a core leg). A CI script lists every pragma in the diff in the job summary; any new pragma needs explicit acceptance by reviewer-standards in the PR. Because these exceptions technically relax the coding-standards §6 rule (100 % changed code), **master is asked to approve or reject this list at G3** (Issues for other roles).
+- **`# pragma: no cover`: no exceptions defined.** D-31 supersedes D-25 in full (its exception list, the CI pragma listing and the Major-finding rule all lapse). This strategy defines no coverage exclusions by pragma; a pragma in a diff is an ordinary review point under coding-standards §6.
+- The 80 % gates are floors, not targets: security-relevant code (`redaction.py`, `infra/file_store.py`, `infra/manifest.py`, `domain/naming.py`, `domain/name_allocator.py`) is still tested on every branch by the tests in §6 and §8; reviewer-quality checks this at G6.
 - Excluded from measurement: `tests/`, `spikes/`, repo-root `gmail_pdf_downloader.py` shim (one line, exercised by an e2e test anyway).
 
 ## 6. Security Tests
@@ -68,7 +71,7 @@ The test-only fake-mailbox hook is the one production seam added for testing; it
 | Sentinel-secret matrix | FR-005, NFR-012, AC-07 | Fake credentials/token contain unique sentinels (`SENTINEL-CLIENT-SECRET-…`, `SENTINEL-REFRESH-…`, `ya29.SENTINEL…`). Force every error path (missing/invalid credentials, consent denied/timeout, refresh failure, HTTP 401/403/429/500 with sentinel echoed in the response body, decode/write failures, internal exception, KeyboardInterrupt) for CLI (subprocess) and GUI (pytest-qt: dialogs, details pane, copied diagnostics via clipboard). Assert 0 sentinel occurrences in stdout, stderr, log, CSV, manifest, GUI texts, clipboard, and `DEBUG`-level logs |
 | Scope and method allow-list | FR-001, NFR-011, AC-01 | Stub flow records requested scopes == `{gmail.readonly}`; `FakeGmail` and `HttpMockSequence` recorders assert only `messages.list`, `messages.get`, `messages.attachments.get`; AST test: no `.modify(`, `.trash(`, `.delete(`, `.send(`, `.insert(`, `.batchModify(`, `getProfile` in `gmail_pdf/` |
 | Path traversal / containment | FR-023, FR-027, AC-06 | Malicious-name table; before/after file-system diff of the parent of the output folder |
-| No overwrite | FR-028, GOAL-04 | Pre-existing files hashed before and after every e2e run |
+| No overwrite | FR-028, GOAL-04, coding-standards §10, D-32 | Pre-existing files hashed before and after every e2e run. Pre-created files with the exact run-log and CSV names (same-second start) → the run uses `_1`, the existing files are byte-identical afterwards. A file appearing at the final PDF name between allocation and move → `_n` suffix, no overwrite. AST/grep test: `os.replace` appears only in `infra/manifest.py` and `infra/auth.py` (plus the ADR-004 POSIX FAT fallback in `infra/file_store.py`, accepted debt AR-04) |
 | Token file protection | FR-004, NFR-013 | POSIX: mode `0600`/`0700` asserted (Ubuntu/macOS legs); Windows: default path under `Path.home()`; warning on outside path |
 | `.gitignore` coverage | SEC-05, NFR-013 | Test asserts each required pattern is present and `git check-ignore` matches sample paths |
 | Egress | NFR-014 | Socket guard (unit); host recorder on a custom `httplib2.Http` in integration tests asserts only Google hosts |
@@ -110,7 +113,7 @@ The test-only fake-mailbox hook is the one production seam added for testing; it
 1. `lint` — `ruff check .` and `ruff format --check .`
 2. `types` — `mypy gmail_pdf --strict`
 3. `test` — matrix: `windows-latest` × Python 3.10/3.11/3.12 (full suite incl. GUI offscreen from R2); `ubuntu-latest` × 3.12 (full suite; GUI offscreen); `macos-latest` × 3.12 (core + CLI). Coverage XML per leg.
-4. `coverage` — combine, `--cov-fail-under=85` floor, `diff-cover --fail-under=100`, pragma report.
+4. `coverage` — combine Windows + Ubuntu data, `coverage report --fail-under=80` (whole package), `diff-cover --fail-under=80` (changed code).
 5. `security` — `pip-audit`, `bandit -r gmail_pdf`, gitleaks, dependency allow-list test.
 6. `package` — build wheel, install in a clean venv on Windows, run `gmail-pdf --help` and an offscreen GUI start (ADR-005).
 7. Nightly: `perf` marker suite on `windows-latest`; artefacts: timings, memory, screenshot matrix.
@@ -131,3 +134,9 @@ The CLAUDE.md §1 build command installs runtime pins only; CI and developers in
 | Fake mailbox and fixture builders (first W1 story) | developer (design here) |
 | Real-mailbox acceptance and GOAL-09 trials | Santhosh with qa-engineer |
 | Strategy changes | solution-architect (this document) |
+
+## 12. Change Log
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| 0.1 | 2026-10-29 | solution-architect | First version for G3 (commit 75b7e47) |
+| 0.2 | 2026-10-29 | solution-architect | Closes G3 **C10** (test-strategy part). §5: gates are ≥ 80 % changed code (`diff-cover --fail-under=80`) and ≥ 80 % whole package (`--cov-fail-under=80`), per the amended coding-standards §6/DoD, PRD v0.4 NFR-022 and D-30; the 100 %/85 % gates of D-24 are superseded. The `# pragma: no cover` exception list is removed (D-31 supersedes D-25). Whole-package threshold applied to the Windows leg and the combined data, not to the macOS leg. §4: R-COUNT test (≤ 10 Hz to the UI thread, ≤ 4 redraws per second). §6: no-overwrite test covers exclusive create of the run log and CSV and the `os.replace` allow-list (coding-standards §10, D-32). §9: pragma report removed. Inputs cite ux-spec v0.3 (4f1536f) and PRD v0.4 (5dc3289) |
