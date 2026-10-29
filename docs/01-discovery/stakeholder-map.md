@@ -1,6 +1,6 @@
 # Stakeholder Map — Gmail PDF Attachment Downloader
 
-> Owner: business-analyst · Version 0.1 (Draft) · 2026-10-29 · Gate G1
+> Owner: business-analyst · Version 0.2 (Q-01, Q-02, Q-12 answered; Q-04 and Q-10 to G8) · 2026-10-29 · Gate G1/G3
 > Sources: `docs/project-state.md`, CLAUDE.md §1/§2, Jira PGD-1. No interviews were held; interests below are inferred from the documents and labelled as such. No personal data beyond the sponsor's name and role.
 
 ## Stakeholders
@@ -36,5 +36,5 @@ R = Responsible, A = Accountable, C = Consulted, I = Informed. `PM` product-mana
 | Override of any gate decision | A/R | I | I | I | I | I | R (logs it) |
 
 ## Engagement notes
-- Santhosh answers Q-01, Q-02, Q-04, Q-10, Q-12 and confirms MoSCoW at G2; target response before G2 starts.
+- Santhosh answered Q-01 (as soon as possible), Q-02 (Windows 11) and Q-12 (about 30 s per PDF) on 2026-10-29 (PGD-1 comment 10108). Q-04 and Q-10: unsure; assumptions stand; re-check at G8 (D-28).
 - Google's rules are monitored through the README and ADRs (no direct engagement).

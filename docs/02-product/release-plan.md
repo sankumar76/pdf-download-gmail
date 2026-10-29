@@ -2,14 +2,14 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.1 |
+| Version | 0.2 |
 | Owner | product-manager |
 | Date | 2026-10-29 |
-| Status | In Review (G2) |
-| Source | [prd.md](prd.md) v0.1 (§4 FRs, §6 scope, §7 epics, §14 decisions) |
+| Status | Aligned to PRD v0.4 (G3 condition C8) |
+| Source | [prd.md](prd.md) v0.4 (§4 FRs, §6 scope, §7 epics, §14 decisions) |
 | Jira | [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1) |
 
-No deadline or team velocity exists (Q-01, ASSUMPTION-14). This plan therefore orders work by **sequence and gates, not dates**. Points are the relative PM sizes in the PRD; the scrum-master calibrates sprints after the first one and plans below measured velocity (PRD §8).
+The sponsor confirmed there is no fixed deadline, only "as soon as possible", with R1 (core + CLI) first (Q-01, PGD-1 c.10108); no team velocity exists (ASSUMPTION-14). This plan therefore orders work by **sequence and gates, not dates**. Points are the relative PM sizes in the PRD; the scrum-master calibrates sprints after the first one and plans below measured velocity (PRD §8).
 
 ## 1. Releases at a glance
 
@@ -35,7 +35,7 @@ No deadline or team velocity exists (Q-01, ASSUMPTION-14). This plan therefore o
 | **W3 Live access and onboarding** | EPIC-01 live consent (needs TR-006), EPIC-08 (FR-065, 066), FR-006 | Real-mailbox acceptance: dry run then run on a one-week range, ≥ 10 sponsor-named PDFs found (PA-04); README followed unaided | Needs `credentials.json` from Santhosh. Records the real timing for NFR-001 |
 
 **R1 entry criteria:** G3 passed (architecture, ADRs for dependencies, Q-07 spike scheduled), G4 passed (epics and first stories Ready).
-**R1 exit criteria:** every R1 story Done (G5–G7); AC-01..09 verified on the CLI; GOAL-01..07 and GOAL-10 metrics met on fixtures (PRD §3); real-mailbox acceptance run done; NFR-011..013 evidence attached; release notes `release-notes-v0.9.0.md` written by the PM; G8 for the release with sponsor sign-off.
+**R1 exit criteria:** every R1 story Done (G5–G7); AC-01..09 verified on the CLI; GOAL-01..07 and GOAL-10 metrics met on fixtures (PRD §3); GOAL-11 (time saved against 30 s per PDF) read from the NFR-001 benchmark and the real-mailbox run; real-mailbox acceptance run done; NFR-011..013 evidence attached; release notes `release-notes-v0.9.0.md` written by the PM; G8 for the release with sponsor sign-off.
 
 ## 3. R2 — Desktop GUI (v1.0.0, MVP complete)
 
@@ -66,7 +66,7 @@ No deadline or team velocity exists (Q-01, ASSUMPTION-14). This plan therefore o
 
 | Dependency | Blocks | Owner | Needed by |
 |------------|--------|-------|-----------|
-| G3 ADRs (GUI framework, time-zone/YAML dependencies, Q-03 delivery form) and Q-07 spike | W1 (dependencies), FR-017, W4 | solution-architect | G3 |
+| G3 ADRs (GUI framework; time-zone/YAML dependencies, Q-03 delivery form and Q-07 recall sweep are decided in ADR-002/005/007) and spike S-01 | W1 (dependencies), FR-017, W4 | solution-architect | G3 |
 | Synthetic fixture mailbox and mock Gmail API | All waves | developer, qa-engineer | W1 |
 | Sponsor's Google Cloud setup and `credentials.json` (TR-006) | W3 live consent, real-mailbox acceptance, GOAL-09 trial | Santhosh | Start of W3 |
 | Sponsor-named sample of ≥ 10 known PDFs (PA-04) | W3 acceptance | Santhosh | W3 |

@@ -1,6 +1,6 @@
 # Requirements Catalogue — Gmail PDF Attachment Downloader
 
-> Owner: business-analyst · Version 0.2 (aligned with PRD v0.1: Q-05, Q-06, Q-09, Q-13 resolved, Q-11 performance part resolved, BRQ-007 mapped to GOAL-10) · 2026-10-29 · Gate G1/G2 · Jira [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1)
+> Owner: business-analyst · Version 0.3 (G3 condition C7: Q-01, Q-02, Q-03, Q-07, Q-08, Q-11, Q-12 resolved; Q-04 and Q-10 needed by G8; DR-005 Confidential) · 2026-10-29 · Gate G1/G2/G3 · Jira [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1)
 > Priority uses MoSCoW. **The source document has no priorities; every priority below is a BA proposal (ASSUMPTION-05) for product-manager to confirm at G2.**
 > Original source IDs (SEC, FR, NFR, LOG) are kept unchanged for traceability. IDs without an original (CFG, VAL, EC, AC) are numbered by the BA in source order. product-manager may renumber in the PRD but must keep a mapping.
 
@@ -197,7 +197,7 @@ No database (CONSTRAINT-04); all data is local files. Retention is not stated in
 | DR-002 | Saved PDF files | Final name, bytes, SHA-256, size | Mailbox owner | Confidential (may be Restricted if financial/personal) | User-managed | Output folder |
 | DR-003 | OAuth client credentials (`credentials.json`) | Client ID, client secret | Mailbox owner | Restricted | Until the Google client is deleted | Google Cloud Console |
 | DR-004 | OAuth token (`token.json`) | Access/refresh token, expiry | Mailbox owner | Restricted | Deleted on revoke or `invalid_grant` (SEC-07) | Google (issued), local file (copy) |
-| DR-005 | Manifest (`.manifest.json`) | messageId + partId key, saved file name, SHA-256, status, timestamp | Mailbox owner | Internal | Lifetime of the output folder; per output folder | Output folder |
+| DR-005 | Manifest (`.manifest.json`) | messageId + partId key, saved file name, SHA-256, status, timestamp, From, Subject, `internal_date_ms`, per-message records (architecture §5.3) | Mailbox owner | **Confidential** (was Internal: it holds sender and subject, like DR-006/DR-007; G3 C7) | Lifetime of the output folder; per output folder | Output folder |
 | DR-006 | Run log | Timestamped events, level, no secrets | Mailbox owner | Confidential (may include sender/subject) | User-managed | `logs/` under output folder |
 | DR-007 | CSV report | Columns per LOG-02 | Mailbox owner | Confidential (sender, subject) | User-managed | `logs/` under output folder |
 | DR-008 | Run configuration (flags, optional `config.yaml`/`.env`, GUI settings) | Parameters CFG-01..11, file paths | Mailbox owner | Internal; must hold no secret values, only paths | User-managed | Local file / GUI session |
@@ -232,39 +232,40 @@ Greenfield: no data migration and no parallel run (Santhosh is the only user).
 | ID | Assumption | Impact if false | Owner |
 |----|------------|-----------------|-------|
 | ASSUMPTION-01 | One user and one Gmail account per run | Multi-account redesign | Santhosh |
-| ASSUMPTION-02 | Windows 11 primary platform; macOS/Linux best-effort | Packaging, SEC-04, GUI testing scope | Santhosh (Q-02) |
-| ASSUMPTION-03 | Python is installed on the user's machine; installer/packaging is not part of the MVP | Packaging effort added | Santhosh (Q-03) |
-| ASSUMPTION-04 | Consent screen is in Testing status; tokens expire after about 7 days (RISK-003) | Different re-consent cadence | Santhosh (Q-04) |
+| ASSUMPTION-02 | Windows 11 is the target platform (**confirmed**, Q-02, comment 10108); macOS/Linux best-effort, not asked | Packaging, SEC-04, GUI testing scope | Santhosh (Q-02, resolved) |
+| ASSUMPTION-03 | Python is installed on the user's machine; installer/packaging is not part of the MVP (**confirmed by ADR-005**: pip-installable package; Santhosh confirms at G8) | Packaging effort added | Santhosh (Q-03, resolved) |
+| ASSUMPTION-04 | Consent screen is in Testing status; tokens expire after about 7 days (RISK-003). Delivery lead unsure (comment 10108); stands, re-check at G8 (D-28) | Different re-consent cadence | Santhosh (Q-04) |
 | ASSUMPTION-05 | MoSCoW priorities here are BA proposals | PRD scope shifts | product-manager (G2) |
 | ASSUMPTION-06 | GUI exposes the same parameters as the CLI, with credential and token paths under "advanced"; optional behaviours follow Q-05 | GUI-03 scope changes | product-manager (Q-05) |
 | ASSUMPTION-07 | Equal-`internalDate` messages are ordered by messageId ascending | Suffix numbering differs | product-manager (Q-09) |
 | ASSUMPTION-08 | Idempotency relies on the manifest; per output folder; a lost manifest means a re-run behaves like a first run (`_1` suffixes) | Duplicate files on re-run | product-manager (Q-06) |
 | ASSUMPTION-09 | The manifest is authoritative: an attachment in the manifest is skipped even if the user deleted the saved file | User cannot re-fetch deleted files without clearing the manifest | product-manager (Q-06) |
 | ASSUMPTION-10 | GUI default time zone is the system local zone, shown and editable | Wrong date prefix near midnight | ux-expert / product-manager |
-| ASSUMPTION-11 | Retention of downloads, logs and reports is user-managed; no automatic deletion | Add retention features | Santhosh (Q-10) |
+| ASSUMPTION-11 | Retention of downloads, logs and reports is user-managed; no automatic deletion. Delivery lead unsure (comment 10108); stands, re-check at G8 (PA-08) | Add retention features | Santhosh (Q-10) |
 | ASSUMPTION-12 | The app sends no telemetry and contacts only Google's APIs | Privacy review needed | solution-architect |
 | ASSUMPTION-13 | Internet access to Google APIs is available; no proxy support is needed | Proxy feature | Santhosh |
-| ASSUMPTION-14 | No deadline or budget has been set | Planning constraints change | Santhosh (Q-01) |
-| ASSUMPTION-15 | The `filename:pdf` search is accepted as the candidate filter, even though it may miss PDFs without a file name | GOAL-01 recall below 100 % | solution-architect (Q-07) |
-| ASSUMPTION-16 | NFR-05 means bounded memory per message, not byte-by-byte streaming | Different memory design | solution-architect (Q-11) |
+| ASSUMPTION-14 | No fixed deadline or budget has been set (**confirmed**, Q-01: as soon as possible; R1 core + CLI first) | Planning constraints change | Santhosh (Q-01, resolved) |
+| ASSUMPTION-15 | The `filename:pdf` search is accepted as the candidate filter, even though it may miss PDFs without a file name. **Superseded by ADR-007** (recall sweep on by default; residual measured by S-01, issue #2) | GOAL-01 recall below 100 % | solution-architect (Q-07, resolved) |
+| ASSUMPTION-16 | NFR-05 means bounded memory per message, not byte-by-byte streaming (**confirmed by ADR-006**, architecture §7) | Different memory design | solution-architect (Q-11, resolved) |
+| ASSUMPTION-17 | The manual baseline of about 30 s per PDF is the delivery lead estimate (comment 10108) and has not been timed | Time-saved claim (brief GOAL-11) changes | Santhosh (re-check at G8) |
 
 ## Open Questions
-None blocks G2 entry, so no Jira question issues were created. Each has a working assumption.
+None is blocking, so no Jira question issues were created. **Open after G3 C7: Q-04 and Q-10 only, both needed by G8** (delivery lead unsure, comment 10108); each has a working assumption.
 
 | ID | Question | Affects | Owner | Needed by | Status |
 |----|----------|---------|-------|-----------|--------|
-| Q-01 | Target date or deadline for MVP and GUI? | Planning, GOAL "by when" | Santhosh | G2 | Open (ASSUMPTION-14) |
-| Q-02 | Which operating systems must be supported? | SEC-04, GUI-17, QA scope | Santhosh | G2 | Open (ASSUMPTION-02) |
-| Q-03 | Delivery form: run from source, pip install, or standalone executable? | TR-001..002, architecture | Santhosh, solution-architect | G3 | Open (ASSUMPTION-03) |
-| Q-04 | Personal Gmail or Workspace? Consent screen Testing or In production? Is verification needed? | SEC-07, RISK-003, TR-003 | Santhosh | G3 | Open (ASSUMPTION-04) |
+| Q-01 | Target date or deadline for MVP and GUI? | Planning, GOAL "by when" | Santhosh | G2 | **Resolved** (comment 10108, 2026-10-29): as soon as possible, no fixed date; R1 (core + CLI) first. ASSUMPTION-14 confirmed |
+| Q-02 | Which operating systems must be supported? | SEC-04, GUI-17, QA scope | Santhosh | G2 | **Resolved** (comment 10108): Windows 11 is the target OS. ASSUMPTION-02 and PA-09 confirmed for Windows |
+| Q-03 | Delivery form: run from source, pip install, or standalone executable? | TR-001..002, architecture | Santhosh, solution-architect | G3 | **Resolved by ADR-005**: pip-installable package with CLI and GUI entry points; frozen executable deferred (PRD Won't); Santhosh confirms at G8 |
+| Q-04 | Personal Gmail or Workspace? Consent screen Testing or In production? Is verification needed? | SEC-07, RISK-003, TR-003 | Santhosh | **G8** (D-28; was G3) | Open. Delivery lead unsure (comment 10108); ASSUMPTION-04 stands (Testing, 7-day expiry); the design works in both consent-screen states (RISK-003) |
 | Q-05 | Must the GUI expose every CLI option; which optional ones (`--skip-identical`, `--query`, `--include-spam-trash`) are in the MVP? | GUI-03, FR-18, CFG-05..06 | product-manager | G2 | **Resolved by PD-01** (PRD v0.1): GUI shows seven fields; paths and log level in Advanced (R3); no skip-identical or config file in MVP. ASSUMPTION-06 refined |
 | Q-06 | Expected re-run behaviour when the manifest is lost or a saved file was deleted? | FR-17, BR-006, AC-05 | product-manager, Santhosh | G2 | **Resolved by PD-02** (PRD v0.1): manifest authoritative; unreadable manifest stops the run; missing manifest warns; recovery in R3. Replaces ASSUMPTION-08, 09 |
-| Q-07 | How should PDFs with no file name be found, given the `filename:pdf` search filter? | FR-02, FR-10, GOAL-01 | solution-architect | G3 | Open (ASSUMPTION-15) |
-| Q-08 | Are a YAML parser (`config.yaml`) and Windows time-zone data acceptable justified dependencies? | CFG-11, CFG-04, CONSTRAINT-03 | solution-architect | G3 | Open |
+| Q-07 | How should PDFs with no file name be found, given the `filename:pdf` search filter? | FR-02, FR-10, GOAL-01 | solution-architect | G3 | **Resolved by ADR-007**: complementary sweep `has:attachment -filename:pdf`, on by default; residual recall measured by S-01 (GitHub issue #2). Replaces ASSUMPTION-15 |
+| Q-08 | Are a YAML parser (`config.yaml`) and Windows time-zone data acceptable justified dependencies? | CFG-11, CFG-04, CONSTRAINT-03 | solution-architect | G3 | **Resolved by ADR-002**: no YAML (CFG-11 is a Won't); `tzdata` and `tzlocal` accepted for time zones |
 | Q-09 | Tie-break order when messages share the same `internalDate`? | FR-05, BR-004 | product-manager | G2 | **Resolved by PD-03** (PRD v0.1): messageId ascending (shorter ID first, then lexicographic). ASSUMPTION-07 confirmed |
-| Q-10 | Retention, clean-up and privacy expectations for downloads, logs and CSV reports (they hold sender and subject)? | DR-002..008, compliance | Santhosh | G2 | Open (ASSUMPTION-11) |
-| Q-11 | Performance expectation (e.g. run time for 10,000 matches) and acceptance of the NFR-05 reading? | NFR-04, NFR-05 | solution-architect, Santhosh | G3 | **Performance part resolved by PD-07** (PRD NFR-001..004; numbers pending sponsor confirmation, PA-01). **Remainder open:** NFR-05 memory reading, owner solution-architect, G3 (ASSUMPTION-16) |
-| Q-12 | Current manual effort and volume, to give a measured baseline? | Brief §2, GOAL baselines | Santhosh | G2 (nice to have) | Open |
+| Q-10 | Retention, clean-up and privacy expectations for downloads, logs and CSV reports (they hold sender and subject)? | DR-002..008, compliance | Santhosh | **G8** | Open. Delivery lead unsure (comment 10108); ASSUMPTION-11 stands (user-managed retention, no telemetry; PA-08); re-check at G8 |
+| Q-11 | Performance expectation (e.g. run time for 10,000 matches) and acceptance of the NFR-05 reading? | NFR-04, NFR-05 | solution-architect, Santhosh | G3 | **Performance part resolved by PD-07** (PRD NFR-001..004; numbers pending sponsor confirmation, PA-01). **Remainder resolved by ADR-006 and architecture §7:** bounded memory per message; ASSUMPTION-16 confirmed |
+| Q-12 | Current manual effort and volume, to give a measured baseline? | Brief §2, GOAL baselines | Santhosh | G2 (nice to have) | **Resolved** (comment 10108): about 30 s per PDF by hand (estimate, ASSUMPTION-17). Used in brief §2, GOAL-01 and GOAL-11. Volume still unknown |
 | Q-13 | Wanted in the GUI: sign-out/revoke action, keyboard-only use, screen-reader support? | UR-013, GUI-19 | product-manager, ux-expert | G2 | **Resolved by PD-04** (PRD v0.1): sign-out = remove local token + show revoke steps (Should, R3); keyboard-only and visible focus Must (R2); screen reader Should (R3); formal WCAG conformance Won't |
 
 ## Issues for other roles

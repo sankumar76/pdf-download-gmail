@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.2 (aligned with PRD v0.1 for G2) |
+| Version | 0.3 (G3 condition C7 closed; delivery-lead answers of 2026-10-29 applied) |
 | Author | business-analyst |
 | Date | 2026-10-29 |
-| Status | In Review (G2 alignment of G1 artefact) |
+| Status | In Review (G3 C7 update) |
 | Jira | [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1) |
 | Companion docs | [requirements-catalog.md](requirements-catalog.md), [stakeholder-map.md](stakeholder-map.md) |
 
@@ -16,15 +16,15 @@ Santhosh (MD) needs every PDF attachment that arrived in one Gmail account durin
 - **Who is affected:** the mailbox owner and sole sponsor/user, Santhosh (see `stakeholder-map.md`).
 - **Current situation (as-is):** PDFs are found and saved by hand: open each email, save each attachment, rename or organise it manually. *Source: requirements doc §1 purpose ("without manually opening emails" per `docs/project-state.md` Request). No further as-is detail was provided.*
 - **Future situation (to-be):** the user picks a date range (and optionally a time zone and extra Gmail search text) in the GUI or CLI, previews with a dry run, runs the download, and gets files named `YYYYMMDD_<name>.pdf` plus a log and CSV report.
-- **Pain / impact:** not quantified. No volume, time-spent or error data was provided (Q-12). Risks of the manual approach implied by the requirements doc: missed attachments, inconsistent names, overwritten files.
-- **Evidence:** `Gmail PDF Attachment Downloader — Requirements.md` (2026-10-28), `docs/project-state.md`. No other evidence exists; none is invented here.
+- **Pain / impact:** manual effort is about **30 seconds per PDF** (delivery lead estimate, PGD-1 comment 10108, Q-12 resolved; a stated estimate, not a measurement: ASSUMPTION-17). Volume and error data are still not provided. Risks of the manual approach implied by the requirements doc: missed attachments, inconsistent names, overwritten files.
+- **Evidence:** `Gmail PDF Attachment Downloader — Requirements.md` (2026-10-28), `docs/project-state.md`, PGD-1 comment 10108 (30 s per PDF). No other evidence exists; none is invented here.
 
 ## 3. Business Objectives (SMART)
-Targets below are derived from the acceptance criteria in requirements doc §6.2 unless marked PROPOSED. No deadline was given (Q-01), so "by when" is expressed as a delivery gate.
+Targets below are derived from the acceptance criteria in requirements doc §6.2 unless marked PROPOSED. No fixed deadline exists (Q-01 resolved: as soon as possible, R1 core + CLI first), so "by when" is expressed as a delivery gate.
 
 | ID | Objective | Metric | Baseline | Target | By when |
 |----|-----------|--------|----------|--------|---------|
-| GOAL-01 | Complete retrieval | Share of PDF attachments from emails received in the inclusive date range that are saved, measured on a mocked/fixture mailbox that covers nested MIME parts and the range boundaries | Manual, not measured | 100 % saved; 0 saved from outside the range (23:59:59 on end date included, 00:00:00 next day excluded) | G7 of the MVP story set |
+| GOAL-01 | Complete retrieval | Share of PDF attachments from emails received in the inclusive date range that are saved, measured on a mocked/fixture mailbox that covers nested MIME parts and the range boundaries | Manual, about 30 s per PDF (Q-12); completeness not measured | 100 % saved; 0 saved from outside the range (23:59:59 on end date included, 00:00:00 next day excluded) | G7 of the MVP story set |
 | GOAL-02 | Predictable naming | Share of saved files whose name matches `YYYYMMDD_<sanitised name>.pdf`, and match of the requirements doc §4.4 example table | Manual, inconsistent | 100 % match; example table reproduced exactly | G7 |
 | GOAL-03 | Safe re-runs | New files written when the same range is run a second time; share reported `SKIPPED_ALREADY_DOWNLOADED` | n/a | 0 new files; 100 % of previously saved attachments reported as skipped | G7 |
 | GOAL-04 | No data loss, no path escape | Existing files overwritten; files written outside the output folder when attachment names are malicious (e.g. `../../x.pdf`) | n/a | 0 and 0 | G7 |
@@ -35,7 +35,9 @@ Targets below are derived from the acceptance criteria in requirements doc §6.2
 | GOAL-09 | Ease of first use (**Should** success metric per PD-08; not a release gate; sponsor confirms at G8, PA-02) | Time for a user who has completed the one-time Google setup to run a dry run for a one-week range from the GUI | n/a | 5 minutes or less, no command typing | G7 (usability check) |
 | GOAL-10 | Auditability (added per PRD GOAL-10, closes G1 condition C2) | For every run that passes input validation and is not a dry run (outcomes: success, some errors, cancelled, zero matches, authentication failure): (a) a run log and a CSV exist at the documented path; (b) CSV header equals the LOG-02 list exactly; (c) every PDF candidate examined has exactly one row with one valid LOG-03 status; (d) per-status row counts equal the summary counts | n/a | 100 % of runs; 0 discrepancies. After a hard kill, ≤ 1 attachment is missing from the CSV | G7 (reconciliation test over ≥ 6 scripted runs, CLI and GUI) |
 
-GOAL-09 and GOAL-10 follow `docs/02-product/prd.md` v0.1 §3 (PD-08 and GOAL-10); the PRD wording is authoritative if the two differ.
+| GOAL-11 (**PROPOSED**) | Time saved against the manual process | Hands-on time per PDF to find, save and name a PDF, excluding the one-time Google setup | About 30 s per PDF by hand (delivery lead estimate, Q-12, comment 10108; not measured, ASSUMPTION-17) | Elapsed run time within the PRD NFR-001 budget (15 min per 1,000 messages, about 0.9 s per message); the user's own hands-on time per PDF is 0 s once the range is entered | G7 (timed run on the fixture) and G8 (sponsor confirms on a real mailbox) |
+
+GOAL-09 and GOAL-10 follow `docs/02-product/prd.md` v0.1 §3 (PD-08 and GOAL-10); the PRD wording is authoritative if the two differ. GOAL-11 is a BA proposal that applies the Q-12 baseline. product-manager owns the time-saved goal in PRD v0.4 (C8); if its ID or wording differs, the PRD wins and this row is renumbered at the next sync.
 
 ## 4. Stakeholders & Personas
 Detail in [stakeholder-map.md](stakeholder-map.md).
@@ -99,10 +101,11 @@ Full list with owners in the catalogue; headline items:
 | ID | Assumption | Impact if false | Validation owner |
 |----|------------|-----------------|------------------|
 | ASSUMPTION-01 | One user and one Gmail account per run | Multi-account scope would change auth and manifest design | Santhosh |
-| ASSUMPTION-02 | Windows 11 is the primary platform; macOS/Linux best-effort | Packaging, permissions (SEC-04) and GUI tests change | Santhosh (Q-02) |
-| ASSUMPTION-04 | OAuth consent screen is in Testing status, so tokens expire after about 7 days unless the screen is published (RISK-003) | Re-consent frequency changes | Santhosh (Q-04) |
+| ASSUMPTION-02 | Windows 11 is the target platform (**confirmed**, Q-02, comment 10108); macOS/Linux best-effort, not asked | Packaging, permissions (SEC-04) and GUI tests change | Santhosh (Q-02, resolved) |
+| ASSUMPTION-04 | OAuth consent screen is in Testing status, so tokens expire after about 7 days unless the screen is published (RISK-003). Delivery lead is unsure (comment 10108); the assumption stands, re-check at G8 (D-28) | Re-consent frequency changes | Santhosh (Q-04) |
 | ASSUMPTION-08 | The manifest is the only guarantee of re-run idempotency; if it is lost, a re-run behaves like a first run with `_1` suffixes. **Superseded by PD-02** (warn in MVP; recovery in R3) | Duplicates on re-run if the user expects otherwise | product-manager (Q-06, resolved) |
-| ASSUMPTION-15 | The Gmail `filename:pdf` search is accepted as the candidate filter even though it may miss PDFs with no file name | GOAL-01 recall below 100 % on real mailboxes | solution-architect (Q-07) |
+| ASSUMPTION-15 | The Gmail `filename:pdf` search is accepted as the candidate filter even though it may miss PDFs with no file name. **Superseded by ADR-007** (baseline search plus recall sweep, on by default; residual measured by S-01, issue #2) | GOAL-01 recall below 100 % on real mailboxes | solution-architect (Q-07, resolved) |
+| ASSUMPTION-17 | The manual baseline of about 30 s per PDF is the delivery lead estimate and has not been timed | GOAL-11 time-saved claim changes | Santhosh (re-check at G8) |
 
 ## 9. Dependencies
 | Dependency | Type | Owner | Status |
@@ -137,22 +140,22 @@ Assessment from BA knowledge; **no web research was performed in this run** and 
 - **Internal policy:** CLAUDE.md §6 rule 7 (no secrets or real personal data in code, tests, fixtures or documents) applies; tests use synthetic data only.
 
 ## 12. Open Questions
-None is blocking for G2, so no Jira question issues were created (playbook §4.2 applies to blocking questions only). Full table with affected requirements is in the catalogue. Status as of PRD v0.1 (`docs/02-product/prd.md` §12, §14.1): Q-05, Q-06, Q-09, Q-13 resolved; Q-11 performance part resolved.
+None is blocking, so no Jira question issues were created (playbook §4.2 applies to blocking questions only). Full table with affected requirements is in the catalogue. Status after G3 condition C7 (2026-10-29): resolved are Q-01, Q-02, Q-12 (delivery-lead answers, comment 10108), Q-03, Q-07, Q-08, Q-11 (architecture ADRs) and Q-05, Q-06, Q-09, Q-13 (PRD). **Open: Q-04 and Q-10, both needed by G8** (delivery lead unsure; working assumptions ASSUMPTION-04 and ASSUMPTION-11 stand).
 
 | ID | Question | Owner | Needed by | Status |
 |----|----------|-------|-----------|--------|
-| Q-01 | Is there a target date or deadline for the MVP and for the GUI? | Santhosh | G2 | Open (PRD: G8) |
-| Q-02 | Which operating systems must be supported? | Santhosh | G2 | Open (PRD: G8, PA-09) |
-| Q-03 | How is the app delivered: run from source, pip install, or a standalone executable? | Santhosh, solution-architect | G3 | Open |
-| Q-04 | Personal Gmail or Workspace? Consent screen Testing or In production? | Santhosh | G3 | Open |
+| Q-01 | Is there a target date or deadline for the MVP and for the GUI? | Santhosh | G2 | **Resolved** (comment 10108, 2026-10-29): as soon as possible, no fixed date; R1 (core + CLI) first. ASSUMPTION-14 confirmed |
+| Q-02 | Which operating systems must be supported? | Santhosh | G2 | **Resolved** (comment 10108): Windows 11 is the target OS. PA-09 and ASSUMPTION-02 confirmed for Windows |
+| Q-03 | How is the app delivered: run from source, pip install, or a standalone executable? | Santhosh, solution-architect | G3 | **Resolved by ADR-005** (pip-installable package with CLI and GUI entry points; frozen executable deferred; Santhosh confirms at G8) |
+| Q-04 | Personal Gmail or Workspace? Consent screen Testing or In production? | Santhosh | **G8** (D-28; was G3) | Open. Delivery lead unsure (comment 10108); ASSUMPTION-04 stands (Testing, 7-day expiry); the design works in both states (RISK-003) |
 | Q-05 | Must the GUI expose every CLI option, including `--skip-identical`, `--query`, `--include-spam-trash`? Which optional ones are in the MVP? | product-manager | G2 | **Resolved by PD-01** (GUI shows seven fields; paths and log level in Advanced, R3; no skip-identical or config file in MVP) |
 | Q-06 | Re-run behaviour if the manifest is lost or a user deleted a saved file | product-manager, Santhosh | G2 | **Resolved by PD-02** (manifest authoritative; unreadable manifest stops the run; missing manifest warns; recovery in R3) |
-| Q-07 | How to find PDFs with no file name given FR-02's `filename:pdf` filter? | solution-architect | G3 | Open (spike; PD-06) |
-| Q-08 | Are a YAML parser (for `config.yaml`) and time-zone data for Windows acceptable justified dependencies? | solution-architect | G3 | Open (YAML not needed, CFG-11 is a Won't; time-zone package TBD) |
+| Q-07 | How to find PDFs with no file name given FR-02's `filename:pdf` filter? | solution-architect | G3 | **Resolved by ADR-007** (complementary sweep `has:attachment -filename:pdf`, on by default; residual recall measured by S-01, GitHub issue #2; PD-06) |
+| Q-08 | Are a YAML parser (for `config.yaml`) and time-zone data for Windows acceptable justified dependencies? | solution-architect | G3 | **Resolved by ADR-002** (no YAML, CFG-11 is a Won't; `tzdata` and `tzlocal` accepted for time zones) |
 | Q-09 | Tie-break order for messages with identical `internalDate` | product-manager | G2 | **Resolved by PD-03** (messageId ascending, shorter ID first, then lexicographic) |
-| Q-10 | Retention, clean-up and privacy expectations for logs, CSV reports and downloads | Santhosh | G2 | Open (PRD: G8, PA-08) |
-| Q-11 | Performance expectation (e.g. time for 10,000 matches) and how to read NFR-05 "stream to disk" given the API returns each attachment whole | solution-architect, Santhosh | G3 | **Performance part resolved by PD-07** (targets NFR-001..004, pending sponsor confirmation PA-01); the NFR-05 memory-reading part remains with solution-architect (G3) |
-| Q-12 | Current manual effort/volume, to set a measured baseline for the benefit | Santhosh | G2 (nice to have) | Open |
+| Q-10 | Retention, clean-up and privacy expectations for logs, CSV reports and downloads | Santhosh | **G8** | Open. Delivery lead unsure (comment 10108); ASSUMPTION-11 stands (user-managed retention, no telemetry; PA-08); re-check at G8 |
+| Q-11 | Performance expectation (e.g. time for 10,000 matches) and how to read NFR-05 "stream to disk" given the API returns each attachment whole | solution-architect, Santhosh | G3 | **Resolved.** Performance part by PD-07 (targets NFR-001..004, pending sponsor confirmation PA-01); NFR-05 memory-reading part by ADR-006 and architecture §7 (bounded memory per message; ASSUMPTION-16 confirmed) |
+| Q-12 | Current manual effort/volume, to set a measured baseline for the benefit | Santhosh | G2 (nice to have) | **Resolved** (comment 10108): about 30 s per PDF by hand. Used as the baseline in §2, GOAL-01 and GOAL-11. Volume is still unknown |
 | Q-13 | Wanted in the GUI: sign-out/revoke action, keyboard-only operation and screen-reader support? | product-manager, ux-expert | G2 | **Resolved by PD-04** (sign-out Should R3; keyboard Must R2; screen reader Should R3; no formal WCAG) |
 
 ## 13. Glossary
@@ -189,4 +192,5 @@ None is blocking for G2, so no Jira question issues were created (playbook §4.2
 - `docs/project-state.md` (intake, D-01, D-02, B-01, T-01, T-02).
 - `CLAUDE.md` §1, §1a, §6, §9.
 - Jira PGD-1 comments 10080 to 10084 (G0 GO, RISK-001..006, run resumed).
+- Jira PGD-1 comments 10106 (G3 record, C7) and 10108 (delivery-lead answers to Q-01, Q-02, Q-04, Q-10, Q-12); decision-log D-28; ADR-002, ADR-005, ADR-006, ADR-007.
 - No interviews, web research or mailbox data were used.
