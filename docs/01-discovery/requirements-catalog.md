@@ -1,6 +1,6 @@
 # Requirements Catalogue — Gmail PDF Attachment Downloader
 
-> Owner: business-analyst · Version 0.1 (Draft) · 2026-10-29 · Gate G1 · Jira [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1)
+> Owner: business-analyst · Version 0.2 (aligned with PRD v0.1: Q-05, Q-06, Q-09, Q-13 resolved, Q-11 performance part resolved, BRQ-007 mapped to GOAL-10) · 2026-10-29 · Gate G1/G2 · Jira [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1)
 > Priority uses MoSCoW. **The source document has no priorities; every priority below is a BA proposal (ASSUMPTION-05) for product-manager to confirm at G2.**
 > Original source IDs (SEC, FR, NFR, LOG) are kept unchanged for traceability. IDs without an original (CFG, VAL, EC, AC) are numbered by the BA in source order. product-manager may renumber in the PRD but must keep a mapping.
 
@@ -29,11 +29,11 @@ Source abbreviations: **RD** = `Gmail PDF Attachment Downloader — Requirements
 | BRQ-004 | Running the same range again adds no duplicate files; a stopped run can be resumed | Safe, repeatable operation on large mailboxes | FR-17, §5.3, AC-05 | Must | GOAL-03, GOAL-06 |
 | BRQ-005 | The tool can only read the mailbox; it cannot send, delete, label or modify any email | Minimise damage from misuse or compromise | RD §1, SEC-01 | Must | GOAL-05 |
 | BRQ-006 | Mailbox passwords and OAuth secrets are never stored by the tool beyond the token file, and never appear in logs, output, dialogs or the repository | Account compromise is the highest-impact risk (RISK-005) | RD §2, SEC-03..08 | Must | GOAL-05 |
-| BRQ-007 | Each run leaves an audit trail (log file, CSV report, console/GUI summary) showing what was saved, renamed, skipped or failed | Accountability and troubleshooting | LOG-01..04 | Must | GOAL-02 |
+| BRQ-007 | Each run leaves an audit trail (log file, CSV report, console/GUI summary) showing what was saved, renamed, skipped or failed | Accountability and troubleshooting | LOG-01..04 | Must | GOAL-02, GOAL-10 |
 | BRQ-008 | A failure on one message or attachment does not prevent the rest of the run from completing | Reliability on large mailboxes | NFR-02, §5.3 | Must | GOAL-06 |
 | BRQ-009 | The same operations are available through a desktop GUI and a CLI, and both produce identical results | Decision D-01 | D-01 | Must | GOAL-07 |
 | BRQ-010 | The GUI looks professional and consistent, adapts to window size and display scaling, and follows the shared design standards | Sponsor standard | §9 | Must | GOAL-08 |
-| BRQ-011 | A first-time user can reach a successful dry run from the GUI quickly, after the one-time Google setup | Usability (PROPOSED metric) | D-01, BA proposal | Should | GOAL-09 |
+| BRQ-011 | A first-time user can reach a successful dry run from the GUI quickly, after the one-time Google setup | Usability (GOAL-09 adopted as a Should success metric per PD-08; not a release gate; sponsor confirms at G8) | D-01, BA proposal, PD-08 | Should | GOAL-09 |
 
 ## Stakeholder / User Requirements (UR)
 Personas: **P-01** GUI user, **P-02** CLI user (both currently Santhosh; ASSUMPTION-01).
@@ -257,15 +257,15 @@ None blocks G2 entry, so no Jira question issues were created. Each has a workin
 | Q-02 | Which operating systems must be supported? | SEC-04, GUI-17, QA scope | Santhosh | G2 | Open (ASSUMPTION-02) |
 | Q-03 | Delivery form: run from source, pip install, or standalone executable? | TR-001..002, architecture | Santhosh, solution-architect | G3 | Open (ASSUMPTION-03) |
 | Q-04 | Personal Gmail or Workspace? Consent screen Testing or In production? Is verification needed? | SEC-07, RISK-003, TR-003 | Santhosh | G3 | Open (ASSUMPTION-04) |
-| Q-05 | Must the GUI expose every CLI option; which optional ones (`--skip-identical`, `--query`, `--include-spam-trash`) are in the MVP? | GUI-03, FR-18, CFG-05..06 | product-manager | G2 | Open (ASSUMPTION-06) |
-| Q-06 | Expected re-run behaviour when the manifest is lost or a saved file was deleted? | FR-17, BR-006, AC-05 | product-manager, Santhosh | G2 | Open (ASSUMPTION-08, 09) |
+| Q-05 | Must the GUI expose every CLI option; which optional ones (`--skip-identical`, `--query`, `--include-spam-trash`) are in the MVP? | GUI-03, FR-18, CFG-05..06 | product-manager | G2 | **Resolved by PD-01** (PRD v0.1): GUI shows seven fields; paths and log level in Advanced (R3); no skip-identical or config file in MVP. ASSUMPTION-06 refined |
+| Q-06 | Expected re-run behaviour when the manifest is lost or a saved file was deleted? | FR-17, BR-006, AC-05 | product-manager, Santhosh | G2 | **Resolved by PD-02** (PRD v0.1): manifest authoritative; unreadable manifest stops the run; missing manifest warns; recovery in R3. Replaces ASSUMPTION-08, 09 |
 | Q-07 | How should PDFs with no file name be found, given the `filename:pdf` search filter? | FR-02, FR-10, GOAL-01 | solution-architect | G3 | Open (ASSUMPTION-15) |
 | Q-08 | Are a YAML parser (`config.yaml`) and Windows time-zone data acceptable justified dependencies? | CFG-11, CFG-04, CONSTRAINT-03 | solution-architect | G3 | Open |
-| Q-09 | Tie-break order when messages share the same `internalDate`? | FR-05, BR-004 | product-manager | G2 | Open (ASSUMPTION-07) |
+| Q-09 | Tie-break order when messages share the same `internalDate`? | FR-05, BR-004 | product-manager | G2 | **Resolved by PD-03** (PRD v0.1): messageId ascending (shorter ID first, then lexicographic). ASSUMPTION-07 confirmed |
 | Q-10 | Retention, clean-up and privacy expectations for downloads, logs and CSV reports (they hold sender and subject)? | DR-002..008, compliance | Santhosh | G2 | Open (ASSUMPTION-11) |
-| Q-11 | Performance expectation (e.g. run time for 10,000 matches) and acceptance of the NFR-05 reading? | NFR-04, NFR-05 | solution-architect, Santhosh | G3 | Open (ASSUMPTION-16) |
+| Q-11 | Performance expectation (e.g. run time for 10,000 matches) and acceptance of the NFR-05 reading? | NFR-04, NFR-05 | solution-architect, Santhosh | G3 | **Performance part resolved by PD-07** (PRD NFR-001..004; numbers pending sponsor confirmation, PA-01). **Remainder open:** NFR-05 memory reading, owner solution-architect, G3 (ASSUMPTION-16) |
 | Q-12 | Current manual effort and volume, to give a measured baseline? | Brief §2, GOAL baselines | Santhosh | G2 (nice to have) | Open |
-| Q-13 | Wanted in the GUI: sign-out/revoke action, keyboard-only use, screen-reader support? | UR-013, GUI-19 | product-manager, ux-expert | G2 | Open |
+| Q-13 | Wanted in the GUI: sign-out/revoke action, keyboard-only use, screen-reader support? | UR-013, GUI-19 | product-manager, ux-expert | G2 | **Resolved by PD-04** (PRD v0.1): sign-out = remove local token + show revoke steps (Should, R3); keyboard-only and visible focus Must (R2); screen reader Should (R3); formal WCAG conformance Won't |
 
 ## Issues for other roles
 - **product-manager:** confirm MoSCoW; decide Q-05, Q-06, Q-09; reflect that D-01 splits the MVP into core+CLI and GUI (RISK-001); renumber with mapping if desired.
