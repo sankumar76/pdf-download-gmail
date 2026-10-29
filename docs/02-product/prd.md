@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.1 |
+| Version | 0.2 |
 | Owner | product-manager |
 | Date | 2026-10-29 |
 | Status | In Review (G2) |
@@ -12,11 +12,11 @@
 
 **ID conventions.** FR-NNN / NFR-NNN are PRD IDs (new numbering). Source IDs (RD FR-01, SEC-01, LOG-01, GUI-01 …) are mapped in §15, so nothing is orphaned. PRD-only items use `PD-` (product decision), `PA-` (PM assumption), `PQ-` (PM open question) to avoid colliding with the BA's `ASSUMPTION-`/`Q-` series. "RD" = `Gmail PDF Attachment Downloader — Requirements.md`.
 
-## 0. G1 conditions closure (C2–C4) and decisions at a glance
+## 0. G1 conditions closure (C2–C4), G2 condition C6 and decisions at a glance
 
 | Item | Where closed | Outcome |
 |------|--------------|---------|
-| C2 audit-trail metric | §3 GOAL-10, FR-039..044, NFR-005 | New measurable goal GOAL-10: 100 % of non-dry-run runs (success, partial, cancelled, zero-match, failed auth) leave a log and a CSV that reconcile with the run summary |
+| C2 audit-trail metric | §3 GOAL-10, FR-039..043 and 046, NFR-005 | New measurable goal GOAL-10: 100 % of non-dry-run runs (success, partial, cancelled, zero-match, failed auth) leave a log and a CSV that reconcile with the run summary |
 | C3 performance NFR | §5 NFR-001..004 (PD-07) | Numeric targets proposed (**PA-01, pending sponsor confirmation at G8**); not a Won't |
 | C4 GOAL-09 | §3 (PD-08) | Adopted as a **Should** success metric (not a release gate); **PA-02 pending sponsor confirmation at G8**; no FR depends on GOAL-09 alone |
 | Q-05 GUI exposure / MVP flags | PD-01 | Decided |
@@ -24,6 +24,7 @@
 | Q-09 tie-break | PD-03 | Decided (messageId ascending, accepted) |
 | Q-13 sign-out, keyboard, screen reader | PD-04 | Decided |
 | MVP split core+CLI vs GUI (RISK-001) | §6, PD-05 | MVP = R1 (Core + CLI) + R2 (Desktop GUI); R1 ships alone |
+| G2 C6 coverage target vs standards | NFR-022, PD-10 | Changed code 100 % (coding-standards §6) is the per-PR gate; the DoD's 90 % is a lower bound it already satisfies; 85 % is only a whole-package floor. No standards change proposed |
 
 The full list of decisions awaiting sponsor confirmation is in §14.3.
 
@@ -205,7 +206,7 @@ Numbers marked **PA-01** are PM proposals pending sponsor confirmation at G8; th
 | NFR-019 | Accessibility (Should, R3) | Screen reader (FR-063) | 100 % of interactive controls expose an accessible name and role; main flow completes with Windows Narrator | Narrator walkthrough |
 | NFR-020 | Compatibility | Platforms and Python | Windows 11 64-bit is primary: full test suite and GUI acceptance. macOS and Linux (current release at G7) best effort: core + CLI tests pass, GUI smoke only. Python 3.10, 3.11 and 3.12 tests all pass | CI matrix; manual GUI run on Windows 11 |
 | NFR-021 | Compatibility / UI | Display | 0 clipped or overlapping controls from minimum window size to 3840 × 2160 at 100/150/200 % scaling | Screenshot matrix reviewed by ux-expert and qa-engineer |
-| NFR-022 | Maintainability | Quality gates | `pytest` 100 % pass, line coverage of `gmail_pdf` ≥ 85 % (PA-01), `ruff` 0 violations, `mypy --strict` 0 errors on every PR | CI / local commands from CLAUDE.md §1 |
+| NFR-022 | Maintainability | Quality gates, every PR | `pytest` 100 % pass; **line coverage of changed code = 100 %** (`coding-standards.md` §6, which governs at G5/G6 and is stricter than the DoD's ≥ 90 %, so both hold); whole-package line coverage of `gmail_pdf` ≥ 85 % as a floor only, never a substitute for the changed-code rule (PA-01); `ruff` 0 violations; `mypy --strict` 0 errors | `pytest -q --cov=gmail_pdf` with `--cov-fail-under=85` for the floor; changed-code coverage by a diff-coverage report against `main` (tooling and treatment of untestable GUI glue: test strategy, solution-architect); `ruff` and `mypy` commands from CLAUDE.md §1 |
 | NFR-023 | Maintainability | Dependencies | 0 runtime third-party dependencies beyond the three Google libraries without an accepted ADR (GUI framework and any time-zone data package need one) | Dependency list vs ADR index at G3 and G6 |
 | NFR-024 | Localisation | Language and formats | UI text English only; dates `YYYY-MM-DD` input, `YYYYMMDD` in names; 100 % of Unicode letters in test names preserved | Table-driven tests |
 | NFR-025 | Availability | Not applicable: local tool; availability depends on Gmail and the user's machine. No SLO (Won't) | — | — |
@@ -244,7 +245,7 @@ MVP = **R1 + R2**. R1 (Core + CLI) is independently shippable and delivers the p
 | EPIC-04 Naming (FR-022..027) | AC-03/04/06; sponsor's contract | Unusable names, overwrites, path escape |
 | EPIC-05 Saving (FR-028..031) | AC-05 and "never overwrite" | Data loss or duplicates on every re-run |
 | EPIC-06 Resilience (FR-036, 037) | Large mailboxes and stop/resume (EC-07) | One bad email kills a 10,000-message run |
-| EPIC-07 Audit/CLI (FR-039..045) | GOAL-10, scripting, dry run (AC-09) | No proof of what happened; no safe preview |
+| EPIC-07 Audit/CLI (FR-039..046) | GOAL-10, scripting, dry run (AC-09) | No proof of what happened; no safe preview |
 | EPIC-08 README (FR-065) | The Google setup is a manual prerequisite (TR-001) | Sponsor cannot reach first run |
 | EPIC-09/10 GUI (FR-047..060, 062, 064) | D-01 and CLAUDE.md §9 make the GUI part of the product | Product form rejected by sponsor |
 
@@ -378,6 +379,7 @@ Resolved by this PRD: Q-05 (PD-01), Q-06 (PD-02), Q-09 (PD-03), Q-13 (PD-04), pe
 | Version | Date | Change | Reason | Decision ref |
 |---------|------|--------|--------|--------------|
 | 0.1 | 2026-10-29 | Initial PRD for G2; GOAL-10 added; PD-01..09 recorded | G1 conditions C2–C4; open questions Q-05, 06, 09, 13 | G1 CONDITIONAL GO, D-01, D-03 |
+| 0.2 | 2026-10-29 | (a) NFR-022 now requires 100 % changed-code coverage per PR (coding-standards §6), keeps ≥ 85 % as a whole-package floor, names the measurement method; PD-10 and PA-01 wording updated. (b) "FR-039..044" corrected to "FR-039..043, 046" for C2 / GOAL-10 (§0, §14.2) and to "FR-039..043" for BRQ-007 (§15.1), because FR-044 (dry run) is outside GOAL-10; EPIC-07 range in §6 aligned to FR-039..046. No change to scope, priorities or FR text | G2 condition C6 | G2 CONDITIONAL GO (gate-log, PGD-1 c.10095) |
 
 ## 14. Product Decisions and Sponsor Confirmation
 
@@ -394,16 +396,17 @@ Resolved by this PRD: Q-05 (PD-01), Q-06 (PD-02), Q-09 (PD-03), Q-13 (PD-04), pe
 | PD-07 (C3, D-03) | **Performance targets.** Numeric targets proposed in NFR-001..004; FR-038 pre-agreed fallback. Not recorded as a Won't. | Won't | A target keeps the spike honest; sponsor can relax it | NFR-001..004 |
 | PD-08 (C4) | **GOAL-09 adopted as a Should metric**, measured at G7, not a release gate. | Drop; Could | The sponsor's wish for a user-friendly tool (§9.1) is best expressed by a measurable time-to-first-result; no FR depends on GOAL-09 alone | §3 |
 | PD-09 | **Must share exception.** Must is 93 % of MVP effort; accepted with mitigations (§8). | Descope acceptance criteria | See §8 | RISK-010 |
+| PD-10 (C6) | **Coverage rule precedence.** Per-PR gate = 100 % line coverage of changed code (`coding-standards.md` §6). The DoD's ≥ 90 % ("or the project threshold") is met by it. ≥ 85 % of the whole `gmail_pdf` package is retained only as a regression floor. No standards change is proposed. | Lower the PRD to 90 % (matches the DoD only); propose changing the coding standard to 90 % (weakens a company rule with no evidence it is unworkable) | Aligns the PRD to the stricter, company-wide rule; the floor protects legacy-style gaps from hiding behind diff coverage | NFR-022 |
 
 Also proposed for master: **GOAL-10 (Auditability)** as a PRD-level goal closing C2, and MoSCoW deltas against the catalogue (§15.2). Suggested decision-log IDs are left to master.
 
 ### 14.2 G1 condition status
-C2 closed (GOAL-10, FR-039..044, NFR-005). C3 closed (NFR-001..004 as PA-01 proposals). C4 closed (PD-08, Should, confirmation at G8). C1 belongs to the business-analyst.
+C2 closed (GOAL-10, FR-039..043 and 046, NFR-005; FR-044 dry run is not a GOAL-10 requirement). C3 closed (NFR-001..004 as PA-01 proposals). C4 closed (PD-08, Should, confirmation at G8). C1 belongs to the business-analyst.
 
 ### 14.3 Decisions needing sponsor confirmation (at G8, the only human approval point)
 Work proceeds on the labelled assumption; if the sponsor changes one, it follows the scope-change route (appended to §13, summarised to master).
 
-1. **PA-01** Performance and capacity numbers (NFR-001..004, 009, 010, 022), including 15 min per 1,000 messages.
+1. **PA-01** Performance and capacity numbers (NFR-001..004, 009, 010; and the 85 % whole-package coverage floor in NFR-022), including 15 min per 1,000 messages.
 2. **PA-02 / PD-08** GOAL-09 kept as a Should metric (≤ 5 min to a GUI dry run).
 3. **PA-05 / PD-05** Core + CLI released first (R1, v0.9), GUI second (R2, v1.0).
 4. **PD-01** GUI MVP shows seven fields; Advanced area (paths, log level) in R3; no skip-identical and no config file.
@@ -422,7 +425,7 @@ Work proceeds on the labelled assumption; if the sponsor changes one, it follows
 | BRQ-001 | FR-008..013, 015..021 |
 | BRQ-002 / 003 / 004 | FR-022..026 / 023, 027, 028, 031 / 029, 030, 037 |
 | BRQ-005 / 006 | FR-001, NFR-011 / FR-002..006, NFR-012..016 |
-| BRQ-007 | FR-039..044, GOAL-10 |
+| BRQ-007 | FR-039..043, GOAL-10 |
 | BRQ-008 / 009 / 010 / 011 | FR-036, 037 / FR-045, 047, 064 / FR-054..060, 062 / FR-006, 047, 065 |
 | UR-001..013 | UR-001 FR-008, 045, 047 · UR-002 FR-045, 047 · UR-003 FR-044, 049 · UR-004 FR-001 · UR-005 FR-050 · UR-006 FR-037, 051 · UR-007 FR-042, 052 · UR-008 FR-010 · UR-009 FR-013 · UR-010 FR-003, 006, 015 · UR-011 FR-043 · UR-012 FR-030 · UR-013 FR-007 |
 | SEC-01..09 | FR-001 (01, 02) · FR-002 (03) · FR-004 (04, 05) · FR-005 (06) · FR-003 (07) · NFR-015 (08) · FR-023, 027 (09) |
