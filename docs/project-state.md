@@ -10,8 +10,8 @@
 | Project            | PDF-Download-gmail — Gmail PDF Attachment Downloader |
 | Jira Intake issue  | [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1) (project key **PGD**) |
 | Current phase      | G0 Intake                |
-| Last gate passed   | —                        |
-| Next gate          | G0 Intake                |
+| Last gate passed   | G1 Discovery (CONDITIONAL GO, 2026-10-29) |
+| Next gate          | G2 Product Definition    |
 | Current sprint     | —                        |
 | Overall health     | 🟢 Green                 |
 | Last updated       | 2026-10-29 by orchestrator |
@@ -32,7 +32,7 @@
 | Gate | Status       | Date | Decision ref |
 |------|--------------|------|--------------|
 | G0 Intake               | ✅ GO | 2026-10-29 | [PGD-1 comment 10081](https://sankumar76.atlassian.net/browse/PGD-1?focusedCommentId=10081) (decision, D-01, D-02); [comment 10082](https://sankumar76.atlassian.net/browse/PGD-1?focusedCommentId=10082) (RISK-001..006). Repo record: `docs/00-governance/gate-log.md` (G0, 2026-10-29), `decision-log.md` (D-01, D-02), `risk-register.md` (RISK-001..006) |
-| G1 Discovery            | ⏳ Pending | | |
+| G1 Discovery            | ✅ CONDITIONAL GO | 2026-10-29 | `docs/00-governance/gate-log.md` (G1, attempt 1); conditions C1 (business-analyst: brief §10 risk table), C2–C4 (product-manager: audit-trail metric, quantified performance NFR per D-03, confirm GOAL-09), all due G2; risks RISK-007..009; decision D-03; [PGD-1 comment 10088](https://sankumar76.atlassian.net/browse/PGD-1?focusedCommentId=10088) (decision), [10089](https://sankumar76.atlassian.net/browse/PGD-1?focusedCommentId=10089) (risks) |
 | G2 Product Definition   | ⏳ Pending | | |
 | G3 Solution Design      | ⏳ Pending | | |
 | G4 Backlog Ready        | ⏳ Pending | | |
@@ -65,6 +65,7 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-10-29 | master | G1 Discovery: **CONDITIONAL GO** (attempt 1). All mandatory checks passed (37/37 source IDs catalogued). Conditions C1–C4 due at G2. Registered RISK-007..009; logged D-03 (Q-11 performance part moves to G2) | docs/00-governance/gate-log.md, risk-register.md, decision-log.md; PGD-1 |
 | 2026-10-29 | master | G0 back-fill: gate-log, decision-log (D-01, D-02) and risk-register (RISK-001..006; RISK-004/006 closed, RISK-002 reduced) written | docs/00-governance/*; PGD-1 comment 10085 |
 | 2026-10-29 | orchestrator | Run resumed as plain `claude` (B-01 resolved). Branch docs/PGD-1-inception created. Briefs for master (back-fill) and business-analyst (G1) posted | PGD-1 comment 10084 |
 | 2026-10-29 | orchestrator | Run paused after G0. Root cause of B-01: the session was launched with `--agent orchestrator`, so the orchestrator's frontmatter write guard applies to every subagent too; combined with each subagent's own guard, the only writable path is project-state.md. Every specialist is blocked. Pause reason posted on PGD-1 | PGD-1 |
