@@ -43,7 +43,8 @@
 - Arrange–Act–Assert structure; one behaviour per test; descriptive names
   (`should_reject_expired_token_when_validating`).
 - Test data via builders/factories; no real personal data.
-- Coverage threshold on changed code: 80%.
+- Coverage thresholds (industry default, e.g. SonarQube "Sonar way" gate): ≥ 80% on changed code
+  in every PR, and ≥ 80% for the whole package.
 
 ## 7. Performance
 - Avoid N+1 queries; batch and paginate; index columns used in filters/joins.
