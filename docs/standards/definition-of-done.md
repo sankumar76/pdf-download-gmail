@@ -6,7 +6,7 @@ A story is `Done` only when every applicable item is satisfied and evidenced.
 - [ ] All acceptance criteria implemented; every task in the story ticked.
 - [ ] Code follows `docs/standards/coding-standards.md`.
 - [ ] Unit tests written for new/changed logic; integration tests for new interfaces.
-- [ ] Coverage on changed code ≥ 90 % (or the project threshold).
+- [ ] Coverage ≥ 80 % on changed code and ≥ 80 % for the whole package (coding-standards §6).
 - [ ] Build, lint, type-check and full test suite pass locally — command output recorded in the Dev Record.
 - [ ] No secrets, credentials, debug code, commented-out code, or unresolved TODOs without a ticket.
 - [ ] Public interfaces documented; README / runbook updated if behaviour or config changed.
