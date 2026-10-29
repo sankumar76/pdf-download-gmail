@@ -98,7 +98,7 @@ No performance target (throughput, elapsed time) exists in the source (Q-11).
 | NFR-02 | One failed message or attachment must not stop the run; log it and continue | BRQ-008 | RD §5.1 | Must | Injected failure; run completes, exit code 1 |
 | NFR-03 | Ctrl+C (CLI) and Cancel (GUI) stop cleanly: finish or discard the current temporary file, save the manifest, print the summary | No corruption; resumable | RD §5.1, GUI-07 | Must | No temp files remain; manifest valid |
 | NFR-04 | Batch requests or a pool of at most 4 workers may be used for message fetching only if needed for speed; file-name assignment stays single-threaded so suffixes are deterministic | Determinism over speed | RD §5.1 | Could | Name-assignment order test |
-| NFR-05 | Memory use stays bounded: process one message at a time; attachments up to Gmail's 25 MB limit must work. RD wording "stream each PDF to disk" is interpreted as bounded memory per message (ASSUMPTION-16, Q-11) | Large attachments | RD §5.1 | Must | 25 MB fixture; peak memory does not grow with the number of messages |
+| NFR-05 | Memory use stays bounded: process one message at a time; attachments up to Gmail's 25 MB limit must work. RD wording "stream each PDF to disk" is interpreted as bounded memory per message (ASSUMPTION-16, Q-11) | Large attachments | RD §5.1 | Must | 25 MB fixture. Wording follows PRD NFR-009 (PD-17): peak memory 300 MB or less while saving a 25 MB attachment; retained memory grows by 2 KB or less per candidate message and per manifest entry; no attachment bytes are kept across messages |
 
 ## Source Requirements — Logging and Output (LOG)
 | ID | Requirement (clarified, same intent) | Rationale | Source | Priority | Acceptance hint |
