@@ -124,3 +124,50 @@ Severity: **Critical** blocks G4; **Major** needs an owner action before the aff
 | 023 | Enabler STORY-02.01 (allow-list check) | AC in any story that adds a dependency |
 | 024 | EPIC-02 / STORY-02.03, EPIC-04 / STORY-04.02 | |
 | 025 | n/a (Won't) | |
+
+---
+
+# Sprint-01 DoR validation (G4)
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-10-29 |
+| Validated by | product-owner |
+| Inputs | [sprint-01-plan.md](sprint-01-plan.md) (d1f1358) including open items A-1..A-6; [definition-of-ready.md](../standards/definition-of-ready.md); stories PGD-12..PGD-18 and sub-tasks PGD-19..PGD-62 read in Jira; UX section 12, architecture 4.1, 6.2-6.5, 8.4, ADR-002, ADR-003, test-strategy section 2 |
+| Where the verdicts live | One comment per story on Jira (PGD-12..PGD-18) with the DoR checklist; the PO Validation section was appended to the description of every story whose ACs I changed (PGD-13, 15, 16, 18). Descriptions of PGD-12, 14, 17 are unchanged |
+
+## Verdicts
+
+| Jira | Story | Points | Verdict | Gaps found and fixed |
+|------|-------|--------|---------|----------------------|
+| PGD-12 | STORY-02.01 enabler | 8 | READY | none; enabler form accepted |
+| PGD-13 | STORY-01.01 redaction | 5 | READY after PO amendments | AC-5 printed the unexpected-failure line for Ctrl+C (fixed: new AC-8 `Run cancelled`, exit 1); AC-7 said `redaction.py` imports only stdlib but `safe_message` takes its sentences from `domain.messages` (fixed: AC-7 names that module; Assumption A-2) |
+| PGD-14 | STORY-01.02 secret files | 3 | READY | none in the ACs; test guidance and one architecture note added |
+| PGD-15 | STORY-02.02 date range | 8 | READY after PO amendments | FR-008 default system zone had no AC (added AC-10); NFR-024 trace claimed but not tested here (clarified); AC-4 trailing-space precision; `cli/console.py` added to the file list |
+| PGD-16 | STORY-02.03 input validation | 3 | READY after PO amendments | Unknown-zone wording (A-3) and multi-error rule (A-2) decided; AC-3 skip rule; AC-4 exact text and the unresolvable-system-zone case |
+| PGD-17 | STORY-02.06 empty range | 2 | READY | none; A-1 decided |
+| PGD-18 | STORY-03.01 PDF part (stretch) | 3 | READY (stretch) | FR-019 silent on `"a.pdf "` and `"a.pdf."` (added AC-8) |
+
+All seven stories pass every DoR item: story form with trace and value; 3-10 ACs with IDs in Given/When/Then (counts 9, 8, 5, 10, 8, 5, 8); negative and NFR paths; Dev Context with architecture sections, ADRs and file lists; dependencies known and inside the sprint (blocked-by links PGD-12 to 13, 14, 15; PGD-13 to 15 and 16; PGD-15 to 16, 17, 18 verified in Jira); UX references (CLI, UX section 12; no GUI states apply); estimate and sub-tasks. No story depends on an EPIC-09/10 item, so C11 is not touched. Sprint arithmetic: committed 29 points against the assumed 30; the goal-critical set is 24 points (the sprint plan is unchanged by this validation).
+
+## Decisions on the open items (A-1..A-6)
+
+| ID | Decision | Basis |
+|----|----------|-------|
+| A-1 | **Accepted.** `error: unexpected failure, see the run log` is used before a run log exists (PGD-13, PGD-17). Interim build only; R1 has the log. Reused for a failed list call (PGD-17 AC-4); no new wording is invented | UX section 12 first-line table; D-21; the text is safe (no secret, no trace) |
+| A-2 | **Accepted.** Several input errors print one per line, each error one line; order start, end, range, tz | UX "one line each"; FR-015 |
+| A-3 | **Decided as an Assumption.** `error: --tz: Unknown time zone. Use an IANA name such as Asia/Kolkata.` Logged for ux-expert to add to UX section 12 | No UX text existed; follows the `--start:` pattern; no correctness or security effect |
+| A-4 | **Accepted.** `client_secret*.json` added to `.gitignore` | Google's download name; more protection, no cost |
+| A-5 | **Accepted with a condition.** The interim `Messages in range: N` line and interim exit-3 message are placeholders; STORY-07.04 and STORY-01.04/01.06 must carry an AC that removes or replaces them, so an interim string cannot ship in v0.9.0 | Avoids a stale placeholder in release |
+| A-6 | **Accepted.** Retry helper built in STORY-02.02; paging stays in STORY-02.04 | NFR allocation, section 6 of this report |
+
+## Issues for other roles (new, none blocking)
+
+| ID | Severity | To | Item |
+|----|----------|----|------|
+| CC-10 | Minor | ux-expert, solution-architect | The unexpected-failure first line differs: UX section 12 `error: unexpected failure, see the run log`; architecture 6.5 `error: unexpected failure, see the run log: <path>`. Stories use the UX string until a log path exists. Agree one wording |
+| CC-11 | Minor | ux-expert | Add the unknown-time-zone line (A-3) to UX section 12 "Errors" |
+| CC-12 | Minor | solution-architect | (a) `write_private_text` (the token write, `os.replace`) sits in `infra/paths.py` (PGD-14) while architecture 4.1 places token writing in `infra/auth.py`; confirm the location and the section 10.2 `os.replace` allow-list. (b) `redaction.py` imports the dependency-free `domain.messages` for `safe_message`'s fixed sentences (PGD-13 AC-7); confirm this fits the layering rules in 4.1 |
+| CC-13 | Minor | scrum-master | (a) Sub-task summaries should cite the new AC ids: PGD-32 and PGD-33 add AC-8; PGD-41 adds AC-10; PGD-60 adds AC-8 of PGD-18. (b) When STORY-01.04/01.06 and 07.04 are drafted, add the A-5 removal AC. (c) When STORY-07.02/07.03 are drafted, extend PGD-17 AC-3 for the zero-match log and header-only CSV (GOAL-10) |
+
+CC-10..CC-13 take the issue count in this report to 0 Critical, 2 Major, 11 Minor (CC-01..CC-13; CC-09 is informational).
