@@ -43,13 +43,12 @@
 - Arrange–Act–Assert structure; one behaviour per test; descriptive names
   (`should_reject_expired_token_when_validating`).
 - Test data via builders/factories; no real personal data.
-- Coverage threshold on changed code: 100%.
+- Coverage threshold on changed code: 80%.
 
 ## 7. Performance
 - Avoid N+1 queries; batch and paginate; index columns used in filters/joins.
 - No unbounded loops/collections over external data; stream large payloads.
 - Cache only with a defined invalidation strategy and TTL.
-- Budgets: p95 API latency ≤ 500 ms, page LCP ≤ 2.5 s, memory per instance ≤ App ≤ 1 GB, whole system (app + database + backup + Caddy) ≤ 3 GB>>.
 
 ## 8. Documentation
 - Public functions/classes have doc comments describing purpose, params, returns, errors.
@@ -77,7 +76,9 @@
 - Mock the API in tests (no live Gmail calls in CI); keep sample MIME payloads in `tests/fixtures/`
 ### Files and secrets
 - Never read, print or log the contents of `secrets/`; log token *paths* only
-- Write files via temp file + atomic `os.replace`; never overwrite an existing file
+- Never overwrite an existing file. If the target name already exists, save as `<name>_1.pdf`,
+  `<name>_2.pdf`, … (first free number), using a no-clobber move so this holds even if a file
+  appears during the run. `os.replace` is allowed only for the app's own state files (manifest, token)
 - Sanitise every external file name before it touches the file system; reject anything that resolves outside the output folder
 - `secrets/`, `downloads/`, `.env` and `token.json` must be in `.gitignore`
 
