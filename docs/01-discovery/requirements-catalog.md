@@ -270,7 +270,7 @@ None blocks G2 entry, so no Jira question issues were created. Each has a workin
 ## Issues for other roles
 - **product-manager:** confirm MoSCoW; decide Q-05, Q-06, Q-09; reflect that D-01 splits the MVP into core+CLI and GUI (RISK-001); renumber with mapping if desired.
 - **solution-architect:** RD §6.1 deliverable tree (`gmail_pdf_downloader.py`, module names) is a solution outline predating D-01, not a business requirement; treat as guidance. Decide Q-07, Q-08, Q-11; dependency justification for the GUI framework and any YAML/time-zone packages.
-- **master:** register PROPOSED-RISK-A, -B, -C from the brief; re-assess RISK-002 and RISK-006.
+- **master:** done at G1 (register updated 2026-10-29): former PROPOSED-RISK-A/B/C are RISK-007/008/009; RISK-002 reduced (score 2, open); RISK-004 and RISK-006 closed.
 - **ux-expert:** GUI-10 setup flow, GUI-18 review checklist, ASSUMPTION-10.
 - **qa-engineer:** every AC-01..09 must be verified for both GUI and CLI.
 

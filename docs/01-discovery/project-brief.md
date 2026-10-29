@@ -112,19 +112,19 @@ Full list with owners in the catalogue; headline items:
 | A test mailbox or a mocked Gmail API for verification | Data | qa-engineer / developer | To be planned at G3 |
 
 ## 10. Business Risks
-Register IDs from PGD-1 comment 10082 (master). Re-assessment of RISK-002 and RISK-006 is pending because T-01 and B-01 are reported resolved in comment 10084.
+Source of truth: `docs/00-governance/risk-register.md` (owned by master; IDs from PGD-1 comment 10082, RISK-007..009 registered at G1, re-assessment of RISK-002/004/006 dated 2026-10-29). Score = P x I (1-5 each). If this table and the register differ, the register wins.
 
-| Risk | Probability | Impact | Mitigation |
-|------|-------------|--------|------------|
-| RISK-001 GUI added to a CLI-shaped spec: new dependency, more effort, conflict with the no-extra-dependencies rule | 3 | 3 | UI-framework ADR (G3); PRD separates core+CLI from GUI polish (G2); GUI is a thin layer |
-| RISK-002 Jira key typo (PDG vs PGD) | 3 | 2 | Resolved per comment 10084; master to re-assess |
-| RISK-003 Testing-status consent screen expires tokens after about 7 days, so unattended runs fail with `invalid_grant` | 4 | 2 | SEC-07 re-consent path; README/GUI explain publishing to "In production"; Q-04 |
-| RISK-004 Jira status categories misconfigured (T-02) | 3 | 2 | Admin fix; query by status name |
-| RISK-005 Token or client secret leaks via logs, GUI dialogs, crash traces or a committed `secrets/` folder | 2 | 5 | SEC-01..09; single redacting error path for GUI and CLI (GUI-11); `.gitignore` (SEC-05); secret-scan and log-scan tests (GOAL-05) |
-| RISK-006 Write-guard hook blocked the governance records | 5 | 3 | Resolved per comment 10084 (session restarted); master to back-fill and re-assess |
-| PROPOSED-RISK-A (for master to register) Search-recall gap: `filename:pdf` may miss unnamed PDFs and FR-10 then never applies | 3 | 3 | Spike and decision at G3 (Q-07) |
-| PROPOSED-RISK-B (for master) Manifest lost or output folder changed, so a re-run creates `_1` duplicates (GOAL-03 fails in practice) | 3 | 3 | Decide behaviour at G2 (Q-06); document; consider manifest integrity check at G3 |
-| PROPOSED-RISK-C (for master) Downloaded PDFs (possibly financial) and logs (sender, subject) sit unencrypted on disk or get committed | 2 | 4 | SEC-05 `.gitignore` for output folder; README guidance; Q-10 |
+| Risk | P | I | Score | Owner | Status | Mitigation |
+|------|---|---|-------|-------|--------|------------|
+| RISK-001 GUI added to a CLI-shaped spec: new dependency, more effort, conflict with the no-extra-dependencies rule | 3 | 3 | 9 | solution-architect (ADR), product-manager (scope) | Open | UI-framework ADR (G3); PRD separates core+CLI from GUI polish (G2); GUI is a thin layer |
+| RISK-002 Jira key typo (`PDG` instead of `PGD`) in CLAUDE.md creates or searches issues in a non-existent project | 1 | 2 | 2 | Santhosh (T-01); orchestrator interim | Reduced (open until the CLAUDE.md change is committed) | T-01 done: CLAUDE.md §1/§1a now say `PGD` (was 3x2=6). Close when the change is committed |
+| RISK-003 Testing-status consent screen expires tokens after about 7 days, so unattended runs fail with `invalid_grant` | 4 | 2 | 8 | business-analyst (G1), solution-architect (G3) | Open | SEC-07 re-consent path; README/GUI explain publishing to "In production"; Q-04 |
+| RISK-004 Jira status categories misconfigured (T-02) | 1 | 2 | 2 | Santhosh (Jira admin) | Closed (verified 2026-10-29) | T-02 fixed; master verified the PGD status categories (was 3x2=6) |
+| RISK-005 Token or client secret leaks via logs, GUI dialogs, crash traces or a committed `secrets/` folder | 2 | 5 | 10 | solution-architect (G3); reviewer-standards, qa-engineer | Open | SEC-01..09; single redacting error path for GUI and CLI (GUI-11); `.gitignore` (SEC-05); secret-scan and log-scan tests (GOAL-05) |
+| RISK-006 Write-guard hook blocked the governance records | 1 | 3 | 3 | Santhosh (hook config) | Closed (verified 2026-10-29) | B-01 resolved (session runs as plain `claude`, comment 10084); master wrote the governance records (was 5x3=15) |
+| RISK-007 Search-recall gap: `filename:pdf` may miss unnamed PDFs, so FR-10 never applies and recall falls below GOAL-01 (registered from former PROPOSED-RISK-A) | 3 | 4 | 12 | solution-architect (spike, G3); product-manager (accept residual, G2) | Open | Spike and ADR at G3 (Q-07, ASSUMPTION-15); state any accepted residual gap in README/GUI help |
+| RISK-008 Manifest lost, corrupted or output folder changed, so a re-run creates `_1` duplicates and GOAL-03 fails in practice (registered from former PROPOSED-RISK-B) | 3 | 3 | 9 | product-manager (Q-06, G2); solution-architect (manifest integrity, G3) | Open | Decide behaviour at G2 (Q-06); atomic manifest write, backup, optional rebuild by SHA-256 at G3; warn when manifest missing in a non-empty folder |
+| RISK-009 Downloaded PDFs (possibly financial) and logs (sender, subject) sit unencrypted on disk or get committed (registered from former PROPOSED-RISK-C) | 2 | 4 | 8 | Santhosh (Q-10); solution-architect (G3); reviewer-standards, qa-engineer | Open | SEC-05 `.gitignore` for output folder; decide default output location at G3; README guidance (TR-002); Q-10 |
 
 ## 11. Compliance & Regulatory Considerations
 Assessment from BA knowledge; **no web research was performed in this run** and no URLs are cited. Santhosh should confirm.
