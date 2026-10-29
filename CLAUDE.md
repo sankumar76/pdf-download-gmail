@@ -17,7 +17,7 @@ them) follows the rules in this file. Role-specific behaviour lives in
 | Project name          | PDF-Download-gmail                        |
 | Business sponsor      | Santhosh / MD                         |
 | Delivery lead (human) | Santhosh — final approver at every gate |
-| Primary stack         | Python 3.12 (min 3.10) / google-api-python-client / google-auth-oauthlib / pytest — CLI only, no DB or frontend |
+| Primary stack         | Python 3.12 (min 3.10) / google-api-python-client / google-auth-oauthlib / pytest |
 | Test command          | pytest -q --cov=gmail_pdf                |
 | Lint command          | ruff check . && ruff format --check .    |
 | Build command         | pip install -r requirements.txt  (no compile step; optional: python -m build) |
@@ -220,3 +220,34 @@ Rules:
 3. If a change genuinely requires modifying or removing existing content, stop and ask the
    delivery lead (Santhosh) for approval first; log the request under "Issues for other roles"
    in your hand-off.
+
+---
+
+## 9. Desktop App & UI Design Standards
+
+**Product form (2026-10-29, delivery lead):** the product is a **desktop application with a
+graphical UI** — not a website and not CLI-only. **No database** is required.
+The UI framework/packaging choice is a solution-architect decision (ADR, gate G3); it must
+support the standards below.
+
+### 9.1 Look & feel
+- Modern, professional and user-friendly; every screen must feel designed by the same hand.
+
+### 9.2 Design system (single source of truth)
+Define these once as shared theme tokens and reuse them everywhere — no ad-hoc values in
+individual screens or widgets:
+- **Typography scale — exactly four roles:** main headings, subheadings, body text, small
+  labels. One size (and weight) per role.
+- **Spacing scale:** one scale for all padding, margins and gaps so sections feel balanced.
+- **Buttons:** one standard style implemented as a shared reusable component; variants
+  (e.g. primary/secondary/destructive) only through that component.
+- **Colour palette:** one consistent palette defined as tokens; no hard-coded colours.
+
+### 9.3 Layout & adaptability
+- Windows are resizable with a sensible minimum size; layouts reflow cleanly from small
+  laptop screens to large monitors.
+- Honour OS display scaling (high-DPI) so text and controls stay crisp and correctly sized.
+
+### 9.4 Applies to
+ux-expert (UX spec, wireframes), solution-architect (UI framework choice), developer
+(implementation), reviewer-standards and qa-engineer (verification against §9.2–9.3).
