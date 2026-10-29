@@ -8,7 +8,7 @@
 | Facilitator | scrum-master |
 | Jira | Intake [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1); stories PGD-12..PGD-18 (below); sub-tasks PGD-19..PGD-62 |
 | Release / wave | R1 Core + CLI (v0.9.0), wave W1, first cut |
-| Status model | All stories are **Draft** (Jira "To Do"). The product-owner validates the Definition of Ready next; the scrum-master then moves each to Ready (Jira "Ready for Dev") |
+| Status model | Stories were created as Draft (Jira "To Do"). The product-owner validated the Definition of Ready on 2026-10-29 (READY on all seven, PGD-1 comments 10124-10131, 8d4d01e). The scrum-master then moved all seven to **Ready** (Jira "Ready for Dev", verified by JQL on 2026-10-29) |
 
 ## Estimation notes
 - Jira story-points field is **not configured** (CLAUDE.md section 1a). Each estimate is in the story description (Estimate line) and mirrored by a `points-N` label. Fibonacci scale.
@@ -21,12 +21,12 @@
 ## Committed Stories (in execution order)
 | # | Story | Jira | Points | Depends on | Critical path | Tier | Status |
 |---|-------|------|--------|-----------|---------------|------|--------|
-| 1 | STORY-02.01 Enabler E-1: walking skeleton, CI and fake mailbox (EPIC-02) | [PGD-12](https://sankumar76.atlassian.net/browse/PGD-12) | 8 | none | Yes | Goal-critical | Draft, DoR self-check done, PO validation pending |
-| 2 | STORY-01.01 One redaction path for every text surface (EPIC-01) | [PGD-13](https://sankumar76.atlassian.net/browse/PGD-13) | 5 | PGD-12 | Yes | Goal-critical | Draft, PO validation pending |
-| 3 | STORY-01.02 Keep secret files out of git and protected on disk (EPIC-01) | [PGD-14](https://sankumar76.atlassian.net/browse/PGD-14) | 3 | PGD-12 | No (parallel with 2) | Droppable | Draft, PO validation pending |
-| 4 | STORY-02.02 Select the messages for an inclusive date range (EPIC-02) | [PGD-15](https://sankumar76.atlassian.net/browse/PGD-15) | 8 | PGD-12, PGD-13 | Yes | Goal-critical | Draft, PO validation pending |
-| 5 | STORY-02.03 Reject bad input before contacting Google (EPIC-02) | [PGD-16](https://sankumar76.atlassian.net/browse/PGD-16) | 3 | PGD-15, PGD-13 | Yes | Goal-critical | Draft, PO validation pending (open items A-1, A-2) |
-| 6 | STORY-02.06 End an empty range normally (EPIC-02) | [PGD-17](https://sankumar76.atlassian.net/browse/PGD-17) | 2 | PGD-15 | No (parallel with 5) | Droppable | Draft, PO validation pending (open item A-1) |
+| 1 | STORY-02.01 Enabler E-1: walking skeleton, CI and fake mailbox (EPIC-02) | [PGD-12](https://sankumar76.atlassian.net/browse/PGD-12) | 8 | none | Yes | Goal-critical | **Ready** (DoR: READY, no changes; 9 ACs) |
+| 2 | STORY-01.01 One redaction path for every text surface (EPIC-01) | [PGD-13](https://sankumar76.atlassian.net/browse/PGD-13) | 5 | PGD-12 | Yes | Goal-critical | **Ready** (DoR: READY after PO amendments; now 8 ACs: AC-8 Ctrl+C, AC-7 import wording) |
+| 3 | STORY-01.02 Keep secret files out of git and protected on disk (EPIC-01) | [PGD-14](https://sankumar76.atlassian.net/browse/PGD-14) | 3 | PGD-12 | No (parallel with 2) | Droppable | **Ready** (DoR: READY, no AC changes; 5 ACs) |
+| 4 | STORY-02.02 Select the messages for an inclusive date range (EPIC-02) | [PGD-15](https://sankumar76.atlassian.net/browse/PGD-15) | 8 | PGD-12, PGD-13 | Yes | Goal-critical | **Ready** (DoR: READY after PO amendments; now 10 ACs: AC-10 default zone, AC-4 precision, `cli/console.py`) |
+| 5 | STORY-02.03 Reject bad input before contacting Google (EPIC-02) | [PGD-16](https://sankumar76.atlassian.net/browse/PGD-16) | 3 | PGD-15, PGD-13 | Yes | Goal-critical | **Ready** (DoR: READY after PO amendments; AC-3 skip rule, AC-4 exact wording and unresolvable system zone) |
+| 6 | STORY-02.06 End an empty range normally (EPIC-02) | [PGD-17](https://sankumar76.atlassian.net/browse/PGD-17) | 2 | PGD-15 | No (parallel with 5) | Droppable | **Ready** (DoR: READY, no AC changes; 5 ACs) |
 
 **Total committed:** 29 points / capacity 30 points (assumed).
 **Critical path:** STORY-02.01 (8) then STORY-01.01 (5) then STORY-02.02 (8) then STORY-02.03 (3) = 24 points, serial. STORY-01.02 and STORY-02.06 run beside the path. Redaction (01.01) precedes anything that logs or prints, so no later line can bypass it (RISK-005, release plan W1 note).
@@ -35,7 +35,7 @@
 ## Stretch Stories
 | Story | Jira | Points | Depends on | Start only if |
 |-------|------|--------|-----------|---------------|
-| STORY-03.01 Recognise a PDF part (EPIC-03) | [PGD-18](https://sankumar76.atlassian.net/browse/PGD-18) | 3 | PGD-15 (epic order; the fixture builders come from PGD-12) | STORY-02.02 has passed G5 and the developer has idle capacity. Pure logic, no CLI work |
+| STORY-03.01 Recognise a PDF part (EPIC-03) | [PGD-18](https://sankumar76.atlassian.net/browse/PGD-18) | 3 | PGD-15 (epic order; the fixture builders come from PGD-12) | STORY-02.02 has passed G5 and the developer has idle capacity. Pure logic, no CLI work. **Ready (stretch)**: DoR READY after PO amendment (now 8 ACs: AC-8 whitespace and trailing-dot rule) |
 
 ## Held or deferred (explicitly NOT in sprint 01)
 | Item | Reason | Condition to release |
@@ -83,15 +83,28 @@ CI runs `windows-latest` on Python 3.10, 3.11 and 3.12 plus Ubuntu and macOS leg
 | Solo developer agent capacity unknown (no velocity) | 30-point assumption is deliberately conservative; droppable tier defined above | scrum-master |
 | RISK-005 credential leakage | 01.01 precedes every logging or printing story; sentinel matrix harness extended by each later story | developer, reviewer-standards |
 
-## Open items for the product-owner (DoR validation)
-| ID | Story | Item |
-|----|-------|------|
-| A-1 | STORY-01.01, 02.06 | The wording `error: unexpected failure, see the run log` is used before a run log exists (UX section 12 table); confirm for the interim build. Same wording reused for a failed list call (02.06 AC-4) |
-| A-2 | STORY-02.03 | Several input errors are printed one per line (UX: "one line each"); confirm |
-| A-3 | STORY-02.03 | No UX text exists for an unknown time zone; proposed `error: --tz: Unknown time zone. Use an IANA name such as Asia/Kolkata.` Confirm with ux-expert |
-| A-4 | STORY-01.02 | `client_secret*.json` added to `.gitignore` beyond the architecture list |
-| A-5 | STORY-02.02 | Interim stdout line `Messages in range: N` and interim real-mode `error: Gmail sign-in is not available in this build yet.` (exit 3) until STORY-07.04 and STORY-01.04/01.06 |
-| A-6 | STORY-02.02 | Retry helper (NFR-006) is built here, as the consistency report allocates it; paging (`nextPageToken`) is left to STORY-02.04 |
+## Product-owner decisions on the open items (DoR validation, 2026-10-29)
+All six accepted; none remains open. A-3 is an Assumption owned by ux-expert (non-blocking).
+| ID | Story | Decision |
+|----|-------|----------|
+| A-1 | STORY-01.01, 02.06 | **Accepted.** `error: unexpected failure, see the run log` is used in the interim build before a run log exists; the same wording is reused for a failed list call (02.06 AC-4). UX gives no path suffix, architecture 6.5 appends `: <path>`: alignment logged as CC-10 (ux-expert, solution-architect) |
+| A-2 | STORY-02.03 | **Decided.** Several input errors are printed one per line, each error being one line (UX "one line each") |
+| A-3 | STORY-02.03 | **Decided (Assumption).** `error: --tz: Unknown time zone. Use an IANA name such as Asia/Kolkata.` (no echo of input). ux-expert to add the line to UX section 12 (CC-11) |
+| A-4 | STORY-01.02 | **Accepted.** `client_secret*.json` is ignored in `.gitignore` in addition to the architecture list |
+| A-5 | STORY-02.02 | **Accepted with a removal rule.** The interim stdout line `Messages in range: N` and the interim real-mode `error: Gmail sign-in is not available in this build yet.` (exit 3) must be removed or replaced by STORY-07.04 and STORY-01.04/01.06; those stories carry an AC to that effect (see "Follow-ups for later stories") |
+| A-6 | STORY-02.02 | **Accepted.** The retry helper (NFR-006) is built in STORY-02.02 as the consistency report allocates it; paging (`nextPageToken`) stays in STORY-02.04 |
+
+Other PO findings (Minor, none blocking sprint 01): CC-10 unexpected-failure wording differs between UX and architecture (ux-expert, solution-architect); CC-11 add the A-3 line to UX section 12 (ux-expert); CC-12 token write helper location and the `redaction.py` to `domain.messages` import, now named in PGD-13 AC-7 (solution-architect, non-blocking); CC-13 sub-task summaries cite the amended ACs (scrum-master, done: PGD-32 and PGD-33 gain PGD-13 AC-8, PGD-41 gains PGD-15 AC-10, PGD-60 gains PGD-18 AC-8).
+
+## Follow-ups for later stories (include when drafting them)
+| Story | Add this to the story |
+|-------|-----------------------|
+| STORY-01.04 (sign-in, mock-tested), STORY-01.06 (missing or wrong credentials) | AC: the interim real-mode line `error: Gmail sign-in is not available in this build yet.` (STORY-02.02 AC-6) and its `messages.py` constant are removed and replaced by the real sign-in behaviour and exit 3 mapping; a test proves the string no longer exists (A-5) |
+| STORY-07.04 (final summary) | AC: the interim stdout line `Messages in range: N` (STORY-02.02 AC-5) is replaced by the seven-field FR-042 summary; a test proves the interim line is gone (A-5). Also keep the "No PDFs found / 0 PDFs found." first lines for candidate-level emptiness (STORY-02.06 Dev Context note) |
+| STORY-07.02 (run log), STORY-07.03 (CSV report) | Extend PGD-17 (STORY-02.06) AC-3: an empty range now creates the run log and a header-only CSV (it creates no file in sprint 01); add a zero-match case to the NFR-005 reconciliation test |
+| STORY-06.02 (Ctrl+C) | Replace the interim `Run cancelled` behaviour of PGD-13 AC-8 with the safe stop and cancelled summary |
+| STORY-03.02, 07.04 | "Messages found but 0 PDF candidates" must print the same empty-range wording (STORY-02.06) |
+| STORY-04.05 (sprint 02) | Verify AA-06 (`\\?\` long paths on Windows 11) |
 
 ## Impediments
 | ID | Description | Impact | Owner | Action | Target date | Status |

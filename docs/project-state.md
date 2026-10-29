@@ -42,6 +42,13 @@
 
 | Story ID | Title | Status | Owner agent | G5 | G6 | G7 | Notes |
 |----------|-------|--------|-------------|----|----|----|-------|
+| STORY-02.01 (PGD-12) | Enabler: walking skeleton, CI, fake mailbox | Ready | developer | | | | 8 pts; first on the critical path |
+| STORY-01.01 (PGD-13) | One redaction path for every text surface | Ready | developer | | | | 5 pts; blocked by PGD-12 |
+| STORY-01.02 (PGD-14) | Keep secret files out of git and protected on disk | Ready | developer | | | | 3 pts; blocked by PGD-12 |
+| STORY-02.02 (PGD-15) | Select the messages for an inclusive date range | Ready | developer | | | | 8 pts; blocked by PGD-12, 13 |
+| STORY-02.03 (PGD-16) | Reject bad input before contacting Google | Ready | developer | | | | 3 pts; blocked by PGD-13, 15 |
+| STORY-02.06 (PGD-17) | End an empty range normally | Ready | developer | | | | 2 pts; blocked by PGD-15 |
+| STORY-03.01 (PGD-18) | Recognise a PDF part | Ready | developer | | | | 3 pts; stretch; blocked by PGD-15 |
 
 ## Open Questions
 
@@ -70,6 +77,9 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-10-29 | scrum-master | PGD-12..18 moved to **Ready for Dev** (checked by JQL). CC-13 sub-task references fixed. Sprint plan updated with the A-1..A-6 decisions and the follow-ups for later stories. Orchestrator committed the plan and briefed master for G4 | docs/05-backlog/sprint-01-plan.md; PGD-1 c.10133 |
+| 2026-10-29 | product-owner | DoR validation: all 7 sprint-01 stories are READY (PGD-12..18, comments 10124–10130). ACs amended on PGD-13, 15, 16 and 18. A-1..A-6 decided. New Minor issues CC-10..13. Totals: 0 Critical, 2 Major, 11 Minor. Orchestrator committed 8d4d01e and briefed scrum-master to transition the stories to Ready | docs/05-backlog/consistency-report.md; PGD-1 c.10131, 10132 |
+| 2026-10-29 | scrum-master | Sprint-01 plan: 7 stories in Jira, all Draft. PGD-12 (02.01), PGD-13 (01.01), PGD-14 (01.02), PGD-15 (02.02), PGD-16 (02.03), PGD-17 (02.06) and PGD-18 (03.01, stretch); 29 of 30 points committed. 44 sub-tasks (PGD-19..62) and 8 Blocks links. STORY-02.09 held (CC-02); no EPIC-09/10 story (C11). Orchestrator committed d1f1358. Briefed product-owner for DoR validation | docs/05-backlog/sprint-01-plan.md; PGD-1 c.10121–10123 |
 | 2026-10-29 | product-owner | Detailed EPIC-01..10 (files plus Jira Epics PGD-2..11, linked to PGD-1). Consistency check found 0 Critical, 2 Major and 7 Minor issues. CC-01 (enablers hosted in EPIC-02) is resolved. CC-02 (ADR-007 recall-sweep gate 0.8 vs NFR-002 dry-run 0.6) is open and needed before STORY-02.09 is Ready (W2). EPIC-09/10 are held by C11. Orchestrator committed fb39980 | docs/05-backlog/epics/*, backlog.md, consistency-report.md; PGD-1 c.10119 |
 | 2026-10-29 | orchestrator | Briefed scrum-master: sprint-01 plan and W1 stories in Jira (R1 core + CLI, Windows 11) | PGD-1 c.10120 |
 | 2026-10-29 | orchestrator | solution-architect finished C10 (PGD-1 c.10117). Its role hook blocks git writes, so the orchestrator committed the 4 architecture files as **4892c8c** and pushed. Briefed product-owner (epics EPIC-01..10, consistency check) | docs/04-architecture/*; PGD-1 comments 10117, 10118 |
