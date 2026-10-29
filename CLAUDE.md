@@ -199,3 +199,24 @@ Every agent reads it before its first Jira or GitHub action in a run.
   (e.g. `aiid-EPIC-01`, `aiid-STORY-01.03`) — agents **search by this label before creating**
   so re-runs never duplicate issues.
 - Never put secrets, tokens or personal data in Jira or GitHub content.
+
+---
+
+## 8. Protected Files (append-only)
+
+These files are maintained by the delivery lead. Every agent and human treats them as
+**append-only**:
+
+| File | How to add to it |
+|------|------------------|
+| `CLAUDE.md` | Append new sections or lines at the end of the file. |
+| `.claude/settings.json` (and any other `settings.json`) | Add new keys or new array entries (e.g. extra `allow`/`deny` rules, extra hooks). Never remove or change an existing key, value or entry. Keep the file valid JSON. |
+| `.github/pull_request_template.md` | Append new sections or lines at the end of the file. |
+
+Rules:
+1. Never overwrite these files (no full-file `Write`, no `>` redirection) and never edit,
+   reorder or delete their existing content.
+2. If a file does not exist yet, creating it is allowed.
+3. If a change genuinely requires modifying or removing existing content, stop and ask the
+   delivery lead (Santhosh) for approval first; log the request under "Issues for other roles"
+   in your hand-off.
