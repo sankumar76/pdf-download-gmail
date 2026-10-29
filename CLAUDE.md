@@ -23,7 +23,7 @@ them) follows the rules in this file. Role-specific behaviour lives in
 | Build command         | pip install -r requirements.txt  (no compile step; optional: python -m build) |
 | Type-check command    | mypy gmail_pdf --strict                  |
 | Branching model       | trunk-based on `main`, short-lived feature branches `feat/<story-id>`, squash-merge after tests + lint pass |
-| Ticketing system      | PDG |
+| Ticketing system      | PGD |
 
 ### 1a. Integration Profile (Jira + GitHub)
 
@@ -31,7 +31,7 @@ them) follows the rules in this file. Role-specific behaviour lives in
 |---------|-------|-------|
 | `INTEGRATION_MODE` | **jira+github** | `jira+github` = Jira and GitHub are the systems of record (see §7). `local` = markdown-only (no MCP calls). |
 | Jira site | sankumar76.atlassian.net | |
-| Jira project key | PDG | |
+| Jira project key | PGD | |
 | Jira issue types | Epic=Epic, Story=Story, Sub-task=Subtask, Bug=Bug, Intake=Task | Use the exact names in your Jira project |
 | Story points field | | Leave blank if not used |
 | Jira status mapping | Draft=To Do, Ready=Ready for Dev, In Progress=In Progress, In Review=In Review, Changes Requested=In Progress, In QA=In QA, Rejected=In Progress, Done=Done, Blocked=Blocked | Must match your workflow's status names |
