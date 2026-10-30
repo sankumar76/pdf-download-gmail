@@ -57,6 +57,25 @@ def test_gethostbyname_for_a_remote_host_is_blocked() -> None:
         socket.gethostbyname("example.com")
 
 
+def test_gethostbyname_ex_for_a_remote_host_is_blocked() -> None:
+    with pytest.raises(NetworkAccessError, match="example.com"):
+        socket.gethostbyname_ex("example.com")
+
+
+def test_gethostbyaddr_for_a_remote_address_is_blocked() -> None:
+    with pytest.raises(NetworkAccessError, match=DOCUMENTATION_ADDRESS):
+        socket.gethostbyaddr(DOCUMENTATION_ADDRESS)
+
+
+def test_getnameinfo_for_a_remote_address_is_blocked() -> None:
+    with pytest.raises(NetworkAccessError, match=DOCUMENTATION_ADDRESS):
+        socket.getnameinfo((DOCUMENTATION_ADDRESS, 80), 0)
+
+
+def test_getnameinfo_for_loopback_is_allowed() -> None:
+    assert socket.getnameinfo(("127.0.0.1", 80), socket.NI_NUMERICHOST | socket.NI_NUMERICSERV)
+
+
 def test_getaddrinfo_for_loopback_is_allowed() -> None:
     assert socket.getaddrinfo("127.0.0.1", 80)
 

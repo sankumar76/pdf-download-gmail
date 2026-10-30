@@ -184,6 +184,14 @@ def test_json_defaults_match_the_constructor_defaults() -> None:
         pytest.param({"format": 1, "messages": "nope"}, id="messages-not-a-list"),
         pytest.param({"format": 1, "messages": [{"resource": {}}]}, id="missing-attachments"),
         pytest.param({"format": 1, "messages": [5]}, id="message-not-an-object"),
+        pytest.param(
+            {"format": 1, "messages": [{"resource": {}, "attachments": {}}]},
+            id="message-without-id",
+        ),
+        pytest.param(
+            {"format": 1, "messages": [{"resource": {"id": 7}, "attachments": {}}]},
+            id="message-id-not-a-string",
+        ),
     ],
 )
 def test_malformed_json_documents_are_rejected(document: dict[str, object]) -> None:

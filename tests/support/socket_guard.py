@@ -2,7 +2,8 @@
 
 ``install()`` replaces the socket entry points that can reach a remote host:
 ``socket.socket.connect``, ``connect_ex`` and ``sendto`` (UDP), plus
-``socket.create_connection``, ``getaddrinfo`` and ``gethostbyname``. Each raises
+``socket.create_connection``, ``getaddrinfo``, ``gethostbyname``, ``gethostbyname_ex``,
+``gethostbyaddr`` and ``getnameinfo``. Each raises
 ``NetworkAccessError`` unless the destination is loopback (or a Unix-domain path). Host names
 other than ``localhost`` are refused *before* resolution, so no DNS query leaves the machine.
 
@@ -44,13 +45,17 @@ def is_loopback_host(host: object) -> bool:
     return address.is_loopback
 
 
+def _blocked(host: object) -> NetworkAccessError:
+    return NetworkAccessError(
+        f"Blocked non-loopback network access to {host!r}; tests must not use the network"
+    )
+
+
 def _check_host(host: object) -> None:
     """Allow ``None``/empty (the local machine) and loopback hosts; refuse everything else."""
     if host in (None, "", b"") or is_loopback_host(host):
         return
-    raise NetworkAccessError(
-        f"Blocked non-loopback network access to {host!r}; tests must not use the network"
-    )
+    raise _blocked(host)
 
 
 def _check_address(address: object) -> None:
@@ -59,9 +64,7 @@ def _check_address(address: object) -> None:
         return
     host = address[0] if isinstance(address, tuple) and address else address
     if not is_loopback_host(host):
-        raise NetworkAccessError(
-            f"Blocked non-loopback network access to {host!r}; tests must not use the network"
-        )
+        raise _blocked(host)
 
 
 def install() -> Callable[[], None]:
@@ -72,6 +75,9 @@ def install() -> Callable[[], None]:
     original_create_connection = socket.create_connection
     original_getaddrinfo = socket.getaddrinfo
     original_gethostbyname = socket.gethostbyname
+    original_gethostbyname_ex = socket.gethostbyname_ex
+    original_gethostbyaddr = socket.gethostbyaddr
+    original_getnameinfo = socket.getnameinfo
 
     # The wrappers must accept whatever the stdlib accepts, so their parameters are `Any`
     # (the same reason typeshed uses its `_Address` alias for socket addresses).
@@ -99,6 +105,18 @@ def install() -> Callable[[], None]:
         _check_host(host)
         return original_gethostbyname(host)
 
+    def guarded_gethostbyname_ex(host: Any) -> Any:
+        _check_host(host)
+        return original_gethostbyname_ex(host)
+
+    def guarded_gethostbyaddr(host: Any) -> Any:
+        _check_host(host)
+        return original_gethostbyaddr(host)
+
+    def guarded_getnameinfo(sockaddr: Any, flags: int) -> Any:
+        _check_address(sockaddr)
+        return original_getnameinfo(sockaddr, flags)
+
     # Monkeypatching stdlib callables: mypy rejects assigning to a method or a function
     # (`method-assign` / `assignment`), which is exactly what a guard has to do.
     socket.socket.connect = guarded_connect  # type: ignore[method-assign,assignment]
@@ -107,6 +125,9 @@ def install() -> Callable[[], None]:
     socket.create_connection = guarded_create_connection  # type: ignore[assignment]
     socket.getaddrinfo = guarded_getaddrinfo  # type: ignore[assignment]
     socket.gethostbyname = guarded_gethostbyname  # type: ignore[assignment]
+    socket.gethostbyname_ex = guarded_gethostbyname_ex  # type: ignore[assignment]
+    socket.gethostbyaddr = guarded_gethostbyaddr  # type: ignore[assignment]
+    socket.getnameinfo = guarded_getnameinfo  # type: ignore[assignment]
 
     def restore() -> None:
         socket.socket.connect = original_connect  # type: ignore[method-assign]
@@ -115,5 +136,8 @@ def install() -> Callable[[], None]:
         socket.create_connection = original_create_connection
         socket.getaddrinfo = original_getaddrinfo
         socket.gethostbyname = original_gethostbyname
+        socket.gethostbyname_ex = original_gethostbyname_ex
+        socket.gethostbyaddr = original_gethostbyaddr
+        socket.getnameinfo = original_getnameinfo
 
     return restore

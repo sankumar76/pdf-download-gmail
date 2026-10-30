@@ -56,6 +56,8 @@ def from_json_dict(data: Mapping[str, object]) -> FakeGmail:
         attachments = entry.get("attachments") if isinstance(entry, dict) else None
         if not isinstance(resource, dict) or not isinstance(attachments, dict):
             raise ValueError("each fake mailbox message needs 'resource' and 'attachments'")
+        if not isinstance(resource.get("id"), str) or not resource["id"]:
+            raise ValueError("each fake mailbox message resource needs a string 'id'")
         decoded = {str(k): b64url_decode(str(v)) for k, v in attachments.items()}
         messages.append(FakeMessage(resource, decoded))
     seed = data.get("shuffle_seed")
