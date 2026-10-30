@@ -694,3 +694,70 @@ Limits of this evidence: the fix was patched in memory, not implemented. P4 and 
 - G6 is not in `HUMAN_APPROVAL_POINTS`. The human path opens only if C28 fails (D-50).
 
 **Posted:** PR #22 comment 6531522614; Jira PGD-13 c.10228.
+
+---
+
+## G6 – Peer Review — STORY-01.01 (PGD-13) — 2026-10-30 — C28 rating only (D-50), not a new attempt
+
+- **Decision:** no new G6 decision. Seven new findings rated: all Minor or Info. **C28 is closed on `a135b4c`.** Under the exit rule PGD-13 moves to In QA with no further G6 decision; master confirms C28 as G7 check 0, and QA tests `a135b4c` only
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no
+- **Attempt:** none. Loop 3 of 3 stays the last; no developer run
+- **Artefacts evaluated:**
+  - PR #22 head `a135b4c`; delta `71b590e..a135b4c` read by master: `redaction.py`, `test_redaction_hooks.py`, `test_sentinel_matrix.py`; commits `32304ab`, `a135b4c`.
+  - Reviews 5718016476 (quality; correction 6532402803) and 5717840658 (standards) with inline QUA-34..37 and STD-44..46; consolidated verification 6532433039; SA acknowledgement 6531815106.
+  - Check runs on `a135b4c`: 10/10 success, read by master. `mergeable_state` clean; `main` `27876b6`.
+  - Issues #23, #27, #28, #29. Jira PGD-13 AC-1..8 and c.10230–10235. JQL: no issue labelled `aiid-STORY-06.02`, `aiid-STORY-01.04` or `aiid-STORY-07.01`.
+  - Raw reviewer results read, not only the tables: `out.json` for `a135b4c`, 51 cases on 3.12.10 and on 3.14.7, all 18 listed probes present, every case loaded the export, non-zero rows P10, E1, E11 only. Mutant table: all 37 required mutants killed; the only survivors are Q5, Q6, Q7. Q7 log: 649 passed on its own copy.
+  - `git show 27876b6:gmail_pdf/cli/main.py`: no `except Exception`, so line 84 is new in this PR.
+
+**C28 exit rule on `a135b4c`**
+| # | Item | Result | Evidence |
+|---|------|--------|----------|
+| 1 | Diff within the four files, no new file, at most two commits | ✅ | Three files, two commits, read by master |
+| 2 | Local rerun, ruff, mypy --strict, bandit | ✅ | Orchestrator: 649 passed, 99.70 %; clean |
+| 3 | CI 10/10 on H, merge state, tested `main` SHA | ✅ | Run 41116702718, read by master; clean; `27876b6` |
+| 4 | X1..X17 and P4 on 3.12.10 and 3.14.7, 0 sentinels | ✅ | `out.json` read by master; P4 reproduced by master |
+| 5 | Q1..Q4, F2, F5, T1 and the full set each fail a named test | ✅ | Mutant table read by master |
+| 6 | STD-40..43; each broad except carries a reason | ✅ | Fixed. Line 167's reason is in the docstring directly above it (STD-44, Info; ruling below) |
+| 7 | Replies in the QUA-27, QUA-31, QUA-32 threads | ✅ | Reviewer-quality, per Jira c.10234 |
+| 8 | SA acknowledgement before G7 GO (not part of the loop) | ✅ | 6531815106, qualified; satisfied (D-52) |
+
+**Master's probes** (in memory, worktree unchanged by `git status`; real child interpreters, `-I -B`; fake sentinel `SENTINEL-CLIENT-SECRET-0001`; 3.12.10 / 3.14.7):
+
+| Case | Sentinels | Exit |
+|---|---|---|
+| P4 on `a135b4c` | 0 / 0 | `0xC000013A` |
+| P4 with Q7 | 1 / 1 | `0xC000013A` |
+| `_run` raises `SystemExit(<sentinel>)` through `main` | 1 / 1 | 1 |
+| `_run` calls `sys.exit(f"error: {exc}")` | 1 / 1 | 1 |
+| `_run` raises `SystemExit(0)` | 0 / 0, no output | 0 |
+
+Unit runs in memory on 3.12.10: hooks and logging test files 165 passed with Q7; the reviewer's 8-case test passes on the head and fails 8 of 8 on Q7. Search for text-carrying exits: `gmail_pdf/`, every installed runtime package and the stdlib modules on the runtime path found none that the product reaches; `argparse` exits with an integer, and the other hits are dev tools or command-line entry scripts the product does not import (`click`, `piptools`, `diff_cover`, `idna`, `json.tool`). Limits: in-memory Q7 does not reach child-interpreter tests, so the 649 figure is the reviewer's; P4 forces timing and no physical key was pressed.
+
+**Ratings and dispositions**
+| Finding | Reviewer | Master | Disposition |
+|---------|----------|--------|-------------|
+| QUA-34 `redaction.py:399-400`, cancel branch guard untested; 2 of 24 cases cannot fail | Minor | **Minor** | TD-C (new), STORY-01.04, with #27. Before any change to `_handle_uncaught`, so before STORY-06.02 G5 at the latest |
+| QUA-35 `redaction.py:186`, "`BaseException` passes" pinned for `KeyboardInterrupt` only | Info | **Info** | TD-C |
+| QUA-36 `redaction.py:444-445`, "fixed line is still printed" holds for `Exception` only | Info | **Info** | TD-C, wording, next time the file is touched |
+| QUA-37 `cli/main.py:84`, `SystemExit(text)` prints raw | Info | **Minor, re-rated up** | #23, STORY-07.01. Interim: reviewer-standards checks each G6 diff for text in `sys.exit` or `SystemExit` until #23 closes |
+| STD-44 `redaction.py:167` | Info | **Info** | #28, STORY-01.04 |
+| STD-45 `test_redaction_hooks.py:3-5` | Info | **Info** | #28; falls away with #27 |
+| STD-46 `test_redaction_hooks.py:545` | Info | **Info** | #28, STORY-01.04 |
+| E11, forced at hook exit with a tracer, 1 / 1 | Not raised | Not a finding | Same residual class as P10 (D-52); noted on #29 |
+| Q5, Q6, Q7 survive | Not listed | **Not a listed check failing** | Rated through QUA-34 and QUA-35 |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C28 | | | **Closed on `a135b4c`** | Master confirms at G7 check 0 |
+| C29 (extended) | scrum-master; reviewer-quality; reviewer-standards | Jira; `sprint-01-plan.md`; GitHub | As recorded at attempt 3, plus: **scrum-master:** create STORY-06.02 in Jira under PGD-7 after the `aiid-STORY-06.02` search, with the SA's six items, the TD-A items and the sprint-01-plan row as ACs, and link #29. Add follow-up rows: STORY-01.04 for #27, #28 and TD-C; STORY-07.01 for QUA-37 on #23. STORY-01.04 and STORY-07.01 have no Jira issue yet, so links go on at creation. **reviewer-quality, before G7 GO:** open TD-C (QUA-34 with its 8-case test and the 2 cases that cannot fail, QUA-35, QUA-36); add QUA-37 to #23; add E11 to #29. | Sprint-02 G4; reviewer-quality items before G7 GO |
+
+**Risks registered:** RISK-005 note changed (D-52). No new risk. Score stays 10 until PGD-13 passes G7.
+
+**Rationale:**
+- Each finding was rated on its own evidence, and a rating of Major was tested for each. QUA-34 and QUA-37 were the two where it was arguable; both are argued in D-51, so the delivery lead can overrule them. Both are named in the code-merge request.
+- QUA-37 went up, not down, and that does not stop the story. The reviewer's three stated reasons do not carry the rating; the rating rests on AC-5's reach and on no input, timing or exception object on this head reaching the print.
+- Master's fix table said "over the three hooks", not "each branch of a hook". That is the second time master's recipe was narrower than its purpose (C27 was the first); the developer delivered what was asked.
+
+**Posted:** PR #22 comment 6532598449; Jira PGD-13 c.10236; #28 comment 6532599519; risk note PGD-1 c.10237.
