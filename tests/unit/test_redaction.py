@@ -123,7 +123,9 @@ def test_clear_secrets_forgets_every_registered_value() -> None:
 
 # ----------------------------------------------------------------------------------- AC-2
 PATTERN_CASES = [
-    pytest.param("token ya29.SENTINEL0001 end", f"token {REDACTED} end", id="access-token-ya29"),
+    pytest.param(
+        f"token {sentinels.ACCESS_TOKEN} end", f"token {REDACTED} end", id="access-token-ya29"
+    ),
     pytest.param(
         f"refresh {sentinels.UNREGISTERED_REFRESH_SHAPE}!", f"refresh {REDACTED}!", id="refresh-1//"
     ),
@@ -174,11 +176,23 @@ PATTERN_CASES = [
         id="authorization-bearer-lower-case",
     ),
     pytest.param(
-        "bad Authorization: Bearer ya29.SENTINEL0001",
+        f"bad Authorization: Bearer {sentinels.ACCESS_TOKEN}",
         f"bad Authorization: Bearer {REDACTED}",
         id="bearer-with-ya29",
     ),
     pytest.param("code=4/0AbCdEf", f"code={REDACTED}", id="code-at-start-of-text"),
+    pytest.param(
+        "code_verifier=abc123def456", f"code_verifier={REDACTED}", id="pkce-code_verifier"
+    ),
+    pytest.param("auth_code=4/0AbCdEf", f"auth_code={REDACTED}", id="auth_code"),
+    pytest.param(
+        '{"device_code": "AH-1AbCd"}', f'{{"device_code": "{REDACTED}"}}', id="json-device_code"
+    ),
+    pytest.param(
+        "grant_type=authorization_code&code=4/0AbCdEf",
+        f"grant_type=authorization_code&code={REDACTED}",
+        id="grant-type-value-stays-visible",
+    ),
 ]
 
 

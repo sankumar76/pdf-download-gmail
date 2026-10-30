@@ -1,13 +1,17 @@
 """The one redaction path (FR-005, NFR-012, ADR-003 section 6, architecture section 8.4).
 
-This is the only code that turns an exception or other untrusted text into text a person can
-see: console, log file, dialog, copied diagnostics. Four parts:
+This is the code that turns an exception or other untrusted text into text a person can see.
+It covers these surfaces: log records (a ``logging.Filter``), one-line error text
+(``safe_message``), uncaught exceptions on the main and worker threads, exceptions the
+interpreter ignores (``sys.unraisablehook``) and warnings routed through ``logging``. Anything
+else that writes to the console on its own, such as ``argparse`` usage errors, is not covered
+(tracked in issue #23). Four parts:
 
 1. A registry of known secrets (``register_secret``): exact matches become ``[REDACTED]``.
 2. Patterns for Google token shapes and key/value forms, as defence in depth (``redact``).
 3. Surfaces: a ``logging.Filter`` (``RedactingFilter``, ``install_logging_redaction``),
    ``safe_message`` for one-line error text, and the ``sys.excepthook`` /
-   ``threading.excepthook`` installers (``install_excepthooks``).
+   ``threading.excepthook`` / ``sys.unraisablehook`` installers (``install_excepthooks``).
 4. Structural rules for the rest of the code base (not enforceable here): never format a
    ``Credentials`` object, HTTP headers or request URIs into any message.
 
@@ -100,8 +104,10 @@ def clear_secrets() -> None:
 
 # ------------------------------------------------------------------------------ patterns
 # (pattern, replacement) pairs from architecture section 8.4 / AA-10. Key names stay visible.
-# Deviation from the architecture text: ``code`` must not be the tail of a longer word, so
-# ``status_code: 404`` and ``zipcode=10001`` are not mistaken for an OAuth ``code=`` value.
+# Decision D-44 (architect): the bare ``code`` key must not be the tail of a longer word, so
+# ``status_code: 404`` and ``zipcode=10001`` are not mistaken for an OAuth ``code=`` value; the
+# OAuth ``*_code`` secrets are listed as explicit keys. A new secret parameter is added to the
+# explicit list with a test row, never by loosening the ``code`` guard.
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"ya29\.[\w.-]+"), REDACTED),
     (re.compile(r"1//[\w.-]+"), REDACTED),
@@ -109,7 +115,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(
             r"""(?ix)
-            ((?:access_token|refresh_token|client_secret|id_token)|(?<!\w)code)
+            ((?:access_token|refresh_token|client_secret|id_token|code_verifier|auth_code|device_code)|(?<!\w)code)
             (["']?\s*[:=]\s*["']?)
             [^"'&\s,}]+
             """
@@ -175,6 +181,9 @@ def install_logging_redaction(*handlers: logging.Handler) -> None:
       later is not covered until it is passed to this function.
     * ``googleapiclient``, ``google_auth_oauthlib``, ``urllib3`` and ``oauthlib`` are capped at
       WARNING (a level that is already stricter is kept).
+    * ``logging.captureWarnings(True)``: ``warnings.warn`` text goes to the ``py.warnings``
+      logger, so the filtered handlers see it instead of ``warnings`` writing raw text to
+      stderr.
     * If ``httplib2`` has already been imported its ``debuglevel`` is set to 0 (it prints
       requests and headers to stdout otherwise). A later import starts at 0 by default.
 
@@ -184,6 +193,7 @@ def install_logging_redaction(*handlers: logging.Handler) -> None:
         _attach_filter(handler)
     if logging.lastResort is not None:
         _attach_filter(logging.lastResort)
+    logging.captureWarnings(True)
     for name in THIRD_PARTY_LOGGERS:
         third_party = logging.getLogger(name)
         if third_party.level < logging.WARNING:  # includes NOTSET (0)
@@ -275,7 +285,8 @@ def _own_message(exc: BaseException) -> str:
 
 
 def safe_message(exc: BaseException) -> str:
-    """Return one displayable line for ``exc``: no newline, no traceback, no secret.
+    """Return one displayable line for ``exc``: no newline, no traceback, no registered secret
+    or known token shape.
 
     * An error this application raises on purpose (``GmailPdfError``) shows its own message,
       redacted: those messages are written for the user.
@@ -352,23 +363,33 @@ def _worker_thread_hook(args: threading.ExceptHookArgs) -> None:
     _handle_uncaught(args.exc_type, args.exc_value, args.exc_traceback)
 
 
-def install_excepthooks() -> Callable[[], None]:
-    """Replace ``sys.excepthook`` and ``threading.excepthook`` with the redacting hooks.
+def _unraisable_hook(args: sys.UnraisableHookArgs) -> None:
+    """Exceptions the interpreter must ignore (``__del__``, callbacks): redacted, DEBUG only."""
+    text = "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback))
+    logger.debug("Ignored exception (redacted traceback):\n%s", redact(text))
 
-    An uncaught exception then prints ``error: unexpected failure, see the run log`` (or
-    ``Run cancelled`` for Ctrl+C) to stderr, and nothing else. The hooks do not call the
-    previous hooks.
+
+def install_excepthooks() -> Callable[[], None]:
+    """Replace ``sys.excepthook``, ``threading.excepthook`` and ``sys.unraisablehook``.
+
+    An uncaught exception on any thread then prints ``error: unexpected failure, see the run
+    log`` (or ``Run cancelled`` for Ctrl+C) to stderr, and nothing else. An exception the
+    interpreter ignores (for example in ``__del__``) prints nothing; its redacted traceback goes
+    to the logger at DEBUG. The hooks do not call the previous hooks.
 
     Returns:
         A function that puts back the hooks that were installed before this call.
     """
     previous_main = sys.excepthook
     previous_thread = threading.excepthook
+    previous_unraisable = sys.unraisablehook
     sys.excepthook = _main_thread_hook
     threading.excepthook = _worker_thread_hook
+    sys.unraisablehook = _unraisable_hook
 
     def restore() -> None:
         sys.excepthook = previous_main
         threading.excepthook = previous_thread
+        sys.unraisablehook = previous_unraisable
 
     return restore

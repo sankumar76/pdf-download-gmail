@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import sys
 import threading
+import warnings
 from collections.abc import Callable, Iterator
 
 import pytest
@@ -41,16 +42,19 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 def _isolate_process_wide_redaction_state() -> Iterator[None]:
     """Undo what ``cli.main.main`` and the redaction installers change process-wide.
 
-    ``main`` installs the excepthooks and the logging caps on every call, and tests call it
-    in-process; without this the hooks, the filter on ``logging.lastResort``, the logger
-    levels and the registered secrets would leak from one test into the next.
+    ``main`` installs the excepthooks, warning capture and the logging caps on every call, and
+    tests call it in-process; without this the hooks, the filter on ``logging.lastResort``, the
+    logger levels and the registered secrets would leak from one test into the next.
     """
     names = redaction.THIRD_PARTY_LOGGERS
     levels = {name: logging.getLogger(name).level for name in names}
     last_resort_filters = list(logging.lastResort.filters) if logging.lastResort else []
-    hooks = (sys.excepthook, threading.excepthook)
+    hooks = (sys.excepthook, threading.excepthook, sys.unraisablehook)
+    showwarning = warnings.showwarning
     yield
-    sys.excepthook, threading.excepthook = hooks
+    sys.excepthook, threading.excepthook, sys.unraisablehook = hooks
+    logging.captureWarnings(False)
+    warnings.showwarning = showwarning
     if logging.lastResort is not None:
         logging.lastResort.filters[:] = last_resort_filters
     for name, level in levels.items():

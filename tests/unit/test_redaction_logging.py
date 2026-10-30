@@ -6,6 +6,7 @@ import io
 import logging
 import sys
 import types
+import warnings
 from collections.abc import Iterator
 
 import pytest
@@ -57,11 +58,18 @@ def capture() -> Iterator[Capture]:
     root.setLevel(previous_level)
 
 
+# ------------------------------------------------------------------ records at every level
 @pytest.mark.parametrize("level", ALL_LEVELS)
 def test_app_logger_output_has_no_sentinel_at_any_level(capture: Capture, level: int) -> None:
     logging.getLogger("gmail_pdf.test").log(level, "value=%s", sentinels.CLIENT_SECRET)
 
-    assert (capture.text.count(sentinels.CLIENT_SECRET), REDACTED in capture.text) == (0, True)
+    assert capture.text.count(sentinels.CLIENT_SECRET) == 0
+
+
+def test_the_redacted_marker_replaces_the_secret_in_log_output(capture: Capture) -> None:
+    logging.getLogger("gmail_pdf.test").info("value=%s", sentinels.CLIENT_SECRET)
+
+    assert REDACTED in capture.text
 
 
 @pytest.mark.parametrize("name", redaction.THIRD_PARTY_LOGGERS)
@@ -74,21 +82,45 @@ def test_third_party_logger_output_has_no_sentinel_at_any_level(
     assert capture.text.count(sentinels.ACCESS_TOKEN) == 0
 
 
-@pytest.mark.parametrize("name", redaction.THIRD_PARTY_LOGGERS)
-def test_third_party_loggers_are_capped_at_warning(capture: Capture, name: str) -> None:
-    logger = logging.getLogger(name)
+# ------------------------------------------------------------------ the third-party cap
+@pytest.fixture
+def capped_logger(capture: Capture, request: pytest.FixtureRequest) -> logging.Logger:
+    """A third-party logger set to DEBUG, capped by the installer, one record per level."""
+    logger = logging.getLogger(request.param)
     logger.setLevel(logging.DEBUG)
-
     install_logging_redaction()
     logger.debug("debug detail")
     logger.info("info detail")
     logger.warning("warning detail")
+    return logger
 
-    assert (logger.level, "debug detail" in capture.text, "info detail" in capture.text) == (
-        logging.WARNING,
-        False,
-        False,
-    )
+
+CAPPED = pytest.mark.parametrize("capped_logger", redaction.THIRD_PARTY_LOGGERS, indirect=True)
+
+
+@CAPPED
+def test_third_party_loggers_are_capped_at_warning(capped_logger: logging.Logger) -> None:
+    assert capped_logger.level == logging.WARNING
+
+
+@CAPPED
+def test_a_capped_logger_drops_debug_records(
+    capped_logger: logging.Logger, capture: Capture
+) -> None:
+    assert "debug detail" not in capture.text
+
+
+@CAPPED
+def test_a_capped_logger_drops_info_records(
+    capped_logger: logging.Logger, capture: Capture
+) -> None:
+    assert "info detail" not in capture.text
+
+
+@CAPPED
+def test_a_capped_logger_still_passes_warnings(
+    capped_logger: logging.Logger, capture: Capture
+) -> None:
     assert "warning detail" in capture.text
 
 
@@ -123,6 +155,7 @@ def test_a_missing_httplib2_module_is_not_imported_by_the_installer(
     assert "httplib2" not in sys.modules
 
 
+# ------------------------------------------------------------------ where the filter is attached
 def test_filter_is_added_once_however_often_the_installer_runs() -> None:
     handler = logging.StreamHandler(io.StringIO())
 
@@ -139,21 +172,24 @@ def test_last_resort_handler_gets_the_filter() -> None:
     assert any(isinstance(f, RedactingFilter) for f in logging.lastResort.filters)
 
 
-def test_last_resort_output_has_no_sentinel(monkeypatch: pytest.MonkeyPatch) -> None:
-    """With no handler configured Python prints WARNING and above through ``lastResort``."""
+@pytest.fixture
+def last_resort_output(monkeypatch: pytest.MonkeyPatch) -> str:
+    """What Python prints through ``lastResort`` for a WARNING when no handler is configured."""
     redaction.register_secret(sentinels.CLIENT_SECRET)
     install_logging_redaction()
-    root = logging.getLogger()
-    monkeypatch.setattr(root, "handlers", [])
+    monkeypatch.setattr(logging.getLogger(), "handlers", [])
     stream = io.StringIO()
     monkeypatch.setattr(sys, "stderr", stream)  # lastResort writes to the current sys.stderr
-
     logging.getLogger("gmail_pdf.unconfigured").warning("secret=%s", sentinels.CLIENT_SECRET)
+    return stream.getvalue()
 
-    assert (stream.getvalue().count(sentinels.CLIENT_SECRET), REDACTED in stream.getvalue()) == (
-        0,
-        True,
-    )
+
+def test_last_resort_output_has_no_sentinel(last_resort_output: str) -> None:
+    assert last_resort_output.count(sentinels.CLIENT_SECRET) == 0
+
+
+def test_last_resort_output_still_shows_the_message(last_resort_output: str) -> None:
+    assert f"secret={REDACTED}" in last_resort_output
 
 
 def test_a_missing_last_resort_handler_is_tolerated(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -175,28 +211,30 @@ def test_token_shapes_are_redacted_in_log_messages(capture: Capture) -> None:
     assert capture.text.count(sentinels.UNREGISTERED_GOCSPX) == 0
 
 
-def test_the_traceback_of_a_logged_exception_is_redacted(capture: Capture) -> None:
-    try:
-        raise RuntimeError(f"failed with {sentinels.CLIENT_SECRET}")
-    except RuntimeError:
-        logging.getLogger("gmail_pdf.test").exception("step failed")
-
-    assert capture.text.count(sentinels.CLIENT_SECRET) == 0
-    assert "RuntimeError" in capture.text
-    assert "Traceback" in capture.text
-
-
-def test_a_chained_exception_in_the_traceback_is_redacted(capture: Capture) -> None:
+@pytest.fixture
+def logged_traceback(capture: Capture) -> str:
+    """Log text for an exception chain whose messages carry two registered secrets."""
     try:
         try:
             raise ValueError(f"inner {sentinels.ACCESS_TOKEN}")
         except ValueError as inner:
-            raise RuntimeError("outer") from inner
+            raise RuntimeError(f"failed with {sentinels.CLIENT_SECRET}") from inner
     except RuntimeError:
         logging.getLogger("gmail_pdf.test").exception("step failed")
+    return capture.text
 
-    assert capture.text.count(sentinels.ACCESS_TOKEN) == 0
-    assert "ValueError" in capture.text
+
+def test_the_traceback_of_a_logged_exception_has_no_sentinel(logged_traceback: str) -> None:
+    assert sentinels.leaked(logged_traceback) == []
+
+
+@pytest.mark.parametrize("name", ["RuntimeError", "ValueError"])
+def test_a_logged_exception_still_shows_its_class_names(logged_traceback: str, name: str) -> None:
+    assert name in logged_traceback
+
+
+def test_a_logged_exception_still_shows_the_traceback_header(logged_traceback: str) -> None:
+    assert "Traceback" in logged_traceback
 
 
 def test_a_second_handler_without_the_filter_sees_the_redacted_record(capture: Capture) -> None:
@@ -215,20 +253,21 @@ def test_a_second_handler_without_the_filter_sees_the_redacted_record(capture: C
     assert other_stream.getvalue().count(sentinels.CLIENT_SECRET) == 0
 
 
-def test_stack_info_is_redacted(capture: Capture) -> None:
-    redaction.register_secret("def test_stack_info_is_redacted")
+def test_stack_info_text_is_redacted() -> None:
+    redaction.register_secret(sentinels.CLIENT_SECRET)
+    record = logging.LogRecord("n", logging.WARNING, __file__, 1, "where", None, None)
+    record.stack_info = f"Stack (most recent call last):\n  frame using {sentinels.CLIENT_SECRET}"
 
-    logging.getLogger("gmail_pdf.test").warning("where", stack_info=True)
+    RedactingFilter().filter(record)
 
-    assert "def test_stack_info_is_redacted" not in capture.text
-    assert "Stack (most recent call last)" in capture.text
+    assert record.stack_info == f"Stack (most recent call last):\n  frame using {REDACTED}"
 
 
 def test_an_already_formatted_exception_text_is_redacted() -> None:
     record = logging.LogRecord("n", logging.ERROR, __file__, 1, "m", None, None)
     record.exc_text = f"Traceback ... {sentinels.UNREGISTERED_GOCSPX}"
 
-    assert RedactingFilter().filter(record) is True
+    RedactingFilter().filter(record)
 
     assert record.exc_text == f"Traceback ... {REDACTED}"
 
@@ -236,7 +275,7 @@ def test_an_already_formatted_exception_text_is_redacted() -> None:
 def test_a_message_that_cannot_be_formatted_is_replaced_not_raised() -> None:
     record = logging.LogRecord("n", logging.ERROR, __file__, 1, "%d", ("not a number",), None)
 
-    assert RedactingFilter().filter(record) is True
+    RedactingFilter().filter(record)
 
     assert record.getMessage() == redaction.UNFORMATTABLE_LOG_MESSAGE
 
@@ -245,4 +284,30 @@ def test_the_filter_never_drops_a_record() -> None:
     record = logging.LogRecord("n", logging.DEBUG, __file__, 1, "plain", None, None)
 
     assert RedactingFilter().filter(record) is True
+
+
+def test_the_filter_keeps_a_plain_message_unchanged() -> None:
+    record = logging.LogRecord("n", logging.DEBUG, __file__, 1, "plain", None, None)
+
+    RedactingFilter().filter(record)
+
     assert record.getMessage() == "plain"
+
+
+# ------------------------------------------------------------------ warnings (QUA-23)
+def library_warning(text: str) -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("always")
+        warnings.warn(text, UserWarning, stacklevel=1)
+
+
+def test_a_library_warning_reaches_the_log_without_the_sentinel(capture: Capture) -> None:
+    library_warning(f"token {sentinels.CLIENT_SECRET} refreshed")
+
+    assert capture.text.count(sentinels.CLIENT_SECRET) == 0
+
+
+def test_a_library_warning_is_routed_through_logging(capture: Capture) -> None:
+    library_warning(f"token {sentinels.CLIENT_SECRET} refreshed")
+
+    assert f"token {REDACTED} refreshed" in capture.text

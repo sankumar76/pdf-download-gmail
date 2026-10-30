@@ -6,6 +6,7 @@ import io
 import logging
 import sys
 import threading
+import types
 from collections.abc import Callable
 
 import pytest
@@ -58,17 +59,87 @@ def run_in_worker(target: Callable[[], None]) -> None:
 
 
 # ----------------------------------------------------------------------------------- install
-@pytest.mark.req("AC-5")
-def test_install_replaces_both_hooks_and_restore_puts_them_back() -> None:
-    before = (sys.excepthook, threading.excepthook)
 
+
+HOOKS = [
+    pytest.param(sys, "excepthook", id="sys.excepthook"),
+    pytest.param(threading, "excepthook", id="threading.excepthook"),
+    pytest.param(sys, "unraisablehook", id="sys.unraisablehook"),
+]
+
+
+@pytest.mark.parametrize(("owner", "name"), HOOKS)
+@pytest.mark.req("AC-5")
+def test_install_replaces_the_hook(owner: object, name: str) -> None:
+    before = getattr(owner, name)
+
+    install_excepthooks()
+
+    assert getattr(owner, name) is not before
+
+
+@pytest.mark.parametrize(("owner", "name"), HOOKS)
+@pytest.mark.req("AC-5")
+def test_restore_puts_the_previous_hook_back(owner: object, name: str) -> None:
+    before = getattr(owner, name)
     restore = install_excepthooks()
-    installed = (sys.excepthook, threading.excepthook)
+
     restore()
 
-    assert installed[0] is not before[0]
-    assert installed[1] is not before[1]
-    assert (sys.excepthook, threading.excepthook) == before
+    assert getattr(owner, name) is before
+
+
+def unraisable_args(exc: BaseException) -> types.SimpleNamespace:
+    """Stands in for ``sys.UnraisableHookArgs`` (the hook only reads these fields)."""
+    return types.SimpleNamespace(
+        exc_type=type(exc),
+        exc_value=exc,
+        exc_traceback=exc.__traceback__,
+        err_msg="Exception ignored in",
+        object=None,
+    )
+
+
+@pytest.fixture
+def ignored_exception() -> RuntimeError:
+    return RuntimeError(f"{sentinels.CLIENT_SECRET} {sentinels.ACCESS_TOKEN}")
+
+
+@pytest.mark.req("AC-5")
+def test_an_ignored_exception_prints_nothing_to_stderr(
+    capsys: pytest.CaptureFixture[str], ignored_exception: RuntimeError
+) -> None:
+    install_excepthooks()
+
+    sys.unraisablehook(unraisable_args(ignored_exception))
+
+    assert capsys.readouterr().err == ""
+
+
+def hand_to_unraisable_hook(caplog: pytest.LogCaptureFixture, exc: RuntimeError) -> None:
+    """Install the hooks, then hand ``exc`` to ``sys.unraisablehook`` with DEBUG captured."""
+    install_excepthooks()
+    caplog.set_level(logging.DEBUG, logger=redaction.logger.name)
+    sys.unraisablehook(unraisable_args(exc))
+
+
+@pytest.mark.req("AC-5")
+def test_an_ignored_exception_goes_to_the_logger_at_debug_only(
+    caplog: pytest.LogCaptureFixture, ignored_exception: RuntimeError
+) -> None:
+    hand_to_unraisable_hook(caplog, ignored_exception)
+
+    records = [r for r in caplog.records if r.name == redaction.logger.name]
+    assert [r.levelno for r in records] == [logging.DEBUG]
+
+
+@pytest.mark.req("AC-5")
+def test_an_ignored_exception_log_has_no_sentinel(
+    caplog: pytest.LogCaptureFixture, ignored_exception: RuntimeError
+) -> None:
+    hand_to_unraisable_hook(caplog, ignored_exception)
+
+    assert sentinels.leaked(caplog.text) == []
 
 
 # ----------------------------------------------------------------------------------- AC-5
