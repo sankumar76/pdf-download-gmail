@@ -1,0 +1,6 @@
+# Keep LF in code and config so hashes, diffs and shell steps behave the same on Windows.
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+requirements*.txt text eol=lf
