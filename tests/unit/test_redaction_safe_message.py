@@ -205,10 +205,15 @@ def test_an_application_error_message_is_cut_to_one_line() -> None:
     assert line == "first line second third [31mred end"
 
 
-def test_a_long_application_error_message_is_truncated() -> None:
+def test_a_long_application_error_message_is_cut_to_the_maximum_length() -> None:
     line = safe_message(GmailPdfError("word " * 200))
 
     assert len(line) == MAX_MESSAGE_LENGTH
+
+
+def test_a_truncated_application_error_message_ends_with_an_ellipsis() -> None:
+    line = safe_message(GmailPdfError("word " * 200))
+
     assert line.endswith("...")
 
 

@@ -29,9 +29,6 @@ class ParserThatRaises:
     def parse_args(self, argv: object = None) -> argparse.Namespace:
         raise self.error
 
-    def print_help(self) -> None:  # pragma: no cover - never reached
-        raise AssertionError("parse_args should have raised")
-
 
 def use_parser_that_raises(monkeypatch: pytest.MonkeyPatch, error: BaseException) -> None:
     monkeypatch.setattr(cli_main, "build_parser", lambda: ParserThatRaises(error))

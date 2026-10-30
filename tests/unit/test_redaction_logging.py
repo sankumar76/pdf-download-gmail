@@ -168,8 +168,8 @@ def test_filter_is_added_once_however_often_the_installer_runs() -> None:
 def test_last_resort_handler_gets_the_filter() -> None:
     install_logging_redaction()
 
-    assert logging.lastResort is not None
-    assert any(isinstance(f, RedactingFilter) for f in logging.lastResort.filters)
+    filters = logging.lastResort.filters if logging.lastResort else []
+    assert any(isinstance(f, RedactingFilter) for f in filters)
 
 
 @pytest.fixture
