@@ -66,16 +66,34 @@ TRACKABLE_PATHS = (
 )
 
 
+# Variables that tell git which repository, index or extra config to use. Git itself sets some
+# of them for hooks (for example GIT_INDEX_FILE in pre-commit); inheriting them would make the
+# scratch-repository commands below write into the caller's repository.
+INHERITED_GIT_LOCATION_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_NAMESPACE",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+)
+
+
 def isolated_env(home: Path) -> Mapping[str, str]:
-    """Process environment with every user-level git setting pointed at an empty folder."""
-    return dict(
-        os.environ,
+    """Environment with user-level git settings and inherited repository location removed."""
+    env = {k: v for k, v in os.environ.items() if k not in INHERITED_GIT_LOCATION_VARS}
+    env.update(
         GIT_CONFIG_GLOBAL=os.devnull,
         GIT_CONFIG_NOSYSTEM="1",
         HOME=str(home),
         USERPROFILE=str(home),
         XDG_CONFIG_HOME=str(home),
     )
+    return env
 
 
 def git(args: Sequence[str], cwd: Path, home: Path) -> subprocess.CompletedProcess[str]:
@@ -189,6 +207,42 @@ def test_isolation_user_level_ignore_file_does_not_affect_the_result(
     result = git(["check-ignore", "-q", "--no-index", "token.json"], repo, quiet_home)
 
     assert result.returncode == 1
+
+
+# ---------------------------------------------------------------- isolation from inherited repo
+
+
+@pytest.mark.parametrize("name", INHERITED_GIT_LOCATION_VARS)
+def test_isolation_inherited_repository_variable_is_dropped(
+    name: str, quiet_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(name, "inherited-value")
+
+    assert name not in isolated_env(quiet_home)
+
+
+@requires_git
+def test_isolation_inherited_index_file_does_not_receive_scratch_repo_changes(
+    tmp_path: Path, quiet_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QUA-21: git sets GIT_INDEX_FILE for hooks; the outer index must stay untouched."""
+    outer_parent = tmp_path / "outer"
+    outer_parent.mkdir()
+    outer = new_repo(outer_parent, "# outer\n", quiet_home)
+    (outer / "a.txt").write_text("a", encoding="utf-8")
+    assert git(["add", "a.txt"], outer, quiet_home).returncode == 0
+    outer_index = outer / ".git" / "index"
+    before = outer_index.read_bytes()
+    monkeypatch.setenv("GIT_INDEX_FILE", str(outer_index))
+
+    inner_parent = tmp_path / "inner"
+    inner_parent.mkdir()
+    inner = new_repo(inner_parent, "# inner\n", quiet_home)
+    (inner / "token.json").write_text("{}", encoding="utf-8")
+    added = git(["add", "-f", "token.json"], inner, quiet_home)
+    assert added.returncode == 0, added.stderr
+
+    assert outer_index.read_bytes() == before
 
 
 # ---------------------------------------------------------------- AC-5
