@@ -9,12 +9,12 @@
 |--------------------|--------------------------|
 | Project            | PDF-Download-gmail — Gmail PDF Attachment Downloader |
 | Jira Intake issue  | [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1) (project key **PGD**) |
-| Current phase      | G4 Backlog Ready (epics and sprint-1 stories) |
-| Last gate passed   | G4 Backlog Ready, sprint 01 (CONDITIONAL GO, 2026-10-29) |
-| Next gate          | G5/G6/G7 per story, starting with PGD-12 (STORY-02.01). Conditions C11–C14 are open (see the G4 row) |
-| Current sprint     | —                        |
-| Overall health     | 🟢 Green                 |
-| Last updated       | 2026-10-30 by master (G6 PGD-13 NO-GO appended; G7 PGD-14 GO; C19 closed; C25, C26) |
+| Current phase      | Phase B story delivery (G5–G7), sprint 01. Inception closed at G4 (CONDITIONAL GO, 2026-10-29) |
+| Last gate passed   | G7 QA Acceptance PGD-14 (GO, 2026-10-30). PGD-12 and PGD-14 are merged to `main` |
+| Next gate          | G6 attempt 2 on PGD-13 (PR #22), then G7. PGD-15..18 wait for PGD-13 to merge. G4 conditions C11–C14 and C25–C26 stay open, due as recorded |
+| Current sprint     | 01                       |
+| Overall health     | 🟡 Amber: PGD-13, the redaction story, failed G6 attempt 1 (QUA-22 Critical, QUA-23 Major) and is in fix loop 2 of 3. RISK-005 stays open until it passes G7, and it blocks PGD-15, 16, 17 and 18 |
+| Last updated       | 2026-10-30 by orchestrator (sprint 01 resumed; ledger corrected) |
 
 ## Request (G0 Intake)
 
@@ -42,9 +42,9 @@
 
 | Story ID | Title | Status | Owner agent | G5 | G6 | G7 | Notes |
 |----------|-------|--------|-------------|----|----|----|-------|
-| STORY-02.01 (PGD-12) | Enabler: walking skeleton, CI, fake mailbox | Done (merged 1ce8473, 2026-10-30) | developer | ✅ 99979e7 | ✅ (attempt 2; C15–C18 closed) | ✅ GO (2026-10-29, code f85d267) | 8 pts; PR #6 awaits **human merge** (code-human); Sev-4 DEF-001/002 (PGD-63/64, #15/#16) open; tech-debt #9–#14 |
-| STORY-01.01 (PGD-13) | One redaction path for every text surface | Changes Requested (G6 NO-GO, loop 2 of 3) | developer | ✅ 6c5edb4 | ❌ NO-GO attempt 1 (QUA-22 Critical, QUA-23 Major, STD-33 SA condition) | | 5 pts; PR #22 (supersedes #18, rebuilt without a gitleaks-tripping literal); deferred #23, #24 |
-| STORY-01.02 (PGD-14) | Keep secret files out of git and protected on disk | In QA → Done on master's G7 (qa-engineer) | developer | ✅ 93ecd5e, 39e1f18, 6bd795b | ✅ CONDITIONAL GO attempt 1; C21, C22, C24 closed | ✅ GO (2026-10-30, code 6bd795b) | 3 pts; PR #17 awaits **human merge** (precondition: CI 10/10 on 1ef31e8); Sev-4 PGD-65/#25 → STORY-01.03, PGD-66/#26; tech-debt #20, #21 |
+| STORY-02.01 (PGD-12) | Enabler: walking skeleton, CI, fake mailbox | Done (merged 1ce8473, 2026-10-30) | developer | ✅ 99979e7 | ✅ (attempt 2; C15–C18 closed) | ✅ GO (2026-10-29, code f85d267) | 8 pts; PR #6 merged by Santhosh at 1ce8473, approved on PGD-1 c.10172; Sev-4 DEF-001/002 (PGD-63/64, #15/#16) open; tech-debt #9–#14 |
+| STORY-01.01 (PGD-13) | One redaction path for every text surface | Changes Requested (G6 NO-GO, loop 2 of 3) | developer | ✅ 6c5edb4 | ❌ NO-GO attempt 1 (QUA-22 Critical, QUA-23 Major, STD-33 SA condition) | | 5 pts; PR #22 (supersedes #18, rebuilt without a gitleaks-tripping literal); head 0348c5b under verification; deferred #23, #24 |
+| STORY-01.02 (PGD-14) | Keep secret files out of git and protected on disk | Done (merged 27876b6, 2026-10-30) | developer | ✅ 93ecd5e, 39e1f18, 6bd795b | ✅ CONDITIONAL GO attempt 1; C21, C22, C24 closed | ✅ GO (2026-10-30, code 6bd795b) | 3 pts; PR #17 merged by Santhosh at 27876b6, approved on PGD-1 c.10212 (request c.10210); CI 10/10 on 1ef31e8, run 41008438277; Sev-4 PGD-65/#25 → STORY-01.03, PGD-66/#26; tech-debt #20, #21 |
 | STORY-02.02 (PGD-15) | Select the messages for an inclusive date range | Ready | developer | | | | 8 pts; blocked by PGD-12, 13 |
 | STORY-02.03 (PGD-16) | Reject bad input before contacting Google | Ready | developer | | | | 3 pts; blocked by PGD-13, 15 |
 | STORY-02.06 (PGD-17) | End an empty range normally | Ready | developer | | | | 2 pts; blocked by PGD-15 |
@@ -71,14 +71,16 @@
 | ID | Item | Owner | Status |
 |----|------|-------|--------|
 | T-01 | Append the Jira key correction (PDG → PGD) and the product-form decision to CLAUDE.md. CLAUDE.md is append-only, and the orchestrator is write-guarded from it. | Santhosh (human) | ✅ Done (key fixed in CLAUDE.md §1/§1a; committed on `main` as 52ff508; RISK-002 closed 2026-10-29) |
-| T-03 | Write `docs/07-qa/test-plan.md`: D-21/PQ-02 confirmation, C12 ratio 0.6 benchmark case, a hook no-traceback check, and the G8 pip-audit re-run (G7 PGD-12, C19) | qa-engineer | ⏳ Due at the next story's G7 |
-| T-04 | Configure branch protection on `main`: required CI checks, no force push (GitHub #7, RISK-022) | Santhosh (repository admin) | ⏳ Recommended before or with the PR #6 merge; checked at G8 |
+| T-03 | Write `docs/07-qa/test-plan.md`: D-21/PQ-02 confirmation, C12 ratio 0.6 benchmark case, a hook no-traceback check, and the G8 pip-audit re-run (G7 PGD-12, C19) | qa-engineer | ✅ Done: `docs/07-qa/test-plan.md` at 62976ec; C19 closed by master at G7 PGD-14 |
+| T-04 | Configure branch protection on `main`: required CI checks, no force push (GitHub #7, RISK-022) | Santhosh (repository admin) | ✅ Done 2026-10-30: 10 required checks, pull request required (0 approvals), admins included, no force push or deletion; read back from the GitHub API. #7 closed; RISK-022 closure is master's call |
 | T-02 | Jira workflow status categories look wrong: "Blocked" is in the *done* category and "Done" is in the *in-progress* category. JQL and reports that use `statusCategory` will mislead. | Santhosh (Jira admin) | ✅ Done (verified by master via Jira statuses; RISK-004 closed) |
 
 ## Activity Log (newest first)
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-10-30 | orchestrator | Run resumed on the delivery lead's instruction. Recorded Santhosh's approval of the PR #17 merge (PGD-1 c.10212; merged at 27876b6). Corrected the ledger: Summary, the PGD-12 and PGD-14 notes, T-03. #22 changes no file that `main` changed since its base, and PR CI tests GitHub's merge ref, so the branch is not updated. Fix loop 2 of PGD-13 restarts from 0348c5b, which is not yet verified | PGD-1 c.10212; PR #22; docs/project-state.md; .vscode/settings.json |
+| 2026-10-30 | orchestrator | Santhosh merged PR #17 (27876b6) and applied branch protection on `main` (T-04); settings verified from the GitHub API and #7 closed. VS Code keys moved from `.claude/settings.json` to `.vscode/settings.json` with the delivery lead's approval | PR #17; #7; .vscode/settings.json |
 | 2026-10-30 | orchestrator | **PGD-14:** G5 passed on 93ecd5e; three reviews done. G6 CONDITIONAL GO: C21 fixed at 39e1f18; C22 met (the SA acknowledged `O_EXCL` and `paths.py`); C24 (QUA-21) fixed at 6bd795b; moved to In QA; QA report 1ef31e8. **PGD-13:** the first PR, #18, failed gitleaks on a fake sentinel in its history. The developer was denied creating `.gitleaksignore` and did not work around it. I rebuilt the branch as PR #22 (same tree, no force push) and closed #18 as superseded. G5 passed on 6c5edb4. G6 NO-GO; fix loop 2 under way. QA runs in the main checkout on the story branch, because the QA write guard rejects worktree paths | PR #17, #18, #22; PGD-13 c.10198–10204; PGD-14 c.10181–10208 |
 | 2026-10-30 | master | Appended the G6 PGD-13 **NO-GO** record (decided earlier: PGD-13 c.10203, PR #22 comment 6515649347) to gate-log. G7 QA Acceptance PGD-14: **GO (ACCEPT)**, code 6bd795b. AC-1..5 verified (POSIX modes on Linux as non-root); 0 Sev-1/2/3; regression 398/11 skipped; CI 10/10. C21, C22 and C24 closed; **C19 closed** (test-plan.md at 62976ec has every required element). DEF-003 (#25) → STORY-01.03; DEF-004 (#26) → the next `.gitignore` story; Obs. 2/4 added to #20. New C25 (SM) and C26 (SA/PM pattern extension), due at the sprint-02 G4. Human merge of PR #17; precondition CI 10/10 on 1ef31e8 | docs/00-governance/gate-log.md; docs/project-state.md; PGD-14 c.10209; PR #17; #20 |
 | 2026-10-30 | master | G6 Peer Review PGD-14 (PR #17, head 93ecd5e): **CONDITIONAL GO** (attempt 1). 0 Blocker/Critical. QUA-15 re-rated Major (D-45; AC-4 says "never raises"). C21 fix-now: QUA-15, QUA-16, STD-22, STD-23, and the docstring parts of STD-20/QUA-17. C22: the SA acknowledges STD-20/21 on PR #17 before G7 GO (D-44 generalises D-42). C23: SM adds the PERF-07 AC to STORY-01.04 and links #21 to STORY-01.03. Tech-debt #20 (ADR-003/arch docs, PERF-07) and #21 (`events.Warning` naming, stable codes) | docs/00-governance/gate-log.md, decision-log.md; docs/project-state.md; PGD-14; PR #17 |
