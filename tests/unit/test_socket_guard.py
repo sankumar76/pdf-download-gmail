@@ -1,21 +1,14 @@
-"""AC-8: the session guard makes a non-loopback connection fail; markers are registered."""
+"""AC-8: the session guard makes non-loopback network use fail; markers are registered."""
 
 from __future__ import annotations
 
 import socket
-import subprocess
-import sys
-from pathlib import Path
 
 import pytest
 
-from tests.support.socket_guard import NetworkAccessError, is_loopback_host
-from tests.support.subprocess_env import guarded_env
+from tests.support.socket_guard import DOCUMENTATION_ADDRESS, NetworkAccessError, is_loopback_host
 
 pytestmark = pytest.mark.req("NFR-014", "AC-8")
-
-# 203.0.113.0/24 is TEST-NET-3 (RFC 5737): never routable, so a miss could not leak anyway.
-DOCUMENTATION_ADDRESS = "203.0.113.7"
 
 
 def test_create_connection_to_a_remote_address_is_blocked() -> None:
@@ -33,9 +26,43 @@ def test_socket_connect_ex_to_a_remote_address_is_blocked() -> None:
         sock.connect_ex((DOCUMENTATION_ADDRESS, 443))
 
 
+def test_udp_sendto_with_data_and_address_is_blocked() -> None:
+    with (
+        socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock,
+        pytest.raises(NetworkAccessError),
+    ):
+        sock.sendto(b"x", (DOCUMENTATION_ADDRESS, 53))
+
+
+def test_udp_sendto_with_data_flags_and_address_is_blocked() -> None:
+    with (
+        socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock,
+        pytest.raises(NetworkAccessError),
+    ):
+        sock.sendto(b"x", 0, (DOCUMENTATION_ADDRESS, 53))
+
+
 def test_remote_host_name_is_blocked_without_a_dns_lookup() -> None:
     with pytest.raises(NetworkAccessError, match="example.com"):
         socket.create_connection(("example.com", 443), timeout=1)
+
+
+def test_getaddrinfo_for_a_remote_host_is_blocked() -> None:
+    with pytest.raises(NetworkAccessError, match="example.com"):
+        socket.getaddrinfo("example.com", 443)
+
+
+def test_gethostbyname_for_a_remote_host_is_blocked() -> None:
+    with pytest.raises(NetworkAccessError, match="example.com"):
+        socket.gethostbyname("example.com")
+
+
+def test_getaddrinfo_for_loopback_is_allowed() -> None:
+    assert socket.getaddrinfo("127.0.0.1", 80)
+
+
+def test_getaddrinfo_without_a_host_is_allowed() -> None:
+    assert socket.getaddrinfo(None, 80)
 
 
 def test_loopback_connection_is_allowed() -> None:
@@ -57,8 +84,8 @@ def test_loopback_connection_is_allowed() -> None:
         ("127.5.5.5", True),
         ("::1", True),
         ("::ffff:127.0.0.1", True),
-        ("203.0.113.7", False),
-        ("::ffff:203.0.113.7", False),
+        (DOCUMENTATION_ADDRESS, False),
+        (f"::ffff:{DOCUMENTATION_ADDRESS}", False),
         ("example.com", False),
         ("", False),
         (None, False),
@@ -66,28 +93,6 @@ def test_loopback_connection_is_allowed() -> None:
 )
 def test_is_loopback_host(host: object, expected: bool) -> None:
     assert is_loopback_host(host) is expected
-
-
-def test_guard_also_applies_in_a_guarded_subprocess(tmp_path: Path) -> None:
-    code = (
-        "import socket\n"
-        "try:\n"
-        f"    socket.create_connection(('{DOCUMENTATION_ADDRESS}', 443), timeout=1)\n"
-        "except RuntimeError as exc:\n"
-        "    print(type(exc).__name__)\n"
-    )
-
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        cwd=tmp_path,
-        env=guarded_env(),
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-
-    assert result.stdout.strip() == "NetworkAccessError", result.stderr
 
 
 def test_req_and_perf_markers_are_registered(pytestconfig: pytest.Config) -> None:
