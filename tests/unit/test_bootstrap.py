@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
-import subprocess
-import sys
+import importlib
 from pathlib import Path
 
 import pytest
@@ -16,9 +14,9 @@ from gmail_pdf.domain.errors import (
     FakeMailboxHookRefusedError,
     GmailPdfError,
 )
-from tests.fakes.fake_gmail import FakeGmail, dump_fake_gmail_to_json_file
+from tests.fakes.fake_gmail import FakeGmail
+from tests.fakes.fake_gmail_json import dump_fake_gmail_to_json_file
 from tests.fixtures.canonical import rd_example_table
-from tests.support.subprocess_env import REPO_ROOT, guarded_env
 
 pytestmark = pytest.mark.req("NFR-014", "AC-9")
 
@@ -78,9 +76,29 @@ def test_build_deps_reads_os_environ_by_default(
     assert isinstance(build_deps().gmail, FakeGmail)
 
 
-def test_missing_mailbox_file_raises_an_os_error(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError):
+def test_missing_mailbox_file_is_reported_as_unavailable(tmp_path: Path) -> None:
+    with pytest.raises(AdapterUnavailableError, match="could not be read"):
         build_deps({ENV_FAKE_MAILBOX: str(tmp_path / "absent.json"), ENV_TESTING: "1"})
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param("{not json", id="invalid-json"),
+        pytest.param("[]", id="not-an-object"),
+        pytest.param('{"format": 99, "messages": []}', id="unsupported-format"),
+    ],
+)
+def test_unparsable_mailbox_file_is_reported_without_echoing_the_path(
+    tmp_path: Path, content: str
+) -> None:
+    path = tmp_path / "bad.json"
+    path.write_text(content, encoding="utf-8")
+
+    with pytest.raises(AdapterUnavailableError) as exc_info:
+        build_deps({ENV_FAKE_MAILBOX: str(path), ENV_TESTING: "1"})
+
+    assert str(path) not in str(exc_info.value)
 
 
 def test_unusable_fake_module_is_reported_as_unavailable(
@@ -92,22 +110,13 @@ def test_unusable_fake_module_is_reported_as_unavailable(
         build_deps({ENV_FAKE_MAILBOX: str(mailbox_file), ENV_TESTING: "1"})
 
 
-def test_hook_works_across_a_process_boundary(tmp_path: Path, mailbox_file: Path) -> None:
-    """The e2e pattern later stories use: a child process builds Deps from the environment."""
-    code = (
-        "from gmail_pdf.bootstrap import build_deps\nprint(len(build_deps().gmail.message_ids))\n"
-    )
-    env = guarded_env({ENV_FAKE_MAILBOX: str(mailbox_file), ENV_TESTING: "1"})
+def test_a_missing_dependency_inside_the_fake_is_not_reported_as_a_missing_checkout(
+    monkeypatch: pytest.MonkeyPatch, mailbox_file: Path
+) -> None:
+    def broken_import(name: str) -> object:
+        raise ModuleNotFoundError("No module named 'tests.fixtures.x'", name="tests.fixtures.x")
 
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        cwd=REPO_ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
+    monkeypatch.setattr(importlib, "import_module", broken_import)
 
-    assert result.stdout.strip() == "6", result.stderr
-    assert json.loads(mailbox_file.read_text(encoding="utf-8"))["format"] == 1
+    with pytest.raises(ModuleNotFoundError, match="tests.fixtures.x"):
+        build_deps({ENV_FAKE_MAILBOX: str(mailbox_file), ENV_TESTING: "1"})

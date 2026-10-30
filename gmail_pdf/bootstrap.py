@@ -22,8 +22,11 @@ ENV_FAKE_MAILBOX = "GMAIL_PDF_TEST_FAKE_MAILBOX"
 
 # The fake lives with the tests, never in the shipped package; it is imported lazily so a
 # normal run (and the wheel) never needs it.
-_FAKE_MODULE = "tests.fakes.fake_gmail"
+_FAKE_MODULE = "tests.fakes.fake_gmail_json"
 _FAKE_LOADER = "load_fake_gmail_from_json_file"
+# Only these names mean "the tests package is not importable"; any other missing module is a
+# real defect inside the fake and must surface unchanged.
+_ABSENT_TEST_PACKAGES = frozenset({"tests", "tests.fakes"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,15 +37,27 @@ class Deps:
 
 
 def _load_fake_mailbox(path: Path) -> GmailPort:
-    """Load ``FakeGmail`` from a JSON file (test-only)."""
+    """Load ``FakeGmail`` from a JSON file (test-only).
+
+    Raises:
+        AdapterUnavailableError: ``tests/`` is not importable, or the file cannot be read or
+            parsed. The message never contains the path.
+    """
     try:
         module = importlib.import_module(_FAKE_MODULE)
     except ModuleNotFoundError as exc:
+        if exc.name not in _ABSENT_TEST_PACKAGES | {_FAKE_MODULE}:
+            raise
         raise AdapterUnavailableError(
             "The fake mailbox is only available from a source checkout (tests/ not importable)."
         ) from exc
     loader = getattr(module, _FAKE_LOADER)
-    return cast(GmailPort, loader(path))
+    try:
+        return cast(GmailPort, loader(path))
+    except (OSError, ValueError) as exc:  # JSONDecodeError is a ValueError
+        raise AdapterUnavailableError(
+            f"The fake mailbox file could not be read; check {ENV_FAKE_MAILBOX}."
+        ) from exc
 
 
 def build_deps(env: Mapping[str, str] | None = None) -> Deps:
@@ -57,7 +72,8 @@ def build_deps(env: Mapping[str, str] | None = None) -> Deps:
     Raises:
         FakeMailboxHookRefusedError: ``GMAIL_PDF_TEST_FAKE_MAILBOX`` is set but
             ``GMAIL_PDF_TESTING`` is not ``1``.
-        AdapterUnavailableError: no Gmail adapter is wired yet (real gateway: later story).
+        AdapterUnavailableError: no Gmail adapter is wired yet (real gateway: later story), or
+            the fake mailbox file is unreadable or malformed.
     """
     environment = os.environ if env is None else env
     mailbox_file = environment.get(ENV_FAKE_MAILBOX)
