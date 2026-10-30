@@ -11,28 +11,34 @@ Capabilities (AC-7):
 
 Supported query terms: ``has:attachment``, ``filename:<ext-or-name>``, ``after:<epoch s>``,
 ``before:<epoch s>``, each optionally negated with ``-``, and plain words (matched against
-the Subject header). Any other ``key:value`` term raises ``UnsupportedQueryError`` rather
-than being silently ignored. All content is synthetic (``example.com``).
+the Subject header). Any other ``key:value`` term, ``OR``/``AND``, ``{}``/``()`` grouping and
+quoted phrases raise ``UnsupportedQueryError`` rather than being silently ignored. JSON
+persistence lives in ``tests/fakes/fake_gmail_json.py``. All content is synthetic (``example.com``).
 """
 
 from __future__ import annotations
 
 import base64
 import copy
-import json
 import random
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from types import MappingProxyType
 
 from gmail_pdf.app.ports import JsonObject, MessageIdPage
 
 WILDCARD_METHOD = "*"
 SPAM_TRASH_LABELS = frozenset({"SPAM", "TRASH"})
-JSON_FORMAT_VERSION = 1
+
+
+# Gmail's documented ceiling for ``maxResults`` on ``users.messages.list``.
+DEFAULT_PAGE_SIZE = 500
+# Query grouping syntax Gmail supports but the fake does not.
+_UNSUPPORTED_BOOLEAN_WORDS = frozenset({"OR", "AND"})
+_GROUP_OPENERS = '{("'
+_GROUP_CLOSERS = '})"'
 
 
 class EpochBounds(Enum):
@@ -40,6 +46,9 @@ class EpochBounds(Enum):
 
     INCLUSIVE = "inclusive"  # after:N keeps s >= N, before:N keeps s <= N
     EXCLUSIVE = "exclusive"  # after:N keeps s > N, before:N keeps s < N
+
+
+DEFAULT_EPOCH_BOUNDS = EpochBounds.INCLUSIVE
 
 
 class UnsupportedQueryError(ValueError):
@@ -150,10 +159,10 @@ class FakeGmail:
         self,
         messages: Iterable[FakeMessage] = (),
         *,
-        page_size: int = 500,
+        page_size: int = DEFAULT_PAGE_SIZE,
         shuffle_seed: int | None = None,
         latency_s: float = 0.0,
-        epoch_bounds: EpochBounds = EpochBounds.INCLUSIVE,
+        epoch_bounds: EpochBounds = DEFAULT_EPOCH_BOUNDS,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         if page_size < 1:
@@ -182,6 +191,16 @@ class FakeGmail:
     def message_ids(self) -> list[str]:
         """Ids in insertion order (not list order)."""
         return list(self._messages)
+
+    @property
+    def messages(self) -> list[FakeMessage]:
+        """Messages in insertion order."""
+        return list(self._messages.values())
+
+    @property
+    def shuffle_seed(self) -> int | None:
+        """Seed of the list-order shuffle, or ``None`` for newest-first order."""
+        return self._shuffle_seed
 
     # ------------------------------------------------------------------ fault scripting
     def fail_with_http(
@@ -226,6 +245,10 @@ class FakeGmail:
         skip: int,
         match: dict[str, object],
     ) -> None:
+        if times is not None and times < 1:
+            raise ValueError("times must be at least 1, or None for every matching call")
+        if skip < 0:
+            raise ValueError("skip must not be negative")
         self._faults.append(_ScriptedFault(method, factory, times, skip, dict(match)))
 
     def _take_fault(self, method: str, params: Mapping[str, object]) -> _ScriptedFault | None:
@@ -332,6 +355,12 @@ class FakeGmail:
         return lambda message: all(predicate(message) for predicate in predicates)
 
     def _term(self, term: str) -> Callable[[FakeMessage], bool]:
+        if (
+            term in _UNSUPPORTED_BOOLEAN_WORDS
+            or term[0] in _GROUP_OPENERS
+            or term[-1] in _GROUP_CLOSERS
+        ):
+            raise UnsupportedQueryError(f"unsupported search syntax {term!r}")
         key, separator, value = term.partition(":")
         if not separator:
             word = term.casefold()
@@ -356,59 +385,3 @@ class FakeGmail:
             return seconds <= epoch_s if inclusive else seconds < epoch_s
 
         return after if key == "after" else before
-
-    # ------------------------------------------------------------------ JSON persistence
-    def to_json_dict(self) -> JsonObject:
-        """Serialise mailbox content and static settings (not faults, calls or cursors)."""
-        return {
-            "format": JSON_FORMAT_VERSION,
-            "page_size": self.page_size,
-            "shuffle_seed": self._shuffle_seed,
-            "latency_s": self.latency_s,
-            "epoch_bounds": self.epoch_bounds.value,
-            "messages": [
-                {
-                    "resource": message.resource,
-                    "attachments": {k: b64url_encode(v) for k, v in message.attachments.items()},
-                }
-                for message in self._messages.values()
-            ],
-        }
-
-    @classmethod
-    def from_json_dict(cls, data: Mapping[str, object]) -> FakeGmail:
-        """Rebuild a fake from ``to_json_dict`` output; ``ValueError`` on a malformed document."""
-        if data.get("format") != JSON_FORMAT_VERSION:
-            raise ValueError(f"unsupported fake mailbox format {data.get('format')!r}")
-        raw_messages = data.get("messages")
-        if not isinstance(raw_messages, list):
-            raise ValueError("fake mailbox 'messages' must be a list")
-        messages: list[FakeMessage] = []
-        for entry in raw_messages:
-            resource = entry.get("resource") if isinstance(entry, dict) else None
-            attachments = entry.get("attachments") if isinstance(entry, dict) else None
-            if not isinstance(resource, dict) or not isinstance(attachments, dict):
-                raise ValueError("each fake mailbox message needs 'resource' and 'attachments'")
-            decoded = {str(k): b64url_decode(str(v)) for k, v in attachments.items()}
-            messages.append(FakeMessage(resource, decoded))
-        seed = data.get("shuffle_seed")
-        return cls(
-            messages,
-            page_size=int(str(data.get("page_size", 500))),
-            shuffle_seed=None if seed is None else int(str(seed)),
-            latency_s=float(str(data.get("latency_s", 0.0))),
-            epoch_bounds=EpochBounds(str(data.get("epoch_bounds", "inclusive"))),
-        )
-
-
-def dump_fake_gmail_to_json_file(fake: FakeGmail, path: Path) -> None:
-    """Write ``fake`` to ``path`` as UTF-8 JSON."""
-    path.write_text(json.dumps(fake.to_json_dict(), indent=2), encoding="utf-8")
-
-
-def load_fake_gmail_from_json_file(path: Path) -> FakeGmail:
-    """Load a fake mailbox from JSON (used by the ``GMAIL_PDF_TEST_FAKE_MAILBOX`` hook)."""
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError("fake mailbox JSON must be an object")
-    return FakeGmail.from_json_dict(data)
