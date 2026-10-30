@@ -19,6 +19,10 @@ def guarded_env(extra: Mapping[str, str] | None = None) -> dict[str, str]:
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join([str(SUPPORT_DIR), str(REPO_ROOT)])
     env["PYTHONUTF8"] = "1"
+    # A child's stderr is compared byte for byte; inherited interpreter options (warnings,
+    # dev mode, startup script) must not add lines to it.
+    for name in ("PYTHONWARNINGS", "PYTHONDEVMODE", "PYTHONSTARTUP"):
+        env.pop(name, None)
     env.pop("GMAIL_PDF_TESTING", None)
     env.pop("GMAIL_PDF_TEST_FAKE_MAILBOX", None)
     if extra:

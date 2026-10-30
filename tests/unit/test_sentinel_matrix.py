@@ -11,8 +11,13 @@ Rule for later stories ("AC in every story that adds a text surface"):
   its name to ``SURFACES``.
 
 Each addition is then checked against every existing surface or path with no other change.
-The CLI is exercised in-process here; ``tests/e2e/test_redaction_subprocess.py`` repeats the
-hook paths in a child interpreter.
+
+How the surfaces are observed: ``Harness.run`` redirects ``sys.stdout`` and ``sys.stderr``
+*inside the test body*. Patching them in a fixture does not work, because pytest's own capture
+puts its streams back for the call phase. Paths that pytest itself intercepts (an exception
+ignored by the interpreter, a library warning) run in a child interpreter, whose output is
+appended to the same surfaces. The CLI is exercised in-process;
+``tests/e2e/test_redaction_subprocess.py`` repeats the hook paths in a child interpreter.
 """
 
 from __future__ import annotations
@@ -34,12 +39,34 @@ from gmail_pdf.cli import main as cli_main
 from gmail_pdf.domain.errors import GmailPdfError
 from gmail_pdf.redaction import install_excepthooks, install_logging_redaction, safe_message
 from tests.support import sentinels
+from tests.support.subprocess_env import REPO_ROOT, run_guarded
 
 pytestmark = pytest.mark.req("FR-005", "NFR-012", "AC-6")
 
 SURFACES = ("stdout", "stderr", "log_file", "excepthook_output")
 SECRET_TEXT = " ".join(sentinels.ALL)
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
+
+# What a child interpreter does first, in the order the application does it: registry, logging
+# redaction (with a log-file handler appended to the harness log), then the excepthooks.
+CHILD_PREAMBLE = """\
+import gc
+import logging
+import warnings
+
+from gmail_pdf import redaction
+from tests.support import sentinels
+
+SECRET_TEXT = " ".join(sentinels.ALL)
+for value in sentinels.REGISTERED:
+    redaction.register_secret(value)
+handler = logging.FileHandler({log_path!r}, encoding="utf-8")
+handler.setLevel(logging.DEBUG)
+redaction.install_logging_redaction(handler)
+redaction.install_excepthooks()
+logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().addHandler(handler)
+"""
 
 
 class Harness:
@@ -52,6 +79,11 @@ class Harness:
         self.hook_output = io.StringIO()
         self.log_path = log_path
         self.handler = logging.FileHandler(log_path, encoding="utf-8")
+
+    def run(self, path: Callable[[Harness], None]) -> None:
+        """Run an error path with stdout and stderr captured for the duration of the call."""
+        with contextlib.redirect_stdout(self.stdout), contextlib.redirect_stderr(self.stderr):
+            path(self)
 
     def text(self, surface: str) -> str:
         """Everything written to ``surface`` so far."""
@@ -82,6 +114,18 @@ class Harness:
             worker.start()
             worker.join(timeout=10)
 
+    def in_child_interpreter(self, body: str) -> None:
+        """Run ``body`` after the application's start-up in a fresh interpreter.
+
+        Its stdout and stderr are appended to this harness's surfaces; its log records go to
+        the same log file.
+        """
+        code = CHILD_PREAMBLE.format(log_path=str(self.log_path)) + body
+        result = run_guarded([sys.executable, "-c", code], REPO_ROOT)
+        assert result.returncode == 0, f"child interpreter failed: {result.stderr[-800:]}"
+        self.stdout.write(result.stdout)
+        self.stderr.write(result.stderr)
+
 
 @pytest.fixture
 def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness]:
@@ -89,8 +133,6 @@ def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness
     for value in sentinels.REGISTERED:
         redaction.register_secret(value)
     h = Harness(tmp_path / "run.log", monkeypatch)
-    monkeypatch.setattr(sys, "stdout", h.stdout)
-    monkeypatch.setattr(sys, "stderr", h.stderr)
     h.handler.setLevel(logging.DEBUG)
     h.handler.setFormatter(logging.Formatter(LOG_FORMAT))
     install_logging_redaction(h.handler)
@@ -173,12 +215,30 @@ def keyboard_interrupt(h: Harness) -> None:
     cli_main.main([])
 
 
+def unraisable_exception(h: Harness) -> None:
+    """An exception in ``__del__``: the interpreter ignores it and prints it to stderr."""
+    h.in_child_interpreter(
+        "class Leaky:\n"
+        "    def __del__(self):\n"
+        "        raise RuntimeError(SECRET_TEXT)\n"
+        "Leaky()\n"
+        "gc.collect()\n"
+    )
+
+
+def library_warning(h: Harness) -> None:
+    """A library warning whose text carries a secret: ``warnings`` prints it to stderr."""
+    h.in_child_interpreter("warnings.warn(SECRET_TEXT)\n")
+
+
 # Append later stories' paths here (see the module docstring).
 ERROR_PATHS = [
     pytest.param(uncaught_exception, id="uncaught-exception"),
     pytest.param(third_party_debug_log, id="third-party-debug-log"),
     pytest.param(chained_exception_message, id="chained-exception-message"),
     pytest.param(keyboard_interrupt, id="keyboard-interrupt"),
+    pytest.param(unraisable_exception, id="unraisable-exception"),
+    pytest.param(library_warning, id="library-warning"),
 ]
 
 
@@ -187,18 +247,18 @@ ERROR_PATHS = [
 def test_no_sentinel_reaches_the_surface(
     harness: Harness, path: Callable[[Harness], None], surface: str
 ) -> None:
-    path(harness)
+    harness.run(path)
 
     assert sentinels.leaked(harness.text(surface)) == []
 
 
-@pytest.mark.parametrize("path", ERROR_PATHS)
-def test_every_path_writes_something_so_the_check_is_not_vacuous(
-    harness: Harness, path: Callable[[Harness], None]
-) -> None:
-    path(harness)
+@pytest.mark.parametrize("surface", SURFACES)
+def test_every_surface_receives_text_from_at_least_one_path(harness: Harness, surface: str) -> None:
+    """Guards against a surface that is never observed (QUA-22): it must not stay empty."""
+    for path in ERROR_PATHS:
+        harness.run(path.values[0])
 
-    assert any(harness.text(surface) for surface in SURFACES)
+    assert harness.text(surface) != ""
 
 
 def test_the_detector_sees_a_sentinel_on_an_unprotected_surface() -> None:
