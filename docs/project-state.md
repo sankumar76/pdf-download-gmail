@@ -14,7 +14,7 @@
 | Next gate          | G5/G6/G7 per story, starting with PGD-12 (STORY-02.01). Conditions C11–C14 are open (see the G4 row) |
 | Current sprint     | —                        |
 | Overall health     | 🟢 Green                 |
-| Last updated       | 2026-10-29 by master (G7 PGD-12 GO; C19, C20; RISK-022) |
+| Last updated       | 2026-10-30 by master (G6 PGD-14 CONDITIONAL GO; D-44, D-45; C21–C23) |
 
 ## Request (G0 Intake)
 
@@ -42,9 +42,9 @@
 
 | Story ID | Title | Status | Owner agent | G5 | G6 | G7 | Notes |
 |----------|-------|--------|-------------|----|----|----|-------|
-| STORY-02.01 (PGD-12) | Enabler: walking skeleton, CI, fake mailbox | Changes Requested (on master's G6) | developer | ✅ 99979e7 | ✅ (attempt 2; C15–C18 closed) | ✅ GO (2026-10-29, code f85d267) | 8 pts; PR #6 awaits **human merge** (code-human); Sev-4 DEF-001/002 (PGD-63/64, #15/#16) open; tech-debt #9–#14 |
-| STORY-01.01 (PGD-13) | One redaction path for every text surface | Ready | developer | | | | 5 pts; blocked by PGD-12 |
-| STORY-01.02 (PGD-14) | Keep secret files out of git and protected on disk | Ready | developer | | | | 3 pts; blocked by PGD-12 |
+| STORY-02.01 (PGD-12) | Enabler: walking skeleton, CI, fake mailbox | Done (merged 1ce8473, 2026-10-30) | developer | ✅ 99979e7 | ✅ (attempt 2; C15–C18 closed) | ✅ GO (2026-10-29, code f85d267) | 8 pts; PR #6 awaits **human merge** (code-human); Sev-4 DEF-001/002 (PGD-63/64, #15/#16) open; tech-debt #9–#14 |
+| STORY-01.01 (PGD-13) | One redaction path for every text surface | In Progress | developer | | | | 5 pts; PGD-12 merged; branch feat/PGD-13-redaction-path |
+| STORY-01.02 (PGD-14) | Keep secret files out of git and protected on disk | Changes Requested (on master's G6) | developer | ✅ 93ecd5e | ⚠️ CONDITIONAL GO (attempt 1, 2026-10-30): C21 fix-now (QUA-15 re-rated Major), C22 SA acknowledgement before G7 GO | | 3 pts; PR #17; tech-debt #20, #21; loop 1 of 3 |
 | STORY-02.02 (PGD-15) | Select the messages for an inclusive date range | Ready | developer | | | | 8 pts; blocked by PGD-12, 13 |
 | STORY-02.03 (PGD-16) | Reject bad input before contacting Google | Ready | developer | | | | 3 pts; blocked by PGD-13, 15 |
 | STORY-02.06 (PGD-17) | End an empty range normally | Ready | developer | | | | 2 pts; blocked by PGD-15 |
@@ -79,6 +79,9 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-10-30 | master | G6 Peer Review PGD-14 (PR #17, head 93ecd5e): **CONDITIONAL GO** (attempt 1). 0 Blocker/Critical. QUA-15 re-rated Major (D-45; AC-4 says "never raises"). C21 fix-now: QUA-15, QUA-16, STD-22, STD-23, and the docstring parts of STD-20/QUA-17. C22: the SA acknowledges STD-20/21 on PR #17 before G7 GO (D-44 generalises D-42). C23: SM adds the PERF-07 AC to STORY-01.04 and links #21 to STORY-01.03. Tech-debt #20 (ADR-003/arch docs, PERF-07) and #21 (`events.Warning` naming, stable codes) | docs/00-governance/gate-log.md, decision-log.md; docs/project-state.md; PGD-14; PR #17 |
+| 2026-10-30 | orchestrator | C20 done (scrum-master): PGD-63 blocks PGD-15, a remote link to #15 added, PGD-64 labelled sprint-02 (PGD-15 c.10176, PGD-64 c.10177). C19 done (qa-engineer): `docs/07-qa/test-plan.md` v0.1 committed as 62976ec on the status branch. A worktree attempt hit the QA write guard, which resolves paths against the main checkout; we used the main checkout instead, with no guard change. Plan OQ-1..OQ-5 are open (OQ-1 hook-refused exit code is needed before PGD-15's G5; OQ-2 sweep-ratio definition is needed for C12). Master checks C19 at PGD-13's G7 | PGD-1 c.10178, 10179 |
+| 2026-10-30 | orchestrator | Resumed. Santhosh merged PR #6 (1ce8473) and replied APPROVED (PGD-1 c.10172). Ledger moved to branch `docs/PGD-1-status-sprint-01` (1d35519). Developers on PGD-13 and PGD-14 run in parallel, each in its own git worktree; qa-engineer on C19 (test plan, branch `docs/PGD-1-qa-test-plan`); scrum-master on C20 | PGD-1 c.10173; PGD-13 c.10174; PGD-14 c.10175 |
 | 2026-10-29 | orchestrator | CI passes 10/10 on head 88bf54d (QA report commit), so the G7 merge precondition is met. Merge request posted for Santhosh (PR #6 c.6513152171, PGD-1 c.10170). **Run paused: waiting for the human merge of PR #6**; PGD-13..18 depend on it. Ledger and governance edits stay uncommitted for the sprint-close status PR | PR #6; PGD-1 |
 | 2026-10-29 | master | G7 QA Acceptance PGD-12: **GO (ACCEPT)**, attempt 1, code f85d267. 9/9 ACs verified with fresh evidence; 0 Sev-1/2/3 open; regression 271/271 and CI 10/10. C18 closed (scope respected; QUA-13 and QUA-14 verified). DEF-001 (PGD-63, #15) is targeted to PGD-15; DEF-002 (PGD-64, #16) to the next `tests/support/` story by the sprint-02 G4 (C20). C19 = test plan due at the next story's G7 (T-03). RISK-022 (branch protection, #7, T-04) registered. Merging PR #6 is **human** (code-human); precondition: CI green on the PR head 88bf54d | docs/00-governance/gate-log.md, risk-register.md; docs/project-state.md; PGD-12; PR #6 |
 | 2026-10-29 | orchestrator | C18 (QUA-13) fixed at **f85d267**: 271 tests passed, CI 40987328532 10/10, scope limited to 4 test files. reviewer-quality verified QUA-13 and QUA-14 (stubbed resolver, no real DNS). G6 complete under the attempt-2 path: PR #6 labelled `gate:g6-pass`, PGD-12 moved to **In QA**. qa-engineer briefed for G7 | PR #6; PGD-12 c.10161–10163 |

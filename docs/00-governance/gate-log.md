@@ -356,3 +356,55 @@ Follow-ups (not conditions):
 
 **Risks registered:** RISK-022 (CI checks not required on `main`). RISK-005 re-assessed: the egress guard and the gitleaks/bandit/pip-audit stages are now evidenced (G6/G7 PGD-12), but redaction (STORY-01.01) is not yet built, so the score is unchanged. RISK-021 now also tracks DEF-001 and DEF-002.
 **Rationale:** All three mandatory G7 items have file-, CI- and Jira-level evidence. Every AC was verified on the final code with fresh runs, and the two gate-style ACs (5 and 6) were mutation-tested. There is no Sev-1, Sev-2 or Sev-3 defect, and the full regression is green locally and on all ten CI jobs. The two Sev-4 defects sit in test-support code, fail no AC and are scheduled with owners. The missing project test plan is a QA-process gap, not a defect in this story, so it is a condition on the next G7 (C19) and does not block PGD-12. G7 is not in `HUMAN_APPROVAL_POINTS`, but the code merge is human under `MERGE_POLICY`.
+
+---
+
+## G6 – Peer Review — STORY-01.02 (PGD-14) — 2026-10-30
+
+- **Decision:** CONDITIONAL GO. The story goes to **Changes Requested** for the fix-now list (C21). It does not enter QA until C21 is closed, and G7 GO also needs C22
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1 (dev↔review loop 1 of 3)
+- **Artefacts evaluated:**
+  - PR #17 `feat/PGD-14-secret-files`, head `93ecd5e`, base `1ce8473` (9 files, 2 commits).
+  - Reviews: standards 5708044489 (APPROVE WITH COMMENTS), quality 5708066212 (APPROVE WITH COMMENTS), performance 5708057780 (APPROVE). All three bodies and all 15 inline comments were read with `gh api`.
+  - Consolidated comment 6514981472.
+  - Check runs for `93ecd5e`: 10/10 success (run 41001643114).
+  - Jira PGD-14 (AC-1..5, Dev Context) and hand-offs c.10182–10184.
+  - ADR-003 decision 1 and architecture §4.1, §6.8, §8.2 and §10.2, as cited by the reviewers. Decision-log D-23, D-32, D-40 and D-42.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Three PR reviews on `93ecd5e` (COMMENT event under `single-token`, verdict in body); labels `review:*-approved` |
+| 2 | Zero open Blocker/Critical findings | ✱ | ✅ | All three reviews: 0 Blocker, 0 Critical. QUA-15 was re-rated Major (#3), not Critical: AC-4's listed cases (inside, outside, `..`, case) all pass, and no code path can feed a user-supplied path into the function until STORY-01.03 |
+| 3 | Major findings fixed or accepted | | ⚠️ | **QUA-15 is re-rated from Minor to Major (D-45).** AC-4 says `token_location_warning` "never blocks or raises" (D-23), and the reviewer's probe shows `ValueError` on a path containing NUL (`paths.py:136-142`). Under D-40, an AC whose outcome is delivered but whose explicit guarantee has a hole is Major, and it is not deferrable → fix now (C21) |
+| 4 | Findings cite file:line | | ✅ | All 15 inline comments are anchored to a file and line; the consolidated table cites file:line |
+| 5 | AC evidence (quality AC table) | | ✅ | AC-1..5 Met. Notes: AC-1 and AC-5 have the isolation gap QUA-16; AC-4 has QUA-15. AC-2 POSIX modes run on the Ubuntu and macOS CI legs and are spy-tested on Windows |
+| 6 | Architecture / ADR conformance | | ⚠️ | STD-21 = QUA-20: the code uses `O_EXCL` on the temp file, but the **Accepted** ADR-003 decision 1 and architecture §8.2 say `O_TRUNC`. Both reviewers endorse `O_EXCL` as stricter. STD-20: the token writer is in `infra/paths.py` (the story's Dev Context) while architecture §4.1/§10.2 name `infra/auth.py`. Ruling D-44: the SA acknowledges on the PR before G7 GO (C22); the documents follow in #20 |
+| 7 | Security hygiene | | ✅ | Placeholder fixtures only; the error message is a constant and `from None` keeps the content out of the encode error; `os.replace` only for the app-owned token (D-32); temp file `0o600` + `O_EXCL` + fsync; `security` job green. STD-22(c) (a token `*.tmp` left by a hard kill outside `secrets/`) is a secret-in-git vector → fix now |
+
+**Dispositions (every Minor and Major finding)**
+
+| Finding(s) | Severity | Disposition |
+|---|---|---|
+| QUA-15 `gmail_pdf/infra/paths.py:136-142` | **Major** (re-rated) | **Fix in this PR.** Fail safe: an unclassifiable path (`ValueError`, e.g. NUL) returns `Warning(TOKEN_OUTSIDE_PROFILE)` and never raises; add the NUL test |
+| QUA-16 `tests/e2e/test_gitignore_matching.py:58-70` | Minor | **Fix in this PR.** Isolate git from user config (`XDG_CONFIG_HOME`/`HOME` to an empty temp dir, or `-c core.excludesFile=<empty>`); AC-5 checks repository rules only (`--exclude-per-directory=.gitignore`, not `--exclude-standard`). Add the negative test the reviewer describes. This is the AC-1/AC-5 evidence and the docstring over-claims, so it is fixed now for consistency with QUA-09/QUA-13 |
+| STD-22 `.gitignore:21-25` | Minor | **Fix in this PR.** Append `.venv/`, `venv/`, `dist/`, `build/` and `*.tmp` (or the narrower `.*.tmp`), and extend `REQUIRED_ARTEFACT_PATTERNS`/`IGNORED_PATHS` with the temp-file samples. A left-over token temp file is a secret-in-git vector (AC-1 intent, Coding Standards §9/§10) |
+| STD-23 `tests/integration/test_private_files.py:216, 86-91` | Minor | **Fix in this PR.** One behaviour per test (Coding Standards §6), for consistency with the PGD-12 STD-04 ruling |
+| STD-20 `gmail_pdf/infra/paths.py:67` | Minor | **Split.** Now: add the docstring restriction "app-owned state only (token, manifest snapshot); never for a user-visible file (coding-standards §10, D-32)". SA acknowledgement before G7 GO (C22). Document reconciliation deferred → [#20](https://github.com/sankumar76/pdf-download-gmail/issues/20) |
+| STD-21 = QUA-20 `gmail_pdf/infra/paths.py:118-125` | Minor / Info | **No code change.** SA acknowledgement before G7 GO (C22). ADR-003, §8.2 and §7 amendment → [#20](https://github.com/sankumar76/pdf-download-gmail/issues/20) |
+| QUA-17 = STD-25 `gmail_pdf/domain/events.py:19-20` | Minor / Info | **Split.** Now: one docstring line, "import as `events.Warning`; never import the name directly". Rename or lint enforcement is the SA's call (§6.8) → [#21](https://github.com/sankumar76/pdf-download-gmail/issues/21), before STORY-01.03 is Ready |
+| QUA-18 (Info) | Info | → [#21](https://github.com/sankumar76/pdf-download-gmail/issues/21) (stable string values, same change) |
+| PERF-07 (Info) | Info | → [#20](https://github.com/sankumar76/pdf-download-gmail/issues/20) item 3: STORY-01.04 AC "write the token only on change", with a test of at most one write per run |
+| QUA-19 (Info) | Info | Optional in this PR (same file as STD-22): `.coverage` + `.coverage.*` instead of `.coverage*` |
+| STD-24, STD-26, PERF-08 (Info) | Info | No action required |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C21 | developer (fix); reviewer-quality and reviewer-standards (delta re-review) | PR #17: `gmail_pdf/infra/paths.py`, `gmail_pdf/domain/events.py` (docstring only), `.gitignore`, `tests/integration/test_private_files.py`, `tests/unit/test_gitignore_patterns.py`, `tests/e2e/test_gitignore_matching.py` and the `paths` unit tests | Fix QUA-15 (Major), QUA-16, STD-22, STD-23, plus the docstring parts of STD-20 and QUA-17, as in the table. Reply "Fixed" in each thread; CI 10/10 on the new head. Reviewers re-review the new diff only. The orchestrator moves PGD-14 to In QA when every C21 thread is verified Fixed and no new Blocker/Critical/Major is raised; otherwise it returns as G6 attempt 2 | Before G7 starts (master confirms as G7 check 0) |
+| C22 | solution-architect | PR #17 comment | Acknowledge STD-21 (accept or reject `O_EXCL` vs ADR-003 `O_TRUNC`) and STD-20 (confirm `infra/paths.py::write_private_text` as the token writer for now, or name where it moves). If rejected, the developer changes the code under C21. Document amendments follow in #20 | Before G7 GO of PGD-14 |
+| C23 | scrum-master | STORY-01.04 and STORY-01.03 when drafted; sprint-02 plan | Add the PERF-07 AC (#20 item 3) to STORY-01.04; link #21 to STORY-01.03 (before Ready) | Sprint-02 G4 |
+
+**Carried project-level conditions:** C19 (test plan) is evidenced by commit 62976ec on `docs/PGD-1-status-sprint-01`; master checks it at the next G7. C20 (#15 → PGD-15; #16 by sprint-02 G4) stays open.
+**Risks registered:** none new. RISK-005 is unchanged: the evidence improved (gitignore and file modes), but redaction (STORY-01.01) is not yet built. RISK-009 (unprotected downloads) is partly mitigated by `downloads/` in `.gitignore`.
+**Rationale:** Both mandatory items are met: three reports and no Blocker or Critical. QUA-15 is re-rated Major under the D-40 rule, because the code contradicts AC-4's explicit "never raises" guarantee, so it must be fixed before QA, as QUA-01 was. The other fixes are cheap. Two of them stop docstrings and test claims overstating the evidence (the recurring pattern on this project), and one closes a secret-in-git vector. The two architecture deviations are endorsed as stricter or harmless, but they contradict an Accepted ADR and the architecture text. Under D-44 the architect signs them off before G7 GO, consistent with D-42, and the documents follow in #20. G6 is not in `HUMAN_APPROVAL_POINTS`.
