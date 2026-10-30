@@ -1,0 +1,97 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gmail-pdf"
+dynamic = ["version"]
+description = "Download every PDF attachment from a Gmail account for a date range (read-only)."
+readme = { text = "Gmail PDF Attachment Downloader. See docs/ in the repository.", content-type = "text/plain" }
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+# Runtime allow-list is exhaustive and machine-checked (ADR-002 rule 2,
+# tests/unit/test_dependency_allowlist.py). PySide6-Essentials is deliberately NOT here:
+# ADR-001 is still Proposed (condition C11).
+dependencies = [
+    "google-api-python-client",
+    "google-auth",
+    "google-auth-httplib2",
+    "google-auth-oauthlib",
+    "tzdata",
+    "tzlocal>=5",
+]
+
+[project.optional-dependencies]
+# Dev/CI-only tools (ADR-002). pytest-qt joins with the first GUI story.
+dev = [
+    "bandit",
+    "diff-cover",
+    "mypy",
+    "pip-audit",
+    "pip-tools",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "tomli; python_version < '3.11'",
+]
+
+[project.scripts]
+gmail-pdf = "gmail_pdf.cli.main:entry"
+
+[tool.setuptools.dynamic]
+version = { attr = "gmail_pdf.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["gmail_pdf*"]
+
+# ---------------------------------------------------------------- ruff (coding-standards §11)
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+# Python sources only: recent ruff versions also format code blocks in Markdown, which must
+# not rewrite the design documents under docs/.
+include = ["*.py", "*.pyi", "**/pyproject.toml"]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use assert, spawn the project's own interpreter, and use seeded non-crypto randomness
+# in the fake mailbox (S101, S603, S311). The fake credentials in tests are sentinels (S105/S106).
+"tests/**" = ["S101", "S105", "S106", "S311", "S603"]
+
+# ---------------------------------------------------------------- mypy (coding-standards §10)
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["gmail_pdf"]
+
+# ---------------------------------------------------------------- pytest (test-strategy §1, §2)
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--strict-markers --strict-config"
+markers = [
+    "req(*ids): requirement and acceptance-criterion IDs the test verifies, e.g. req('FR-026', 'AC-4')",
+    "perf: performance benchmark (NFR-001..003, 009, 010); excluded from the fast suite with -m 'not perf'",
+]
+
+# ---------------------------------------------------------------- coverage (test-strategy §5, D-30)
+[tool.coverage.run]
+branch = true
+source = ["gmail_pdf"]
+# Relative paths let the Windows and Ubuntu data files be combined in the CI coverage job.
+relative_files = true
+
+[tool.coverage.paths]
+source = ["gmail_pdf", "*/gmail_pdf", "*\\gmail_pdf"]
+
+[tool.coverage.report]
+# Whole-package floor (D-30). The macOS leg overrides it with --cov-fail-under=0.
+fail_under = 80
+show_missing = true
+skip_empty = true
