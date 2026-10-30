@@ -115,7 +115,11 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(
             r"""(?ix)
-            ((?:access_token|refresh_token|client_secret|id_token|code_verifier|auth_code|device_code)|(?<!\w)code)
+            (
+                (?:access_token|refresh_token|client_secret|id_token
+                   |code_verifier|auth_code|device_code)
+                |(?<!\w)code
+            )
             (["']?\s*[:=]\s*["']?)
             [^"'&\s,}]+
             """
@@ -139,16 +143,51 @@ def redact(text: str) -> str:
     return text
 
 
+TRACEBACK_UNAVAILABLE = "<traceback could not be formatted>"
+
+
+def _redacted_traceback(
+    exc_type: type[BaseException] | None,
+    exc_value: BaseException | None,
+    exc_traceback: TracebackType | None,
+) -> str:
+    """Return the redacted traceback text, or a fixed placeholder if that fails.
+
+    Formatting walks the exception chain and calls ``__str__`` of arbitrary objects, and
+    ``redact`` can fail too (for example at interpreter shutdown). A hook or filter that lets
+    such a failure escape makes CPython print the original exception, unredacted. So this
+    never raises and never returns text that has not been through ``redact``.
+    """
+    try:
+        return redact("".join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
+    except Exception:
+        return TRACEBACK_UNAVAILABLE
+
+
 # ------------------------------------------------------------------------------ logging
 class RedactingFilter(logging.Filter):
     """Redacts the message, the exception text and the stack text of every record it sees.
 
     Attach it to a handler (a filter on a logger does not see records from child loggers).
-    It never drops a record. Only the message, ``args``, exception and stack text are
-    sanitised; values passed through ``extra=`` are left alone, so do not put secrets there.
+    It never drops a record and never raises: if sanitising fails, the record is reduced to a
+    fixed placeholder message with no exception or stack text. Only the message, ``args``,
+    exception and stack text are sanitised; values passed through ``extra=`` are left alone,
+    so do not put secrets there.
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            self._sanitise(record)
+        except Exception:  # nothing may escape: the caller of logger.exception() would abort
+            record.msg = UNFORMATTABLE_LOG_MESSAGE
+            record.args = None
+            record.exc_info = None
+            record.exc_text = None
+            record.stack_info = None
+        return True
+
+    @staticmethod
+    def _sanitise(record: logging.LogRecord) -> None:
         try:
             message = record.getMessage()
         except Exception:  # a broken __str__ or format must not leak or crash
@@ -158,14 +197,12 @@ class RedactingFilter(logging.Filter):
         if record.exc_info:
             # exc_text is what Formatter prints; clearing exc_info stops a handler without
             # this filter from formatting the unredacted traceback again.
-            text = "".join(traceback.format_exception(*record.exc_info)).rstrip("\n")
-            record.exc_text = redact(text)
+            record.exc_text = _redacted_traceback(*record.exc_info).rstrip("\n")
             record.exc_info = None
         elif record.exc_text:
             record.exc_text = redact(record.exc_text)
         if record.stack_info:
             record.stack_info = redact(record.stack_info)
-        return True
 
 
 def _attach_filter(handler: logging.Handler) -> None:
@@ -312,7 +349,11 @@ def _write_stderr(line: str) -> None:
     if stream is None:  # pythonw, or a closed standard stream: there is nowhere to write
         return
     try:
-        stream.write(redact(line) + "\n")
+        text = redact(line)
+    except Exception:  # the callers pass fixed sentences, so the line itself is safe to print
+        text = line
+    try:
+        stream.write(text + "\n")
         stream.flush()
     except (OSError, ValueError):
         # stderr is gone (closed pipe); this is the handler of last resort, so there is no
@@ -333,11 +374,15 @@ def report_unexpected_failure(
     """Print the unexpected-failure line to stderr; send the redacted traceback to DEBUG.
 
     The traceback is redacted here, before it reaches the logger, so it is safe even if a
-    handler has no ``RedactingFilter``. Nothing but the one fixed line reaches stderr (AC-5).
+    handler has no ``RedactingFilter``. This function writes only the one fixed line to stderr
+    (AC-5). If the traceback cannot be formatted or redacted, a fixed placeholder is logged
+    instead.
     """
     _write_stderr(UNEXPECTED_FAILURE_LINE)
-    text = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-    logger.debug("Unexpected failure (redacted traceback):\n%s", redact(text))
+    logger.debug(
+        "Unexpected failure (redacted traceback):\n%s",
+        _redacted_traceback(exc_type, exc_value, exc_traceback),
+    )
 
 
 def _handle_uncaught(
@@ -345,10 +390,15 @@ def _handle_uncaught(
     exc_value: BaseException | None,
     exc_traceback: TracebackType | None,
 ) -> None:
-    if issubclass(exc_type, KeyboardInterrupt):
-        report_cancelled()
-    else:
-        report_unexpected_failure(exc_type, exc_value, exc_traceback)
+    try:
+        if issubclass(exc_type, KeyboardInterrupt):
+            report_cancelled()
+        else:
+            report_unexpected_failure(exc_type, exc_value, exc_traceback)
+    except Exception:
+        # A hook that raises makes CPython print the original exception, unredacted. There
+        # is nowhere safer to report this failure, so it is dropped.
+        return
 
 
 def _main_thread_hook(
@@ -365,17 +415,25 @@ def _worker_thread_hook(args: threading.ExceptHookArgs) -> None:
 
 def _unraisable_hook(args: sys.UnraisableHookArgs) -> None:
     """Exceptions the interpreter must ignore (``__del__``, callbacks): redacted, DEBUG only."""
-    text = "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback))
-    logger.debug("Ignored exception (redacted traceback):\n%s", redact(text))
+    try:
+        logger.debug(
+            "Ignored exception (redacted traceback):\n%s",
+            _redacted_traceback(args.exc_type, args.exc_value, args.exc_traceback),
+        )
+    except Exception:  # see _handle_uncaught: a raising hook falls back to the raw default
+        return
 
 
 def install_excepthooks() -> Callable[[], None]:
     """Replace ``sys.excepthook``, ``threading.excepthook`` and ``sys.unraisablehook``.
 
     An uncaught exception on any thread then prints ``error: unexpected failure, see the run
-    log`` (or ``Run cancelled`` for Ctrl+C) to stderr, and nothing else. An exception the
-    interpreter ignores (for example in ``__del__``) prints nothing; its redacted traceback goes
-    to the logger at DEBUG. The hooks do not call the previous hooks.
+    log`` (or ``Run cancelled`` for Ctrl+C) to stderr, and the hook writes nothing else. An
+    exception the interpreter ignores (for example in ``__del__``) is not written to stderr by
+    the hook; its redacted traceback goes to the logger at DEBUG. No failure inside a hook
+    escapes it (CPython would print the original exception unredacted); if the traceback
+    cannot be formatted or redacted, a fixed placeholder is logged and the fixed line is still
+    printed. The hooks do not call the previous hooks.
 
     Returns:
         A function that puts back the hooks that were installed before this call.
