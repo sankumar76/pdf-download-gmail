@@ -434,3 +434,110 @@ Follow-ups (not conditions):
 | # | Owner agent | Artefact | Required change | Due gate |
 |---|-------------|----------|-----------------|----------|
 | C24 | developer (fix); reviewer-quality (verifies in the QUA-21 thread) | PR #17: `tests/e2e/test_gitignore_matching.py` only | Strip the inherited git repository-location variables in `isolated_env`. Add the inherited-`GIT_INDEX_FILE` regression test. CI 10/10 on the new head. If any other file changes, or a new Blocker, Critical or Major is raised, the PR returns as G6 attempt 2. Within scope, the orchestrator moves PGD-14 to In QA once reviewer-quality replies Fixed | Before G7 starts (master confirms C21 and C24 as G7 check 0) |
+
+---
+
+## G6 – Peer Review — STORY-01.01 (PGD-13) — 2026-10-30
+
+- **Decision:** NO-GO. The story goes to Changes Requested, and G6 attempt 2 is required
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1 (dev↔review loop 1 of 3)
+- **Artefacts evaluated:**
+  - PR #22 `feat/PGD-13-redaction`, head `6c5edb4`, base `1ce8473` (13 files; supersedes the closed #18 with an identical tree).
+  - Reviews 5708306706 (standards, APPROVE WITH COMMENTS), 5708364198 (quality, REQUEST CHANGES) and 5708338494 (performance, APPROVE).
+  - All 18 inline comments and consolidated comment 6515621219, read with `gh api`.
+  - SA ruling 6515541757.
+  - Check runs on `6c5edb4`: 10/10 (run 41005624066).
+  - Jira PGD-13 AC-1..8 and c.10199–10202.
+  - `tests/unit/test_sentinel_matrix.py` at `6c5edb4`; master read the harness fixture.
+  - The decision was posted on PGD-13 (c.10203) and PR #22 (comment 6515649347) while the checkout was on another story's branch. This record was appended afterwards on `docs/PGD-1-status-sprint-01`.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Three PR reviews on `6c5edb4` |
+| 2 | Zero open Blocker/Critical | ✱ | ❌ | **QUA-22 Critical** (`test_sentinel_matrix.py:86-105`; vacuity guard at 195-201). The fixture patches `sys.stdout`/`sys.stderr` at setup, but pytest capture restores its own streams for the call phase, so the matrix never observes stdout or stderr. Mutant M4 (`safe_message` → raw `str(exc)`) passes 21/21. AC-6 names four surfaces and two are unobserved, so under D-40 the AC outcome is not delivered → Critical |
+| 3 | Majors fixed or accepted | | ❌ | **QUA-23 Major** (`redaction.py:355-374`): `sys.unraisablehook` and `warnings.warn` print a registered sentinel to stderr (RISK-005, impact 5). Not accepted |
+| 4 | Findings cite file:line | | ✅ | All inline comments are anchored |
+| 5 | ADR/architecture conformance (D-44) | | ⚠️ | STD-33: the SA acknowledged the `(?<!\w)code` guard on condition of explicit `code_verifier`, `auth_code` and `device_code` keys plus test rows (6515541757) |
+| 6 | Other ACs / CI | | ✅ | AC-1..5, 7 and 8 met (quality AC table); CI 10/10; no new dependency; layering proven (AC-7) |
+
+**Dispositions**
+| Finding(s) | Severity | Disposition |
+|---|---|---|
+| QUA-22 | Critical | Fix now: capture the streams in the call phase; make the vacuity guard per surface; M4 must fail with capture on |
+| QUA-23 | Major | Fix now: a redacting `sys.unraisablehook` plus `logging.captureWarnings(True)`; add `unraisable-exception` and `library-warning` rows; narrow the over-claiming docstrings |
+| STD-33 | Minor + SA condition | Fix now: the SA's pattern and test rows (D-44) |
+| STD-29, STD-31, STD-32 | Minor | Fix now |
+| STD-30 | Minor | Split: docstring fixed now; argparse redaction deferred → [#23](https://github.com/sankumar76/pdf-download-gmail/issues/23) (STORY-07.01) |
+| QUA-24 (+ PERF-10 Info) | Minor | Defer → [#24](https://github.com/sankumar76/pdf-download-gmail/issues/24) (STORY-01.04; the SA signs off the patterns) |
+| STD-37 | Info | Fix the docstring's first line now (over-claim); no action on the `__all__` part |
+| `test_stack_info_is_redacted` (standards cross-reference) | — | Mutation-check now; fix if vacuous |
+| STD-34, 35, 36, QUA-25, QUA-26, PERF-09 | Info | No action. QUA-26 is recommended together with the QUA-23 fix |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| R1 | developer | PR #22 (`gmail_pdf/redaction.py`, `gmail_pdf/cli/main.py`, tests under `tests/unit/`, `tests/support/sentinels.py`) | Fix QUA-22, QUA-23, STD-33 (SA pattern), STD-29, STD-31, STD-32, the STD-30/STD-37 docstrings, and the stack-info test check | G6 attempt 2 |
+| R2 | reviewer-quality, reviewer-standards | PR #22 | Re-review the delta. Quality re-runs the mutation set: M4 and the two new paths must fail when unprotected | G6 attempt 2 |
+| R3 | solution-architect | PR #22 reply on 6515541757 | Confirm that the implemented key/value pattern matches the ruling | G6 attempt 2 |
+| — | scrum-master | STORY-07.01 and STORY-01.04 when drafted | Carry #23 and #24 as ACs | Sprint-02 G4 |
+
+**Risks registered:** none new. RISK-005 stays at 10 🟡 until PGD-13 passes G7.
+**Rationale:** The G6 pass criterion fails. QUA-22 leaves AC-6's stdout and stderr surfaces unverified, and those surfaces are the core NFR-012 evidence for the story that carries the project's safety premise (GOAL-05, RISK-005). QUA-23 is a real leak path. Both fixes are small. Because a Critical was open, closure needs a G6 attempt 2 by master, not the scoped exit used for Minor leftovers. The deferrals go to the stories that first produce the affected strings (#23, #24). G6 is not in `HUMAN_APPROVAL_POINTS`.
+
+---
+
+## G7 – QA Acceptance — STORY-01.02 (PGD-14) — 2026-10-30
+
+- **Decision:** GO (ACCEPT). The story may move to Done. **Merging PR #17 needs the delivery lead** (`MERGE_POLICY = docs-auto, code-human`). **Merge precondition:** all 10 CI jobs green on the PR head `1ef31e8` (a docs-only commit with the test report). Its run was still in progress when this decision was taken
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - `docs/07-qa/PGD-14-test-report.md` at `1ef31e8`, read in full. The code under test is `6bd795b`.
+  - C24 diff `39e1f18..6bd795b`: only `tests/e2e/test_gitignore_matching.py`.
+  - `6bd795b..1ef31e8`: only the report.
+  - QUA-21 thread: developer reply plus reviewer-quality "Verified fixed".
+  - Check runs on `6bd795b`: 10/10 (run 41005608058).
+  - Jira bugs PGD-65 and PGD-66, GitHub #25 and #26.
+  - QA PR comment 6515703358 and Jira c.10207.
+  - C19 artefact: `docs/07-qa/test-plan.md` at 62976ec (333 lines).
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 0 | Conditions closed (C21, C22, C24; C19 due at this G7) | | ✅ | **C21** closed at the G6 exit (39e1f18). **C22** closed (SA comment 6515049452). **C24** closed: the delta stayed in its one-file scope, reviewer-quality verified it by probe (outer index byte-identical; `GIT_DIR` case clean), and CI is 10/10 on `6bd795b`. **C19** closed: `test-plan.md` exists and contains the D-21/PQ-02 exit-code confirmation, the C12/CC-02 ratio-0.6 benchmark case (§ "Ratios r"), the no-traceback check for the hook and CLI (§11) and the G8 pip-audit re-run |
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | Report matrix: AC-1..5 pass with fresh evidence. AC-1: mutation (removing any of 13 patterns fails the tests) plus probes in four temp repos (LF/CRLF, case rules). AC-2: POSIX modes verified **on Linux as non-root** in a `python:3.12-slim` container under umask 022, 077, 000 and 002; macOS is CI-only (green). AC-3: fault injection plus a kill between write and replace. AC-4: more than 30 path shapes on Windows and Linux, including NUL, and it never raises. AC-5: a force-added secret is reported, and gitleaks is green in CI |
+| 2 | No open Sev-1/Sev-2 defects | ✱ | ✅ | Sev-1/2/3: 0. New Sev-4: DEF-003 (PGD-65, #25) and DEF-004 (PGD-66, #26) |
+| 3 | Regression suite recorded and green | ✱ | ✅ | Windows 3.12: 398 passed, 11 skipped (the POSIX-only tests, each with a stated reason), repeatable and per-file isolated. Linux subset: 88 passed, 3 Windows-only skips. Coverage 99.42 %, diff-cover 100 %. ruff, mypy and bandit clean. CI 10/10 on `6bd795b` |
+| 4 | Exploratory notes present | | ✅ | 90-minute charter (EC-5, EC-1); 8 observations; 2 defects |
+| 5 | Accessibility (UI stories) | | n/a | No UI |
+| 6 | G6 re-checks | | ✅ | QUA-15 (Major, D-45), QUA-16 and QUA-21 re-verified fixed by QA on both operating systems |
+
+**Defect and observation dispositions**
+| Item | Disposition |
+|---|---|
+| DEF-003 · [PGD-65](https://sankumar76.atlassian.net/browse/PGD-65) · [#25](https://github.com/sankumar76/pdf-download-gmail/issues/25) (Sev-4 product): a NUL or nameless path raises a raw `ValueError` where the docstring promises `PrivateFileError`; no content leaks | Keep open. **Target:** the next story that edits `infra/paths.py`, which is STORY-01.03 (defaults and precedence), before its G5. STORY-01.03 is also where user-supplied paths first reach these helpers, so the contract must hold there |
+| DEF-004 · [PGD-66](https://sankumar76.atlassian.net/browse/PGD-66) · [#26](https://github.com/sankumar76/pdf-download-gmail/issues/26) (Sev-4 test): the `.gitignore` tests miss over-broad patterns and an appended `!secrets/` | Keep open. **Target:** the next story that edits `.gitignore` or its tests, and no later than the sprint-02 G4, where the scrum-master schedules it |
+| Obs. 1: backup and case variants (`token.json.bak`, `*.pem`, `Token.json` on case-sensitive file systems) are not ignored | Not a defect: SEC-05 and AC-1 name exactly the delivered patterns, and gitleaks is the second control. **C26:** the solution-architect proposes, and the product-manager accepts or declines, an extension of the pattern list (backup suffixes, `*.pem`, case variants) by the sprint-02 G4. If accepted, it becomes an AC of the next `.gitignore` story together with DEF-004 |
+| Obs. 2 and 4: a stale `.token.json.<hex>.tmp` survives a kill and is never swept; concurrent writers on Windows can fail | Constraints for STORY-01.04, added to [#20](https://github.com/sankumar76/pdf-download-gmail/issues/20): sweep stale `.token.json.*.tmp` when writing, and keep a single writer thread for the token. Both fail safe today (`0600`, ignored by git, content valid) |
+| Obs. 3: advisory false positives (`\\?\`, UNC admin share, relative home, literal `~`) | No action for PGD-14 (fail safe). STORY-01.03 must `expanduser` user-supplied paths (carried with DEF-003) |
+| Obs. 5–8: symlink tightening, no parent `fsync` (SA: optional), noisy `_discard` log, unstripped minor git variables | No action |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C25 | scrum-master | Jira (STORY-01.03 when drafted; sprint-02 plan) | Link DEF-003 (#25) to STORY-01.03 with "before G5" and add an `expanduser` AC (Obs. 3). Schedule DEF-004 (#26) | Sprint-02 G4 |
+| C26 | solution-architect (proposal), product-manager (decision) | `docs/04-architecture/` §10.1 `.gitignore` list; decision-log entry via master | Decide whether to extend the secret patterns with backup suffixes, `*.pem` and case variants (Obs. 1). Scope goes through the PM (CLAUDE.md §6.6) | Sprint-02 G4 |
+
+Follow-ups (not conditions):
+- qa-engineer: move PGD-14 to Done.
+- orchestrator: request the human merge with the precondition above.
+- master: comment on #20 adding Obs. 2 and 4.
+
+**Risks registered:** none new. RISK-005 is partly evidenced: secret files are kept out of git and protected on disk (PGD-14). The score stays at 10 🟡 until redaction (PGD-13) passes G7. RISK-009 is partly mitigated by `downloads/` in `.gitignore`.
+**Rationale:**
+- All three mandatory G7 items have file-, CI- and Jira-level evidence.
+- Every AC was verified on the code under test, including a non-root Linux run for the POSIX modes that Windows cannot exercise.
+- The G6 Major (QUA-15) and the two isolation fixes were re-verified independently.
+- The two Sev-4 defects fail no AC. Each is routed to the story that next touches its code.
+- The project test plan (C19) now exists with every element required at the PGD-12 G7.
+- G7 is not in `HUMAN_APPROVAL_POINTS`, but the code merge is human under `MERGE_POLICY`.
