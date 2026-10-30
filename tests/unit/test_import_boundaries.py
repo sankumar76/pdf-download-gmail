@@ -84,21 +84,23 @@ def violations_in(module: str, source: str, *, is_package: bool = False) -> list
     return problems
 
 
-def check_tree(sources: Mapping[str, str]) -> list[str]:
-    """Violations across ``{module: source}``; ``__init__`` modules are packages."""
-    problems: list[str] = []
-    for module, source in sources.items():
-        problems.extend(violations_in(module, source))
-    return problems
+def check_tree(sources: Mapping[str, tuple[str, bool]]) -> list[str]:
+    """Violations across ``{module: (source, is_package)}``; ``__init__`` modules are packages."""
+    return [
+        problem
+        for module, (source, is_package) in sources.items()
+        for problem in violations_in(module, source, is_package=is_package)
+    ]
 
 
-def package_sources() -> dict[str, str]:
-    """``{module: source}`` for every module in the real package."""
-    sources: dict[str, str] = {}
+def package_sources() -> dict[str, tuple[str, bool]]:
+    """``{module: (source, is_package)}`` for every module in the real package."""
+    sources: dict[str, tuple[str, bool]] = {}
     for path in sorted((REPO_ROOT / PACKAGE).rglob("*.py")):
         relative = path.relative_to(REPO_ROOT).with_suffix("")
-        parts = relative.parts[:-1] if relative.name == "__init__" else relative.parts
-        sources[".".join(parts)] = path.read_text(encoding="utf-8")
+        is_package = relative.name == "__init__"
+        parts = relative.parts[:-1] if is_package else relative.parts
+        sources[".".join(parts)] = (path.read_text(encoding="utf-8"), is_package)
     return sources
 
 
@@ -173,9 +175,21 @@ def test_package_init_relative_import_resolves_inside_the_package() -> None:
 
 
 def test_a_synthetic_violation_in_a_tree_fails_the_check() -> None:
-    sources = {"gmail_pdf.domain.models": "from gmail_pdf.infra import auth"}
+    sources = {"gmail_pdf.domain.models": ("from gmail_pdf.infra import auth", False)}
 
     assert check_tree(sources) != []
+
+
+def test_forbidden_relative_import_in_a_package_init_is_flagged() -> None:
+    sources = {"gmail_pdf.app": ("from ..infra import gmail_gateway", True)}
+
+    assert any("app may import only domain" in p for p in check_tree(sources))
+
+
+def test_permitted_relative_import_in_a_package_init_is_not_flagged() -> None:
+    sources = {"gmail_pdf.domain": ("from . import errors", True)}
+
+    assert check_tree(sources) == []
 
 
 def test_layer_of_package_level_modules() -> None:
@@ -184,5 +198,5 @@ def test_layer_of_package_level_modules() -> None:
 
 
 def test_package_walk_reads_utf8_sources() -> None:
-    assert all(isinstance(source, str) for source in package_sources().values())
+    assert all(isinstance(source, str) for source, _ in package_sources().values())
     assert Path(REPO_ROOT / PACKAGE / "__init__.py").exists()
