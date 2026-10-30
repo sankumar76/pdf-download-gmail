@@ -5,6 +5,7 @@ from __future__ import annotations
 import runpy
 import subprocess
 import sys
+import sysconfig
 from importlib import metadata
 from pathlib import Path
 
@@ -141,8 +142,9 @@ def test_subprocess_entry_points_print_usage_under_the_socket_guard(
 
 
 def test_installed_console_script_prints_usage_under_the_socket_guard(tmp_path: Path) -> None:
-    scripts_dir = Path(sys.executable).parent
-    candidates = [scripts_dir / "gmail-pdf.exe", scripts_dir / "gmail-pdf"]
+    # A venv puts scripts beside python.exe; a system install (CI runner) uses sysconfig's dir.
+    scripts_dirs = [Path(sysconfig.get_path("scripts")), Path(sys.executable).parent]
+    candidates = [d / name for d in scripts_dirs for name in ("gmail-pdf.exe", "gmail-pdf")]
     script = next((path for path in candidates if path.exists()), None)
     assert script is not None, "gmail-pdf console script missing: run `pip install --no-deps -e .`"
 
