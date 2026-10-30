@@ -1,9 +1,9 @@
 """User-facing sentences shared by every front end (architecture section 4.1, FR-064).
 
-This module is dependency-free (standard library only, and it imports nothing at all today) so
-``gmail_pdf.redaction`` can import it and still load before any other part of the package
-(PGD-13 AC-7, assumption A-2). It holds fixed text only: no sentence here is ever built from an
-exception message, a token or any other untrusted value.
+This module is dependency-free (it imports nothing), so ``gmail_pdf.redaction`` can import it
+and still load before any other part of the package (PGD-13 AC-7, assumption A-2). It holds
+fixed text only: no sentence here is ever built from an exception message, a token or any
+other untrusted value.
 """
 
 from __future__ import annotations

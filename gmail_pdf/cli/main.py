@@ -8,8 +8,9 @@ resolution, credential read, logging set-up or network call (PD-16), so ``--help
 always safe to run. The full flag table arrives with STORY-07.01.
 
 Redaction comes first (PGD-13 AC-7): ``main`` installs the logging caps and the excepthooks
-before the parser, a logger or a handler exists. A failure that escapes the run prints one
-fixed line and exits 1; Ctrl+C prints ``Run cancelled`` and also exits 1 (decision D-21).
+before the parser is built, so no handler or argument output exists without them. A failure
+that escapes the run prints one fixed line and exits 1; Ctrl+C prints ``Run cancelled`` and
+also exits 1 (decision D-21).
 """
 
 from __future__ import annotations
