@@ -14,3 +14,11 @@ class FakeMailboxHookRefusedError(GmailPdfError):
 
 class AdapterUnavailableError(GmailPdfError):
     """The requested adapter is not wired into this build yet."""
+
+
+class PrivateFileError(GmailPdfError):
+    """A private (secret-bearing) folder or file could not be created or written.
+
+    The message names the operation only: never the file content and never a path taken from
+    the operating-system error text.
+    """

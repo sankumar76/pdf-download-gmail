@@ -4,3 +4,29 @@
 .claude/agent-memory-local/
 .env
 .env.*
+
+# --- PGD-14: secrets and app-owned state must never be committed (FR-004, NFR-013, SEC-04) ---
+# OAuth client file and token (ADR-003); Google names downloaded client files client_secret*.json
+secrets/
+*credentials*.json
+client_secret*.json
+token.json
+# Downloaded PDFs, partial downloads, manifest snapshot/backup/journal, run logs
+downloads/
+*.part
+.manifest.json*
+.manifest.journal
+logs/
+
+# --- Python build and test artefacts ---
+__pycache__/
+*.egg-info/
+.coverage
+.coverage.*
+coverage.xml
+.venv/
+venv/
+dist/
+build/
+# Token temp files (.<name>.<hex>.tmp) left behind if the process is killed mid-write
+.*.tmp
