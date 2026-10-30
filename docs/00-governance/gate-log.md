@@ -541,3 +541,74 @@ Follow-ups (not conditions):
 - The two Sev-4 defects fail no AC. Each is routed to the story that next touches its code.
 - The project test plan (C19) now exists with every element required at the PGD-12 G7.
 - G7 is not in `HUMAN_APPROVAL_POINTS`, but the code merge is human under `MERGE_POLICY`.
+
+**Post-decision note (2026-10-30, G6 PGD-13 attempt 2):** the merge precondition above is met. Master read the check runs: 10/10 success on `1ef31e8`, and 10/10 on the merge commit `27876b6`. Santhosh merged PR #17 at 2026-10-30T09:06:37Z and approved it explicitly on PGD-1 c.10212 (request c.10210). No numbered condition closes with this: C25 and C26 stay open, due at the sprint-02 G4.
+
+---
+
+## G6 – Peer Review — STORY-01.01 (PGD-13) — 2026-10-30
+
+- **Decision:** CONDITIONAL GO. Fix-now items (C27) must land and be verified before G7 starts. The story stays in Changes Requested until then
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 2 (dev↔review loop 2 of 3)
+- **Artefacts evaluated:**
+  - PR #22 `feat/PGD-13-redaction`, head `146236f`, base `1ce8473`, 14 files; delta `6c5edb4..146236f`.
+  - Reviews 5716488827 (standards, APPROVE WITH COMMENTS), 5716664769 (quality, APPROVE WITH COMMENTS) and 5708338494 (performance, APPROVE, attempt 1; not repeated under the exit rule).
+  - Inline findings QUA-27..30, STD-38, STD-39, read with `gh api`. Consolidated comment 6530170538.
+  - SA ruling 6515541757 and confirmation 6529841053.
+  - Check runs on `146236f`: 10/10 (run 41102046435). `mergeable_state` clean; `main` is `27876b6`; PR #22 and `main` changed no common file since `1ce8473` (master compared both file lists).
+  - Jira PGD-13 AC-1..8 and c.10214–10218.
+  - `gmail_pdf/redaction.py`, `gmail_pdf/cli/main.py` and `tests/unit/test_sentinel_matrix.py` read at `146236f`.
+  - Master's own probes, below.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Two re-reviews on `146236f`; performance from attempt 1, per the exit rule |
+| 2 | Zero open Blocker/Critical | ✱ | ✅ | QUA-22 closed. Master read `Harness.run` (redirect in the test body) and the per-surface guard. Master's run: matrix 29 passed. M4 injected in memory, normal pytest capture: `chained-exception-message-stdout` and `-stderr` fail, 2 failed, 27 passed |
+| 3 | Majors fixed or accepted | | ⚠️ | QUA-23 closed: 0 sentinels for `__del__` and `warnings.warn` on 3.12.10 and 3.14.7. **QUA-27 re-rated Major (D-46): open, fix now under C27** |
+| 4 | Findings cite file:line | | ✅ | All new inline comments are anchored |
+| 5 | ADR/architecture conformance (D-44) | | ✅ | SA 6529841053 confirms the pattern. Master compared the compiled source with the ruling: identical with whitespace removed. `status_code` and `zipcode` stay readable; `code_verifier`, `auth_code` and the `code=` value are redacted |
+| 6 | Exit rule of attempt 1, other ACs, CI | | ✅ | R1, R2 and R3 done. 9 of 9 original and 8 of 8 new-protection mutants killed on the reviewer's own export. AC-6 now met. CI 10/10. Orchestrator rerun 569 passed, 99.68 %, ruff and mypy --strict clean |
+
+**Master's QUA-27 probes** (real child interpreters at `146236f`, stderr counted, sentinel `SENTINEL-CLIENT-SECRET-0001`; 3.12.10 / 3.14.7). The fix column is the reviewer's helper at all three format sites plus a guard in `_handle_uncaught`, patched in memory; the branch was not changed.
+
+| Case | Trigger | Head | With fix |
+|---|---|---|---|
+| 1a | `__del__`, exception with a raising `__cause__` property | 1 / 1 | 0 / 0 |
+| 1b | Uncaught exception of that type, sentinel in its message | 2 / 2, "Original exception was:" | 0 / 0 |
+| 1c | Same in a worker thread | 0 / 0 | 0 / 0 |
+| 2a | Ordinary `RuntimeError`, `traceback.format_exception` fails (simulated `MemoryError`) | 1 / 1, raw original | 0 / 0 |
+| 2b | Ordinary `RuntimeError`, `redact` fails (simulated) | 1 / 1, raw original. The helper alone still gives 1 / 1 | 0 / 0, nothing printed |
+| 2c | Ordinary `RuntimeError` raised from `SyntaxError("x", ("f", 1, 1, 5))`: stdlib types, no simulation | 1 / 0 | 0 / 0 |
+| 3a | `logger.exception` on a filtered handler, raising `__cause__` | 3 / 3, caller aborted | 0 / 0, caller continues |
+| 3b | `main` with a failure of that type in `_run` | 3 / 3 | 0 / 0 |
+| Shutdown | Object alive at exit whose `__del__` raises, installers called directly | 0 sentinels; about 630 bytes on both versions | 0 bytes |
+
+Limits of this evidence: the fix was patched in memory, not implemented. The first 3a run used an unfiltered handler and was discarded and repeated. The reviewer saw the shutdown noise through `cli.main.main` on 3.14.7 only; master saw it on both versions with the installers called directly.
+
+**Dispositions**
+| Finding(s) | Severity | Disposition |
+|---|---|---|
+| QUA-27 `gmail_pdf/redaction.py:368`, extended to `:339` and `:161` | **Major** (re-rated, D-46) | **Fix in this PR** (C27) |
+| QUA-28 `tests/unit/test_redaction_logging.py:256` | Minor | **Fix in this PR** (C27). About four lines. It restores handler-level proof for the stack text the AC-3 row of the PR claims; attempt 1 item 9 kept the test honest at filter level only. Over-claiming evidence is fixed now on this project |
+| STD-38 `gmail_pdf/redaction.py:118` | Minor | **Fix in this PR** (C27). Coding Standards §10 sets 100; the line is 115. A commit is needed anyway, a tech-debt issue would cost more than the wrap, and the D-44 test rows guard it |
+| QUA-29 `tests/unit/test_sentinel_matrix.py:126-127` | Info | No action. N1 and N2 fail the matrix today, and C27 verification proves the child wiring again through the `hook-failure` row. Optional in the C27 commit |
+| QUA-30 `gmail_pdf/redaction.py:184-186` | Info | No action. Safe today. Issue #19 tracks later handlers; STORY-07.02 passes its run-log handler to `install_logging_redaction` |
+| STD-39 `tests/unit/test_redaction_logging.py:198` | Info | No action: accepted idiom |
+| SA note: a handler added without `install_logging_redaction` prints a registered secret in warning text | Not a finding | Already on #19 and #20. Not a defect while no real handler exists |
+| STD-34, 35, 36, QUA-25, PERF-09 | Info | No action, as at attempt 1 |
+
+No Major or Minor finding is deferred, so no new tech-debt issue is needed. #23 and #24 stand.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C27 | developer (fix); reviewer-quality and reviewer-standards (verify); orchestrator (G5 rerun, CI) | PR #22: `gmail_pdf/redaction.py`, `tests/unit/test_redaction_hooks.py`, `tests/unit/test_redaction_logging.py`, `tests/unit/test_sentinel_matrix.py` only | (1) **QUA-27:** no exception escapes `sys.excepthook`, `threading.excepthook`, `sys.unraisablehook` or `RedactingFilter.filter`, whatever fails inside. Reviewer's helper at all three format sites plus a guard that also covers `_write_stderr`; the outcome is binding, placement is the developer's choice. If `redact` itself fails, keeping the fixed line is better if it stays small. Docstrings claim only what holds. (2) **Tests:** unit tests with `traceback.format_exception` and `redact` failing, for each entry point; a `hook-failure` path in `ERROR_PATHS` in a child interpreter with a real uncaught exit (the child return-code assertion may take an expected value). (3) **QUA-28:** the reviewer's logger-level stack test. (4) **STD-38:** wrap line 118; source identical to the SA ruling with whitespace removed. **Verified by:** orchestrator, local rerun and CI 10/10 from check runs on the new head; reviewer-quality, own export, the probes above on 3.12.10 and 3.14.7, each guard removed in turn and a named test failing, including `hook-failure` on stderr, N8 failing the new stack test, "Verified fixed" in the QUA-27 and QUA-28 threads; reviewer-standards, STD-38 and the new diff. No new SA confirmation if the whitespace-stripped source is unchanged; otherwise D-44 applies again. The orchestrator then moves PGD-13 to In QA. If another file changes, a new Blocker, Critical or Major is raised, or verification fails, the PR returns as G6 attempt 3, loop 3 of 3 (D-47) | Before G7 starts (master confirms C27 as G7 check 0); QA tests the new head only |
+
+**Risks registered:** RISK-023 (stale green run, not-strict protection). RISK-022 closed (D-48). RISK-005 stays at 10 🟡 until PGD-13 passes G7.
+**Rationale:**
+- Both mandatory items are met: three reports and no open Blocker or Critical. QUA-22 and QUA-23 are confirmed closed by master's own runs, and every attempt-1 exit requirement is evidenced.
+- QUA-27 is the same evidence pattern as QUA-15 (D-45): a delivered AC with a hole in its explicit guarantee, so it is Major and fixed before merge. The reviewer's Minor rating rested on a contrived trigger and on line 339 being "pre-existing", but that line is new in this PR and a failed `sys.excepthook` prints the original exception raw.
+- It is not Critical, so this is not a NO-GO: every case AC-5 lists passes, no real dependency is known to trigger it, production code registers no secret yet, and its trigger is far narrower than QUA-23's, which was itself Major.
+- RISK-005 has impact 5 and the fix is small. Leaving it would ship the redaction story knowing that one failure in a hook undoes it.
+- G6 is not in `HUMAN_APPROVAL_POINTS`.
