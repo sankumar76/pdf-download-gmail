@@ -47,6 +47,9 @@ pytestmark = pytest.mark.req("FR-005", "NFR-012", "AC-6")
 SURFACES = ("stdout", "stderr", "log_file", "excepthook_output")
 SECRET_TEXT = " ".join(sentinels.ALL)
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
+# Printed by the ``hook-failure`` child just before its final ``raise``; the row asserts it, so a
+# child that stops early (QUA-33) cannot leave the row green with nothing exercised.
+HOOK_FAILURE_REACHED = "hook-failure child reached its final raise"
 
 # What a child interpreter does first, in the order the application does it: registry, logging
 # redaction (with a log-file handler appended to the harness log), then the excepthooks.
@@ -241,7 +244,8 @@ def hook_failure(h: Harness) -> None:
     ``Hostile.__cause__`` raises a sentinel, so ``traceback.format_exception`` fails inside each
     hook: for an exception ignored in ``__del__``, for an uncaught exception in a worker thread,
     and for the uncaught exception that ends the process (exit code 1). A hook that lets that
-    failure escape makes CPython print the original exception, unredacted.
+    failure escape makes CPython print the original exception, unredacted. The child prints
+    ``HOOK_FAILURE_REACHED`` before the final ``raise``, so the row fails if it stops early.
     """
     h.in_child_interpreter(
         "import threading\n"
@@ -259,9 +263,11 @@ def hook_failure(h: Harness) -> None:
         "worker = threading.Thread(target=fail)\n"
         "worker.start()\n"
         "worker.join()\n"
+        f"print({HOOK_FAILURE_REACHED!r}, flush=True)\n"
         "raise Hostile(SECRET_TEXT)\n",
         expected_returncode=1,
     )
+    assert HOOK_FAILURE_REACHED in h.stdout.getvalue()
 
 
 # Append later stories' paths here (see the module docstring).

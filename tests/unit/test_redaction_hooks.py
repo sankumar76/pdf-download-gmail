@@ -1,4 +1,9 @@
-"""PGD-13 AC-5 and AC-8: the excepthook installers, the unexpected-failure and cancel lines."""
+"""PGD-13 AC-5 and AC-8: the excepthook installers, the unexpected-failure and cancel lines.
+
+Over 400 lines on purpose (Coding Standards, files): every test of the "nothing escapes"
+guarantee for the hooks and the log filter (QUA-27, QUA-31, QUA-32) sits next to the one set of
+breakers it uses; the split into its own module is planned for STORY-01.04 (TD-B).
+"""
 
 from __future__ import annotations
 
@@ -8,7 +13,8 @@ import sys
 import threading
 import traceback
 import types
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from typing import NoReturn
 
 import pytest
 
@@ -298,31 +304,48 @@ def test_a_missing_or_broken_stderr_does_not_raise(
 # ------------------------------------------------------------- a failure inside a hook (QUA-27)
 # A hook that raises makes CPython print the original exception, unredacted, so nothing may
 # escape: the traceback cannot be formatted, ``redact`` fails, the logger fails, stderr fails.
-def raise_with_a_secret(*args: object, **kwargs: object) -> None:
-    raise MemoryError(sentinels.CLIENT_SECRET)
+def raising(exc_type: type[BaseException]) -> Callable[..., NoReturn]:
+    """A stand-in for a function that fails with ``exc_type``, a sentinel in its message."""
+
+    def raise_it(*args: object, **kwargs: object) -> NoReturn:
+        raise exc_type(sentinels.CLIENT_SECRET)
+
+    return raise_it
 
 
 class StderrThatFails(io.StringIO):
     """A stderr whose write fails with something other than ``OSError`` or ``ValueError``."""
 
+    def __init__(self, exc_type: type[BaseException]) -> None:
+        super().__init__()
+        self.exc_type = exc_type
+
     def write(self, text: str, /) -> int:
-        raise RuntimeError(sentinels.CLIENT_SECRET)
+        raise self.exc_type(sentinels.CLIENT_SECRET)
 
 
-def break_formatting(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(traceback, "format_exception", raise_with_a_secret)
+def break_formatting(
+    monkeypatch: pytest.MonkeyPatch, exc_type: type[BaseException] = MemoryError
+) -> None:
+    monkeypatch.setattr(traceback, "format_exception", raising(exc_type))
 
 
-def break_redact(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(redaction, "redact", raise_with_a_secret)
+def break_redact(
+    monkeypatch: pytest.MonkeyPatch, exc_type: type[BaseException] = MemoryError
+) -> None:
+    monkeypatch.setattr(redaction, "redact", raising(exc_type))
 
 
-def break_logger(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(redaction.logger, "debug", raise_with_a_secret)
+def break_logger(
+    monkeypatch: pytest.MonkeyPatch, exc_type: type[BaseException] = MemoryError
+) -> None:
+    monkeypatch.setattr(redaction.logger, "debug", raising(exc_type))
 
 
-def break_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "stderr", StderrThatFails())
+def break_stderr(
+    monkeypatch: pytest.MonkeyPatch, exc_type: type[BaseException] = MemoryError
+) -> None:
+    monkeypatch.setattr(sys, "stderr", StderrThatFails(exc_type))
 
 
 def trigger_main_hook(exc: BaseException) -> None:
@@ -341,16 +364,19 @@ def trigger_report(exc: BaseException) -> None:
     report_unexpected_failure(type(exc), exc, exc.__traceback__)
 
 
-# (trigger, what the entry point may print to stderr)
-HOOK_ENTRIES = [
-    pytest.param(trigger_main_hook, FAILURE, id="main-thread-hook"),
-    pytest.param(trigger_worker_hook, FAILURE, id="worker-thread-hook"),
-    pytest.param(trigger_unraisable_hook, "", id="unraisable-hook"),
+HOOK_TRIGGERS = [
+    pytest.param(trigger_main_hook, id="main-thread-hook"),
+    pytest.param(trigger_worker_hook, id="worker-thread-hook"),
+    pytest.param(trigger_unraisable_hook, id="unraisable-hook"),
 ]
-ENTRY_POINTS = [
-    *HOOK_ENTRIES,
-    pytest.param(trigger_report, FAILURE, id="report-unexpected-failure"),
-]
+ENTRY_POINTS = [*HOOK_TRIGGERS, pytest.param(trigger_report, id="report-unexpected-failure")]
+# What each entry point may print to stderr, for the two tests that assert on it.
+STDERR_OF = {
+    trigger_main_hook: FAILURE,
+    trigger_worker_hook: FAILURE,
+    trigger_unraisable_hook: "",
+    trigger_report: FAILURE,
+}
 FORMAT_OR_REDACT = [
     pytest.param(break_formatting, id="formatting-fails"),
     pytest.param(break_redact, id="redact-fails"),
@@ -362,13 +388,12 @@ LOGGER_OR_STDERR = [
 
 
 @pytest.mark.parametrize("breaker", FORMAT_OR_REDACT)
-@pytest.mark.parametrize(("trigger", "expected_stderr"), ENTRY_POINTS)
+@pytest.mark.parametrize("trigger", ENTRY_POINTS)
 @pytest.mark.req("AC-5")
 def test_a_failure_while_formatting_or_redacting_does_not_escape(
     monkeypatch: pytest.MonkeyPatch,
     breaker: Callable[[pytest.MonkeyPatch], None],
     trigger: Callable[[BaseException], None],
-    expected_stderr: str,
 ) -> None:
     install_excepthooks()
     breaker(monkeypatch)
@@ -377,21 +402,20 @@ def test_a_failure_while_formatting_or_redacting_does_not_escape(
 
 
 @pytest.mark.parametrize("breaker", FORMAT_OR_REDACT)
-@pytest.mark.parametrize(("trigger", "expected_stderr"), ENTRY_POINTS)
+@pytest.mark.parametrize("trigger", ENTRY_POINTS)
 @pytest.mark.req("AC-5")
 def test_a_failure_while_formatting_or_redacting_leaves_only_the_fixed_stderr_output(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     breaker: Callable[[pytest.MonkeyPatch], None],
     trigger: Callable[[BaseException], None],
-    expected_stderr: str,
 ) -> None:
     install_excepthooks()
     breaker(monkeypatch)
 
     trigger(secret_error())
 
-    assert capsys.readouterr().err == expected_stderr
+    assert capsys.readouterr().err == STDERR_OF[trigger]
 
 
 @pytest.fixture
@@ -401,14 +425,13 @@ def debug_log(caplog: pytest.LogCaptureFixture) -> pytest.LogCaptureFixture:
 
 
 @pytest.mark.parametrize("breaker", FORMAT_OR_REDACT)
-@pytest.mark.parametrize(("trigger", "expected_stderr"), ENTRY_POINTS)
+@pytest.mark.parametrize("trigger", ENTRY_POINTS)
 @pytest.mark.req("AC-5")
 def test_an_unavailable_traceback_is_logged_as_the_placeholder(
     monkeypatch: pytest.MonkeyPatch,
     debug_log: pytest.LogCaptureFixture,
     breaker: Callable[[pytest.MonkeyPatch], None],
     trigger: Callable[[BaseException], None],
-    expected_stderr: str,
 ) -> None:
     install_excepthooks()
     breaker(monkeypatch)
@@ -419,14 +442,13 @@ def test_an_unavailable_traceback_is_logged_as_the_placeholder(
 
 
 @pytest.mark.parametrize("breaker", FORMAT_OR_REDACT)
-@pytest.mark.parametrize(("trigger", "expected_stderr"), ENTRY_POINTS)
+@pytest.mark.parametrize("trigger", ENTRY_POINTS)
 @pytest.mark.req("AC-5")
 def test_an_unavailable_traceback_leaves_no_sentinel_in_the_log(
     monkeypatch: pytest.MonkeyPatch,
     debug_log: pytest.LogCaptureFixture,
     breaker: Callable[[pytest.MonkeyPatch], None],
     trigger: Callable[[BaseException], None],
-    expected_stderr: str,
 ) -> None:
     install_excepthooks()
     breaker(monkeypatch)
@@ -437,13 +459,12 @@ def test_an_unavailable_traceback_leaves_no_sentinel_in_the_log(
 
 
 @pytest.mark.parametrize("breaker", LOGGER_OR_STDERR)
-@pytest.mark.parametrize(("trigger", "expected_stderr"), HOOK_ENTRIES)
+@pytest.mark.parametrize("trigger", HOOK_TRIGGERS)
 @pytest.mark.req("AC-5")
 def test_a_failing_logger_or_stderr_does_not_escape_a_hook(
     monkeypatch: pytest.MonkeyPatch,
     breaker: Callable[[pytest.MonkeyPatch], None],
     trigger: Callable[[BaseException], None],
-    expected_stderr: str,
 ) -> None:
     install_excepthooks()
     breaker(monkeypatch)
@@ -451,17 +472,115 @@ def test_a_failing_logger_or_stderr_does_not_escape_a_hook(
     trigger(secret_error())  # an escaping exception fails the test
 
 
-@pytest.mark.parametrize(("trigger", "expected_stderr"), HOOK_ENTRIES)
+@pytest.mark.parametrize("trigger", HOOK_TRIGGERS)
 @pytest.mark.req("AC-5")
 def test_a_failing_logger_does_not_change_what_a_hook_prints(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     trigger: Callable[[BaseException], None],
-    expected_stderr: str,
 ) -> None:
     install_excepthooks()
     break_logger(monkeypatch)
 
     trigger(secret_error())
 
-    assert capsys.readouterr().err == expected_stderr
+    assert capsys.readouterr().err == STDERR_OF[trigger]
+
+
+# ------------------------------------------- an interrupt or exit inside a hook (QUA-31, D-49)
+# The hooks catch ``BaseException`` on purpose: a ``KeyboardInterrupt`` or ``SystemExit`` raised
+# inside them would otherwise make CPython print the original exception, unredacted. The log
+# filter and its traceback helper catch ``Exception`` only, so Ctrl+C during logging still stops
+# the run (the last tests below).
+BASE_EXCEPTIONS = [
+    pytest.param(KeyboardInterrupt, id="keyboard-interrupt"),
+    pytest.param(SystemExit, id="system-exit"),
+]
+
+
+def assert_nothing_escapes(trigger: Callable[[BaseException], None]) -> None:
+    """Run ``trigger``; whatever escapes it is a named failure, not a crash of the test run."""
+    try:
+        trigger(secret_error())
+    except BaseException as escaped:
+        pytest.fail(f"{type(escaped).__name__} escaped {trigger.__name__}")
+
+
+@pytest.mark.parametrize("exc_type", BASE_EXCEPTIONS)
+@pytest.mark.parametrize("breaker", [*FORMAT_OR_REDACT, *LOGGER_OR_STDERR])
+@pytest.mark.parametrize("trigger", HOOK_TRIGGERS)
+@pytest.mark.req("AC-5")
+def test_a_base_exception_inside_a_hook_does_not_escape(
+    monkeypatch: pytest.MonkeyPatch,
+    breaker: Callable[[pytest.MonkeyPatch, type[BaseException]], None],
+    trigger: Callable[[BaseException], None],
+    exc_type: type[BaseException],
+) -> None:
+    install_excepthooks()
+    breaker(monkeypatch, exc_type)
+
+    assert_nothing_escapes(trigger)
+
+
+FILTERED_LOGGER = "gmail_pdf.filter_under_test"
+
+
+@pytest.fixture
+def filtered_log() -> Iterator[io.StringIO]:
+    """The output of a logger whose only handler carries the redacting filter."""
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.addFilter(redaction.RedactingFilter())
+    log = logging.getLogger(FILTERED_LOGGER)
+    log.propagate = False
+    log.addHandler(handler)
+    yield stream
+    log.removeHandler(handler)
+
+
+@pytest.mark.parametrize("breaker", FORMAT_OR_REDACT)
+@pytest.mark.req("AC-3", "AC-8")
+def test_an_interrupt_while_sanitising_a_record_still_stops_the_logging_call(
+    monkeypatch: pytest.MonkeyPatch,
+    filtered_log: io.StringIO,
+    breaker: Callable[[pytest.MonkeyPatch, type[BaseException]], None],
+) -> None:
+    breaker(monkeypatch, KeyboardInterrupt)
+
+    with pytest.raises(KeyboardInterrupt):
+        try:
+            raise secret_error()
+        except RuntimeError:
+            logging.getLogger(FILTERED_LOGGER).exception("step failed")
+
+
+# ----------------------------------- what the filter falls back to when it fails (QUA-27, QUA-32)
+# Kept by the fallback, ``args`` would make ``Handler.handleError`` print them raw and
+# ``stack_info`` would be appended raw; no other test builds a record that carries either.
+FALLBACK_FIELDS = [
+    pytest.param({"args": (sentinels.CLIENT_SECRET,)}, id="args"),
+    pytest.param(
+        {"stack_info": f"Stack (most recent call last):\n  {sentinels.CLIENT_SECRET}"},
+        id="stack-info",
+    ),
+]
+
+
+@pytest.mark.parametrize("field", FALLBACK_FIELDS)
+@pytest.mark.req("AC-3")
+def test_the_filter_fallback_clears_args_and_stack_info(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    filtered_log: io.StringIO,
+    field: dict[str, object],
+) -> None:
+    monkeypatch.setattr(logging, "raiseExceptions", True)  # handleError prints what it could not
+    break_redact(monkeypatch)
+    record = logging.LogRecord(
+        FILTERED_LOGGER, logging.WARNING, __file__, 1, "value %s", None, None
+    )
+    vars(record).update(field)
+
+    logging.getLogger(FILTERED_LOGGER).handle(record)
+
+    assert sentinels.leaked(filtered_log.getvalue() + capsys.readouterr().err) == []
