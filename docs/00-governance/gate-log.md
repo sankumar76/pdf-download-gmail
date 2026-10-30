@@ -408,3 +408,29 @@ Follow-ups (not conditions):
 **Carried project-level conditions:** C19 (test plan) is evidenced by commit 62976ec on `docs/PGD-1-status-sprint-01`; master checks it at the next G7. C20 (#15 → PGD-15; #16 by sprint-02 G4) stays open.
 **Risks registered:** none new. RISK-005 is unchanged: the evidence improved (gitignore and file modes), but redaction (STORY-01.01) is not yet built. RISK-009 (unprotected downloads) is partly mitigated by `downloads/` in `.gitignore`.
 **Rationale:** Both mandatory items are met: three reports and no Blocker or Critical. QUA-15 is re-rated Major under the D-40 rule, because the code contradicts AC-4's explicit "never raises" guarantee, so it must be fixed before QA, as QUA-01 was. The other fixes are cheap. Two of them stop docstrings and test claims overstating the evidence (the recurring pattern on this project), and one closes a secret-in-git vector. The two architecture deviations are endorsed as stricter or harmless, but they contradict an Accepted ADR and the architecture text. Under D-44 the architect signs them off before G7 GO, consistent with D-42, and the documents follow in #20. G6 is not in `HUMAN_APPROVAL_POINTS`.
+
+### G6 exit check — STORY-01.02 (PGD-14) — 2026-10-30 — head `39e1f18`
+
+- **Ruling:** C21 and C22 are **closed**. A new condition, **C24** (QUA-21), must be fixed before In QA. The scope is fixed: the C24 delta may touch only `tests/e2e/test_gitignore_matching.py`. If the delta stays in scope, no G6 attempt 2 is needed.
+- **Evidence:**
+  - **Standards re-review: APPROVE.** STD-20, 22, 23 and 25 verified. STD-21 rebuttal accepted. New Info findings STD-27 and STD-28 (Jira c.10191).
+  - **Quality re-review 5708212916: APPROVE WITH COMMENTS.** QUA-15 (Major) verified by probe. QUA-16, QUA-17 and QUA-19 verified. New Minor QUA-21 (Jira c.10192).
+  - **CI and local run.** `gh api commits/39e1f18/check-runs` shows 10/10 success (run 41004166732). The orchestrator's local run: 387 passed, 99.42 %.
+  - **C22 closed.** The SA's comment [6515049452](https://github.com/sankumar76/pdf-download-gmail/pull/17#issuecomment-6515049452) acknowledges both points:
+    - STD-21: the `O_EXCL` + random name + `fsync` + `os.replace` sequence is now the required pattern for the token.
+    - STD-20: `paths.py` owns the private-file mechanics, and `auth.py` writes the token only through `paths.write_private_text`.
+    - It also sets a new `os.replace` allow-list: `paths.write_private_text`, `manifest.py`, and the `file_store` FAT fallback.
+    - The document changes go into #20.
+- **QUA-21 (Minor), `tests/e2e/test_gitignore_matching.py:69-78` → fix now (C24).**
+  - The defect: `isolated_env` passes inherited `GIT_INDEX_FILE`, `GIT_DIR` and similar variables to git. If the suite runs inside a git hook, the AC-5 test's `git add -f token.json` stages `token.json` into the outer repo's real index. The reviewer reproduced this with temp repos.
+  - Why fix now: that is the exact threat this story exists to prevent (a secret reaching a commit). It is also the same evidence class as QUA-16 and STD-22, which were ruled fix-now at attempt 1, and the fix is small and confined to one file.
+  - The fix: drop the repository-location variables (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_COMMON_DIR`, `GIT_NAMESPACE`, `GIT_CEILING_DIRECTORIES`, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`) and add the reviewer's regression test: with an inherited `GIT_INDEX_FILE`, the outer index stays unchanged.
+- **Info findings:**
+  - **STD-27** (`tests/unit/test_token_location_warning.py:122-130`, branching in a test): no action now. It is outside the C24 file scope. Whoever next edits that file splits the `ValueError` case into its own parametrized test.
+  - **STD-28** (`test_private_files.py` is 389 lines): no action now. The next addition to that file moves the AC-3 failure tests to `test_private_file_failures.py`.
+  - No issues created for either.
+- **C23 extended (scrum-master):** the STORY-01.04 Dev Context must also carry the SA rule from c.6515049452. `auth.py` writes the token only through `paths.write_private_text`. Any new caller outside `auth.py` needs SA acknowledgement under D-44.
+
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C24 | developer (fix); reviewer-quality (verifies in the QUA-21 thread) | PR #17: `tests/e2e/test_gitignore_matching.py` only | Strip the inherited git repository-location variables in `isolated_env`. Add the inherited-`GIT_INDEX_FILE` regression test. CI 10/10 on the new head. If any other file changes, or a new Blocker, Critical or Major is raised, the PR returns as G6 attempt 2. Within scope, the orchestrator moves PGD-14 to In QA once reviewer-quality replies Fixed | Before G7 starts (master confirms C21 and C24 as G7 check 0) |
