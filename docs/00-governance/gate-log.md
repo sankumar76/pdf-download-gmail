@@ -612,3 +612,85 @@ No Major or Minor finding is deferred, so no new tech-debt issue is needed. #23 
 - It is not Critical, so this is not a NO-GO: every case AC-5 lists passes, no real dependency is known to trigger it, production code registers no secret yet, and its trigger is far narrower than QUA-23's, which was itself Major.
 - RISK-005 has impact 5 and the fix is small. Leaving it would ship the redaction story knowing that one failure in a hook undoes it.
 - G6 is not in `HUMAN_APPROVAL_POINTS`.
+
+---
+
+## G6 – Peer Review — STORY-01.01 (PGD-13) — 2026-10-30 — attempt 3 (C27 verification failed)
+
+- **Decision:** CONDITIONAL GO, attempt 3. C27 is not closed. Under D-47 the PR returns as G6 attempt 3, loop 3 of 3. The story stays in Changes Requested and does not go to In QA. The label is what the checklist gives when no mandatory item fails; C28 is a **counted** loop and D-47's exemption does not apply to it (D-50)
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 3 (dev↔review loop 3 of 3, the last)
+- **Artefacts evaluated:**
+  - PR #22 `feat/PGD-13-redaction`, head `71b590e`, delta `146236f..71b590e`: exactly the four C27 files (master read `git diff --name-status`).
+  - Reviews 5717359480 (quality, REQUEST CHANGES) and 5717150462 (standards, APPROVE WITH COMMENTS), with inline QUA-31, QUA-32, QUA-33, STD-40..43, read with `gh api`. Threads r4427511853 (QUA-27, Not fixed) and r4427512278 (QUA-28, Verified fixed). Consolidated comment 6531333500.
+  - Performance review 5708338494 (attempt 1).
+  - Check runs on `71b590e`: 10/10 success, run 41108747121, read by master. `mergeable_state` clean; `main` is `27876b6`.
+  - Jira PGD-13 AC-1..8 and c.10222–10227.
+  - `gmail_pdf/redaction.py`, `gmail_pdf/cli/main.py`, `tests/unit/test_redaction_hooks.py` and the `hook_failure` row, read at `71b590e`. Architecture line 172. Coding Standards lines 10, 12 and 70.
+  - The reviewer's export of `redaction.py` is byte-identical to the worktree file (`cmp`).
+  - Master's own probes, below.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Quality and standards on `71b590e`; performance from attempt 1. Master timed the only hot path touched, see below |
+| 2 | Zero open Blocker/Critical | ✱ | ✅ | None raised. QUA-31 is not Critical: every case AC-5 and AC-8 list passes, and production code registers no secret yet |
+| 3 | Majors fixed or accepted | | ⚠️ | **QUA-31 Major, open, fix now (D-49).** QUA-27 Fixed for `Exception`, Not fixed against the C27 outcome |
+| 4 | C27 verification | | ❌ | QUA-27 not verified fixed. F2 and F5 survive, so "each guard removed in turn and a named test failing" is not met. QUA-28 and STD-38 closed |
+| 5 | ADR/architecture conformance (D-44) | | ✅ | Whitespace-stripped pattern identical to the SA ruling (both reviewers, by script). No new SA confirmation needed |
+| 6 | Findings cite file:line | | ✅ | All inline comments are anchored |
+| 7 | CI / G5 | | ✅ | CI 10/10 read by master; orchestrator rerun 621 passed, 99.70 %, ruff, mypy --strict, bandit clean |
+
+**Master's probes** (real child interpreters at `71b590e`, `-I -B`, sentinels counted on stdout plus stderr, 3.12.10 / 3.14.7; sentinel `SENTINEL-CLIENT-SECRET-0001`). "Fix" is `except BaseException` at lines 398 and 423 patched in memory; the branch and the worktree were not changed. `git status` of the worktree was unchanged afterwards.
+
+| # | Case | `71b590e` | Fix |
+|---|---|---|---|
+| P1 | Ordinary `RuntimeError` through the hook, real `interrupt_main()` after the fixed line | 1 / 2, "Original exception was:" | 0 / 0, exit 1, fixed line |
+| P2 | Non-`Exception` raised inside the hook, through `cli.main.main` | 3 / 4, raw | 0 / 0, exit 1 |
+| P3 | One real interrupt during `report_unexpected_failure`, through `main` | 0 / 0, `Run cancelled`, exit `0xC000013A` | same |
+| P4 | Two real interrupts, through `main`, timing forced | 1 / 2, raw | 0 / 0 |
+| P5 | Real interrupt inside `_unraisable_hook`, mid-run | run continues, 419 bytes of noise | run continues, 0 bytes |
+| P6 | `SystemExit(7)` inside `sys.excepthook` | 0 sentinels, exit 7 | 0 sentinels, exit 1 |
+| P7 | `SystemExit(7)` inside the worker hook | 0 sentinels, run continues | same |
+| P8 | Real interrupt in the filter, line 181 kept as `Exception` | not run | run stops, `Run cancelled` |
+| P8' | Same with line 181 also widened to `BaseException` | not run | **run continues: the Ctrl+C is lost** |
+| P9 | Non-`Exception` through `logger.exception`, main thread | 3 / 4, raw | 0 / 0, exit 1 |
+| P9b | Same in a worker thread | 1 / 1 | 0 / 0 |
+| P10 | Real interrupt delivered at `_handle_uncaught` entry, before the `try` (forced with `sys.settrace`) | 1 / 2, raw | **1 / 2, raw: not closed** |
+| P11 | `redact` fails, record with `args` and `stack_info`, raw second handler | 0 / 0; F2 2 / 4; F5 2 / 2 | not run |
+
+Limits of this evidence: the fix was patched in memory, not implemented. P4 and P10 force the timing. No physical key press was used. The first P11 run died on my own hand-built record (rc 1, no `CONTINUED`) and was discarded and repeated. Some counts differ from the reviewer's X-cases by one; the probe bodies differ and the outcome is the same. pytest was not run on the fix by master; the reviewer's scratch copy gave 621 passed.
+
+**Performance check:** `RedactingFilter.filter`, best of 7 runs of 20,000 records, two repeats on 3.12.10: 6.27 and 6.20 µs per record at `146236f`, 6.25 and 6.31 at `71b590e`. No change.
+
+**Dispositions**
+| Finding(s) | Severity | Disposition |
+|---|---|---|
+| QUA-31 `gmail_pdf/redaction.py:398, 423` | **Major** (confirmed, D-49) | **Fix now** (C28) |
+| QUA-27 | Major | **Fixed for `Exception`, Not fixed against the C27 outcome.** Closes with QUA-31 against the outcome restated in D-49. The thread stays open |
+| QUA-32 `redaction.py:183, 186` | Minor | **Fix now** (C28). Redaction path, and C27 asked for it |
+| STD-41 `tests/unit/test_redaction_hooks.py:371, 411, 429, 446` | Minor | **Fix now** (C28). Same lines as the new breakers, and a deferral would cost more |
+| QUA-33 `tests/unit/test_sentinel_matrix.py:263` | Info | **Fix now** (C28). Marker line. A row that can silently become a no-op is not left on a security story |
+| STD-40 `redaction.py` 453, `test_redaction_hooks.py` 467 lines | Minor | **Inline justification now** (C28), as Coding Standards line 10 allows. Splitting is **not allowed in this loop**. The test-file split is deferred to STORY-01.04 (TD-B) |
+| STD-42 `redaction.py:146` | Info | Move the constant in C28, one line |
+| STD-43 `redaction.py:162, 172, 433` | Info | Absorbed by the QUA-31 docstrings |
+| QUA-28, STD-38 | Minor | **Closed**, verified by the reviewers |
+| STD-39, QUA-29, QUA-30 | Info | No action, as at attempt 2 |
+| Residual: real interrupt at hook entry (P10), P4 class | Not a finding | **Accepted residual** until STORY-06.02 (D-49, TD-A). Reproducing it is not a finding |
+| `main`'s `except Exception` block interrupted: exit `0xC000013A`, not 1 (P3) | Not a finding | Windows, AC-8 edge, no sentinel. Note on TD-A |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C28 | developer (fix); orchestrator, reviewer-quality, reviewer-standards (verify); solution-architect (acknowledgement) | PR #22: `gmail_pdf/redaction.py`, `tests/unit/test_redaction_hooks.py`, `tests/unit/test_redaction_logging.py`, `tests/unit/test_sentinel_matrix.py` only; no new file; at most two commits, then head H is frozen | (1) **QUA-31:** `except BaseException` at lines 398 and 423 with the reason inline; nothing else widens; lines 163 and 181 stay `except Exception`. Docstrings at 159, 172, 433 and PR deviation 7 claim exactly the outcome restated in D-49, including the entry-window limit. (2) **Tests:** breakers raising `KeyboardInterrupt` and `SystemExit` over the three hooks, wrapped so a failure is a named `pytest.fail`; a test that a `KeyboardInterrupt` during formatting or `redact` still leaves `logger.*`. (3) **QUA-32:** one parametrised test, F2 and F5 must fail it. (4) **STD-41:** `trigger` alone in the shared lists, a mapping for the two stderr tests. (5) **QUA-33:** marker in the child, asserted; T1 must fail. (6) **STD-40:** one sentence of justification in each file. (7) **STD-42:** move the constant. **Verified by:** orchestrator: diff `71b590e..H` within the four files, local rerun, ruff, mypy --strict, bandit, CI 10/10 from check runs on H, merge state clean, tested `main` SHA compared (RISK-023). reviewer-quality, fresh export of H, one run: all probes X1..X17 and P4 on 3.12.10 and 3.14.7, 0 sentinels; Q1, Q2 (398, 423 back to `Exception`), Q3, Q4 (181, 163 widened), F2, F5, T1 each fail a named test; the full set G1..G8, F1..F6, M1..M9, N1..N8, D1 still fails; replies in the QUA-27, QUA-31, QUA-32 threads. reviewer-standards: diff `71b590e..H`; STD-40..43; each broad except carries a reason. solution-architect: one PR comment before G7 GO acknowledging STORY-06.02 as the closure of the residual; not part of the loop. reviewer-performance: not needed. **Clean:** the orchestrator moves PGD-13 to In QA, with no further master decision at G6. **Failure:** see D-50: Santhosh, before any developer run | Before G7 starts (master confirms C28 as G7 check 0); QA tests H only |
+| C29 | reviewer-quality (TD-A), reviewer-standards (TD-B), scrum-master (link, plan row) | GitHub tech-debt issues; STORY-06.02 and STORY-01.04; `sprint-01-plan.md` follow-ups | **TD-A → STORY-06.02:** real interrupt at hook entry (P10, P4 class); SIGINT sets the flag so no `KeyboardInterrupt` reaches a hook; test both presses; note the P3 exit code. **TD-B → STORY-01.04:** split `tests/unit/test_redaction_hooks.py` under 400 lines before that story's G5. Both linked by the scrum-master | Sprint-02 G4 |
+
+**Risks registered:** RISK-005 note added. No new risk.
+
+**Rationale:**
+- Both mandatory items are met, so the checklist gives CONDITIONAL GO, as D-47 said it would on this kind of evidence. Same evidence, same label, whatever the loop count.
+- The likelihood is low and was weighed: a real leak needs a failure carrying a secret, plus a signal or a non-`Exception` inside a window of milliseconds. D-40, D-45 and D-46 do not turn on likelihood. QUA-27's triggers were contrived too, and it was Major. Rating this Minor would give a different answer for the same pattern, in the loop where it would be convenient.
+- D-47 is met on two independent limbs: a new Major and a failed verification. A lower rating of QUA-31 would not have changed the result.
+- The fix does not close everything. P10 shows that no `except` clause reaches an interrupt delivered before the `try` starts. Claiming otherwise would repeat the over-claim that C27 was meant to end, so the docstrings state the limit and D-49 accepts it.
+- G6 is not in `HUMAN_APPROVAL_POINTS`. The human path opens only if C28 fails (D-50).
+
+**Posted:** PR #22 comment 6531522614; Jira PGD-13 c.10228.
