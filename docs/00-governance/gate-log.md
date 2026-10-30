@@ -206,3 +206,153 @@ Follow-ups (not conditions):
 
 **Risks registered:** RISK-020 (interim CLI strings from A-5 ship in v0.9.0 if the removal ACs are not drafted). Re-assessed: RISK-010 (enablers add about 16 R1 points; sprint 01 commits 29 of an assumed 30; score unchanged), RISK-014 (PD-17 rewords NFR-009, so P drops from 4 to 2; open until the W1 benchmark measures the 2 KB figure), RISK-007 (CC-02/C12 noted).
 **Rationale:** All three mandatory G4 items have Jira- and file-level evidence. The consistency report has 0 Critical issues. All seven sprint-01 stories are READY under the DoR, and master's full read of three of them found every DoR item met. Every story has a parent epic and an FR/NFR trace, with sampled goal → FR → story → AC → test chains intact. G3 conditions C7–C10 are closed, measured against the current standards rulings (D-30..D-32), which superseded the D-25/D-26 wording in C10. The ⚠️ items are an open Major (CC-02) that touches only a held story outside sprint 01, Minor documentation drift and C11, which is open by design. None of them puts users, data or correctness at risk in sprint 01, so each carries an owner and a due gate. G4 is not in `HUMAN_APPROVAL_POINTS`, so no human approval is needed.
+
+---
+
+## G6 – Peer Review — STORY-02.01 (PGD-12) — 2026-10-29
+
+- **Decision:** CONDITIONAL GO (story goes to **Changes Requested** for the fix-now list; it does not enter QA until C15 is closed)
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1 (dev↔review loop 1 of 3)
+- **Artefacts evaluated:** PR #6 `feat/PGD-12-walking-skeleton`, head `99979e7`, base `main` `50d2385` (34 new files, 9 commits). Reviews: standards [5706665315](https://github.com/sankumar76/pdf-download-gmail/pull/6#pullrequestreview-5706665315), quality [5706676804](https://github.com/sankumar76/pdf-download-gmail/pull/6#pullrequestreview-5706676804), performance [5706701035](https://github.com/sankumar76/pdf-download-gmail/pull/6#pullrequestreview-5706701035); 34 inline review threads (all read; all unresolved, none outdated); consolidated comment [6511894214](https://github.com/sankumar76/pdf-download-gmail/pull/6#issuecomment-6511894214). Check runs for `99979e7`: 10/10 success (run 40978322562). Jira PGD-12 (description, AC-1..9, 10 sub-tasks Done, status In Review), comments 10140–10144. `tests/unit/test_import_boundaries.py` read in full and QUA-01 reproduced by master. `gmail_pdf/**/__init__.py` (no imports). `pyproject.toml:35`; ADR-002 L30; EPIC-02 L51, EPIC-03 L41–44; reviewer severity scale (`.claude/agents/review/reviewer-quality.md` L63–66); `definition-of-done.md` §Peer Review
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present (standards, quality, performance) | ✱ | ✅ | Three submitted PR reviews on `99979e7` (event COMMENT under `single-token`, verdict in body): standards APPROVE WITH COMMENTS, quality REQUEST CHANGES, performance APPROVE WITH COMMENTS. Hand-offs PGD-12 c.10141–10143. Labels per playbook §5.3 |
+| 2 | Zero open Blocker/Critical findings | ✱ | ✅ | 0 Blocker and 0 Critical in all three reviews. **QUA-01 severity ruled Major, not Critical** (D-40): the rubric's Critical is "AC not met". AC-6's rules are enforced for every absolute import in every module and for relative imports in every non-`__init__` module; the negative tests fail as required; and the delivered package gives the correct result, because no `gmail_pdf/**/__init__.py` contains any import (master checked). The defect is a gap in future enforcement for one import form, which is Major ("should fix before merge"). Not deferrable: see #3 |
+| 3 | Major findings fixed or explicitly accepted with a logged reason | | ⚠️ | **QUA-01** (`tests/unit/test_import_boundaries.py:87-102`): reproduced by master: `check_tree({"gmail_pdf.app": "from ..infra import gmail_gateway"})` → `[]` (false negative); `check_tree({"gmail_pdf.domain": "from . import errors"})` → 2 violations (false positive); `violations_in(..., is_package=True)` is correct. **Not accepted** → fix in this PR (C15). **PERF-01** (`tests/fakes/fake_gmail.py:72-77`): **accepted as deferred** (D-41) → [#9](https://github.com/sankumar76/pdf-download-gmail/issues/9), target STORY-02.08 before its G5 |
+| 4 | Findings cite file:line | | ✅ | All 34 inline threads anchor to path + line; the consolidated table cites file:line for every Major and Minor; QUA-12 is PR-level by nature |
+| 5 | Every AC has implementation evidence (quality AC table) | | ✅ | Quality review AC table: AC-1..5, 7, 8, 9 Met; AC-6 met with defect (QUA-01). Sub-tasks PGD-19..28 Done. **AC-3 / QUA-12 ruled met** (D-43): the AC's outcome is that every listed stage executes on a PR with no secrets and the run is green; the first run on the PR was red only on the three Windows test legs from a test-helper path lookup, fixed in `99979e7`, and the run on the reviewed head is green on all 10 jobs with every stage present. QA re-verifies AC-3 on the final head because C15 changes `ci.yml` |
+| 6 | Dependency control (NFR-023, Coding Standards §5) | | ⚠️ | STD-08: `tomli; python_version < '3.11'` (`pyproject.toml:35`) is not on the ADR-002 dev list (ADR-002 L30) and has no architect approval on record. Low risk (dev-only, MIT, pip-audit clean, disclosed). Ruling D-42: approval now (C16), ADR-002 amendment as follow-up [#14](https://github.com/sankumar76/pdf-download-gmail/issues/14) |
+| 7 | Security hygiene | | ✅ | No secrets (standards review: `example.com` / RFC 5737 fixtures; only the automatic `GITHUB_TOKEN`; SHA-pinned actions; `permissions: contents: read`); `security` job green (pip-audit, bandit, gitleaks, allow-list test). Fake-mailbox hook gated by two env vars (AC-9). QUA-09 overclaim on DNS egress → fix now (C15) so the NFR-014 evidence is not overstated |
+| 8 | G5 evidence consistent | | ✅ | 131 passed, 98.80 % (gate 80 %, D-30), ruff and `mypy --strict` clean; reproduced by reviewer-quality on Windows 11 / 3.12.10 and by the orchestrator (c.10140); CI 10/10 green |
+
+**Dispositions (every Major and Minor finding)**
+
+| Finding(s) | Severity | Disposition | Where |
+|---|---|---|---|
+| QUA-01 | Major | **Fix in this PR** (carry `is_package` through `package_sources`/`check_tree`; add the false-negative and false-positive tests) | C15 |
+| PERF-01 (+ PERF-05 Info) | Major | **Defer**, accepted (D-41) | [#9](https://github.com/sankumar76/pdf-download-gmail/issues/9) → STORY-02.08 |
+| STD-10 = QUA-08; STD-09 | Minor | **Fix in this PR** (production code in `gmail_pdf/bootstrap.py`: narrow the `ModuleNotFoundError` catch; translate `OSError`/`ValueError` to `AdapterUnavailableError` without echoing the path) | C15 |
+| STD-15 = PERF-04; QUA-10 | Minor | **Fix in this PR** (`timeout-minutes` on every job; `cancel-in-progress` only for `pull_request`) — protects the `main` baseline before the first code merge | C15 |
+| QUA-02, QUA-04 | Minor | **Fix in this PR** (validate `times`/`skip`; reject `OR`/`AND`/braces/parentheses/quotes as the docstring promises) | C15 |
+| QUA-07, STD-05 | Minor | **Fix in this PR** (same test: per-mode exact assertion on the unwidened query, parametrised, no branching) | C15 |
+| QUA-09 | Minor | **Fix in this PR**: preferred, guard `getaddrinfo`/`gethostbyname`/`sendto` with the loopback check and install the guard in `pytest_configure`; acceptable, narrow the docstring to what is enforced and open a `follow-up` issue for the rest | C15 |
+| STD-01, STD-02, STD-04 | Minor | **Fix in this PR** (move the JSON persistence block to `tests/fakes/fake_gmail_json.py`; split `test_fake_gmail.py` by capability; one behaviour per test / parametrise with ids). Rationale: Coding Standards §1/§6 are written rules, the files will grow with #9–#13, and the split is mechanical now | C15 |
+| STD-03, STD-06, STD-07 | Minor | **Fix in this PR** (named defaults; typed helper instead of `type: ignore`; delete dead `noqa: ANN401`, justify the remaining ignores) | C15 |
+| STD-11 | Minor | **Fix in this PR** (move the subprocess tests to `tests/e2e/`; Architecture §10.1 is the layout every later story copies) | C15 |
+| STD-08 | Minor | **Split**: architect approval now; ADR-002 amendment deferred (D-42) | C16; [#14](https://github.com/sankumar76/pdf-download-gmail/issues/14) |
+| QUA-03 | Minor | **Defer** | [#11](https://github.com/sankumar76/pdf-download-gmail/issues/11) → STORY-02.02 (PGD-15), before its G5 |
+| QUA-05 | Minor | **Defer** | [#12](https://github.com/sankumar76/pdf-download-gmail/issues/12) → STORY-03.03 (EPIC-03, AA-02/AR-05), before its G5 |
+| QUA-06 | Minor | **Defer** | [#13](https://github.com/sankumar76/pdf-download-gmail/issues/13) → STORY-03.01 (PGD-18), before its G5 |
+| PERF-02, PERF-03 (+ PERF-06 Info) | Minor | **Defer** | [#10](https://github.com/sankumar76/pdf-download-gmail/issues/10) → STORY-02.08 |
+| Info: STD-12, 13, 14, 16, 17; QUA-11, QUA-12; PERF-05, PERF-06 | Info | No action required. STD-12/13 optional in this PR; STD-14 when `ExitCode` lands; STD-16 developer may open a `follow-up`; QUA-11 tracked in #8; QUA-12 ruled (D-43); PERF-05/06 folded into #9/#10 | — |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C15 | developer (fix); reviewer-quality and reviewer-standards (delta re-review); reviewer-performance only for PERF-04 if it wishes | PR #6 (`tests/unit/test_import_boundaries.py`, `gmail_pdf/bootstrap.py`, `tests/unit/test_bootstrap.py`, `.github/workflows/ci.yml`, `tests/fakes/fake_gmail.py`, new `tests/fakes/fake_gmail_json.py`, `tests/unit/test_fake_gmail*.py`, `tests/support/socket_guard.py`, `tests/conftest.py`, `tests/e2e/`) | Fix QUA-01 (Major) and Minor STD-01..07, STD-09, STD-10/QUA-08, STD-11, STD-15/PERF-04, QUA-02, QUA-04, QUA-07, QUA-09, QUA-10 as in the dispositions table. Reply "Fixed" in each thread. G5 loop green on the new head (pytest, coverage ≥ 80/80, ruff, `mypy --strict`, CI 10/10). Reviewers re-review the new diff only and reply in the original threads. The orchestrator moves PGD-12 to In QA when every C15 thread is marked Fixed and the delta re-reviews raise no new Blocker/Critical/Major; any new Blocker/Critical/Major returns to master as G6 attempt 2 | Before G7 starts (master confirms closure as the first G7 check) |
+| C16 | solution-architect | PR #6 comment; ADR-002 (follow-up #14) | STD-08: post approval or rejection of `tomli` (Python < 3.11, dev-only) on PR #6; if rejected, the developer removes it under C15. Amend the ADR-002 dev list via #14 | Approval: before G7 GO of PGD-12. ADR amendment: sprint-02 G4 |
+| C17 | scrum-master (product-owner validates) | Jira PGD-15, PGD-18; future STORY-02.08 and STORY-03.03 | Link #11 in PGD-15 and #13 in PGD-18 (sub-task or Dev Context line; no AC change needed, test infrastructure). When drafting STORY-02.08 add #9/#10 as ACs; when drafting STORY-03.03 add #12. Each must close before the target story's G5 | PGD-15/PGD-18 links: before either story goes In Progress. Drafted stories: the G4 of the sprint that contains them |
+
+Follow-ups (not conditions):
+- qa-engineer (G7): verify AC-3 and AC-6 on the **final** head, because C15 changes `ci.yml` and the boundary test; include the QUA-01 false-negative case as AC-6 evidence.
+- orchestrator: transition PGD-12 to **Changes Requested** (CLAUDE.md §4); brief the developer with the C15 list. `MERGE_POLICY = docs-auto, code-human`: PR #6 waits for the delivery lead after G7.
+- Standards recommendation (D-40): reviewer severity scale to state that an AC whose outcome is delivered but whose enforcing check has a gap is Major; Critical is reserved for an AC outcome not delivered. Proposed to the delivery lead; standards are his to change.
+
+**Risks registered:** RISK-021 (deferred fake-fidelity gaps QUA-03/05/06 let product code pass against an over-permissive fake). Re-assessed: RISK-014 (PERF-01 adds a measurement-validity cause to the NFR-009 benchmark; mitigated by #9 in STORY-02.08; score unchanged at 4); RISK-016 (QUA-05: the AA-02 fallback is untestable until #12 closes; score unchanged).
+**Rationale:** Both mandatory G6 items have PR-level evidence: three reports exist and none has an open Blocker or Critical finding. QUA-01 stays Major because AC-6's outcome is delivered for the current package (master reproduced the defect and confirmed no `__init__` module imports anything), but the AC says the test *enforces* the layering, so the gap is not accepted and must be fixed before QA. PERF-01 is accepted as deferred with a logged reason, because PGD-12 measures no NFR and its only consumer is STORY-02.08. The cheap Minor items in production code, CI and test conventions are fixed now, and the fake-fidelity items move to the first story that depends on each. G6 is not in `HUMAN_APPROVAL_POINTS`, so no human approval is needed.
+
+---
+
+## G6 – Peer Review — STORY-02.01 (PGD-12) — 2026-10-29 — attempt 2
+
+- **Decision:** CONDITIONAL GO. One docstring-level fix (C18) is needed before QA starts. No further G6 attempt is needed unless the C18 delta goes beyond the scope stated below
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 2 (fix loop 1 of 3 completed; C18 is a single-file follow-up within loop 2)
+- **Artefacts evaluated:** PR #6, head `5f67b59` (16 commits, 42 files, base `50d2385`); fix commits 3b12e14, 1f21246, d729d6c, a42ea30, 1fd8de8, e4bce0c, 5f67b59. Standards re-review [5707087304](https://github.com/sankumar76/pdf-download-gmail/pull/6#pullrequestreview-5707087304) (APPROVE); quality re-review [5707092105](https://github.com/sankumar76/pdf-download-gmail/pull/6#pullrequestreview-5707092105) (APPROVE WITH COMMENTS); performance review 5706701035 (unchanged, APPROVE WITH COMMENTS; its items deferred to #9/#10); the thread replies and the new inline comments QUA-13, QUA-14, STD-18 and STD-19 (read with `gh api`). Check runs for `5f67b59`: 10/10 success (run 40985658014). PR body Dev Record with findings table. SA ruling, PR comment [6512025330](https://github.com/sankumar76/pdf-download-gmail/pull/6#issuecomment-6512025330). Jira PGD-12 c.10147, 10150–10158. Remote links on PGD-15 (id 10000 → #11) and PGD-18 (id 10001 → #13), read with `listJiraIssueRemoteIssueLinks`. `docs/05-backlog/sprint-01-plan.md` working-tree diff (+10 lines with the #9/#10/#12 ACs; **uncommitted**). Local checkout at `5f67b59`: master re-ran the QUA-01 probe and read the `tests/support/socket_guard.py` docstring
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Attempt-1 reports plus the delta re-reviews from standards and quality on `5f67b59`. Performance had no fix-now item of its own; PERF-04 = STD-15 was verified by standards. Labels: `review:standards-approved`, `review:quality-approved`, `review:performance-approved` |
+| 2 | Zero open Blocker/Critical findings | ✱ | ✅ | Re-reviews: standards 0/0/0/0 + 2 Info; quality 0/0/0 + 1 Minor + 1 Info. No Blocker or Critical has ever been open on this PR |
+| 3 | Major findings fixed or accepted | | ✅ | **QUA-01 fixed** (3b12e14). Master re-ran the probe on the `5f67b59` checkout: `check_tree` now takes `(source, is_package)`; `{"gmail_pdf.app": ("from ..infra import gmail_gateway", True)}` gives 2 violations (was `[]`); `{"gmail_pdf.domain": ("from . import errors", True)}` gives `[]` (was 2 false positives); the real package gives `[]`. Two regression tests were added. reviewer-quality also verified it. **PERF-01** remains accepted as deferred (D-41, #9) |
+| 4 | C15 closed (fix-now list) | | ✅ | All 17 IDs (19 with aliases) have a "Fixed in <sha>" reply. The reviewers verified each one: standards marked STD-01..07, 09, 10, 11 and 15 Fixed; quality marked QUA-01, 02, 04, 07, 08, 09 and 10 Verified fixed. Size: no file in `gmail_pdf/` or `tests/` is over 400 lines (`fake_gmail.py` 387). G5 re-check: 265 passed, 98.90 %, diff-cover 100 % (81/81), ruff and `mypy --strict` clean, CI 10/10. **Closed** |
+| 5 | C16 closed (STD-08 `tomli`) | | ✅ | The solution-architect **APPROVED** it (PR comment 6512025330; Jira c.10151), with reasons and rejected alternatives. Standards marks STD-08 "Rebuttal accepted". The ADR-002 amendment remains in #14 (sprint-02 G4). **Closed** |
+| 6 | C17 closed (deferred items linked) | | ✅ | PGD-15 has a remote link to #11 and PGD-18 a remote link to #13, both "must be addressed before G5". The #9/#10 ACs (a)–(g) for STORY-02.08 and the #12 AC for STORY-03.03 are in the `sprint-01-plan.md` follow-ups, but that file is **uncommitted** (held for the sprint-close status PR, c.10150). Closed for G6. The orchestrator must commit the plan before the sprint-02 G4, where master checks it (RISK-020/021 pattern) |
+| 7 | New findings on the delta | | ⚠️ | **QUA-13 (Minor)**, `tests/support/socket_guard.py:4-10`. Master read the docstring at `5f67b59`: it still says "so no DNS query leaves the machine", but `gethostbyname_ex`, `gethostbyaddr` and `getnameinfo` are neither guarded nor on the "Not covered, by design" list. This is the same over-claim of NFR-014 evidence that attempt 1 ruled fix-now (QUA-09: "acceptable: narrow the docstring"), so for consistency it is **fix now** → C18. QUA-14, STD-18 and STD-19 are Info → see the dispositions table |
+| 8 | ACs and security | | ✅ | Quality: all 9 ACs met, and AC-6's defect is fixed. The security job is green; no secrets; no new dependency in the delta (standards: no `open`/`os.replace`/`unlink` added in `gmail_pdf/`; no pragma) |
+
+**Dispositions (new findings on the delta)**
+
+| Finding | Severity | Disposition |
+|---|---|---|
+| QUA-13 `tests/support/socket_guard.py:4-10` | Minor | **Fix before G7 (C18).** Minimum: add `gethostbyname_ex`, `gethostbyaddr` and `getnameinfo` to the "Not covered, by design" paragraph, or reword the "no DNS query leaves the machine" claim to name only the guarded entry points. Alternatively, guard all three with `_check_host` (for `getnameinfo`, check `sockaddr[0]`) and add a `pytest.raises(NetworkAccessError)` test for each. No tech-debt issue |
+| QUA-14 `gmail_pdf/bootstrap.py:55-60` | Info | No action required: it affects only hand-written test fixture files, and the hook is gated by two env vars. Optional in the C18 commit: validate `isinstance(resource.get("id"), str)` in `tests/fakes/fake_gmail_json.py::from_json_dict` and raise `ValueError` (with a test), so the existing translation covers it |
+| STD-18 `tests/support/socket_guard.py:63` | Info | No action required. Optional in the C18 commit, because it is in the same file: one `_refuse(host)` helper, keeping the `None`/empty-host difference explicit |
+| STD-19 `tests/unit/test_fake_gmail_canonical.py:84, 97` | Info | No action required. The conditional on `bounds` is a small oracle, and the single-assertion structure asked for by STD-05 is met |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C18 | developer (fix); reviewer-quality (replies Fixed/Not fixed in the QUA-13 thread); reviewer-standards only if STD-18 is included | PR #6: `tests/support/socket_guard.py` (plus `tests/unit/test_socket_guard.py` if guarding; plus `tests/fakes/fake_gmail_json.py` and its test if the optional QUA-14 change is taken) | Fix QUA-13 as in the dispositions table. CI 10/10 on the new head. **Scope rule:** the delta may touch only the files named here. If it touches `gmail_pdf/`, `.github/` or any other file, or the reviewer raises any new Blocker/Critical/Major, it returns to master as G6 attempt 3. Within scope, the orchestrator moves PGD-12 to In QA once the reviewer marks QUA-13 Fixed and CI is green | Before G7 starts. Master confirms C15 and C18 as the first G7 check |
+
+Carried, not conditions: qa-engineer re-verifies **AC-3** (`ci.yml` changed in 5f67b59: timeouts and concurrency) and **AC-6** (boundary test changed in 3b12e14) on the final head, as directed at attempt 1. The orchestrator commits `docs/05-backlog/sprint-01-plan.md` (C17 evidence) with the governance files.
+
+**Condition status:** C15 ✅ closed · C16 ✅ closed · C17 ✅ closed (plan file still to be committed) · C18 ⏳ open (new).
+**Risks registered:** none new. RISK-014, RISK-016 and RISK-021 are unchanged; their mitigations (#9–#13) are now linked to target stories.
+**Rationale:** Both mandatory items are met, the one Major (QUA-01) is fixed and independently re-verified by master, and C15–C17 are closed with PR, CI and Jira evidence. The only open item is that the NFR-014 egress-guard docstring still claims more than the code enforces. Attempt 1 ruled this exact over-claim fix-now (QUA-09), so the same evidence gives the same decision. It is a one-paragraph change with no runtime effect, so it is a scoped pre-G7 condition, not another full review loop. G6 is not in `HUMAN_APPROVAL_POINTS`; under `MERGE_POLICY = docs-auto, code-human`, the delivery lead merges PR #6 after G7.
+
+---
+
+## G7 – QA Acceptance — STORY-02.01 (PGD-12) — 2026-10-29
+
+- **Decision:** GO (ACCEPT). The story may move to Done. **Merging PR #6 needs the delivery lead** (`MERGE_POLICY = docs-auto, code-human`)
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - `docs/07-qa/PGD-12-test-report.md` (commit 88bf54d, read in full); code under test `f85d267`.
+  - C18 diff `5f67b59..f85d267`: 4 files, all under `tests/`. These are `socket_guard.py`, `test_socket_guard.py`, `fake_gmail_json.py` and `test_fake_gmail_canonical.py`, which now holds the JSON tests after the STD-02 split.
+  - reviewer-quality "Verified fixed" replies r4419691700 (QUA-13) and r4419691990 (QUA-14).
+  - `gh api commits/f85d267/check-runs`: 10/10 success (run 40987328532).
+  - PR #6 comment 6513098595 (QA), Jira PGD-12 c.10166, Jira Bugs PGD-63 and PGD-64 (Low priority, `sev-4`, To Do), and GitHub #15 and #16 (`bug`, `sev-4`, `ai-delivery`).
+  - `socket_guard.py` docstring at HEAD.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 0 | G6 conditions C15–C18 closed | | ✅ | C15, C16 and C17 closed at G6 attempt 2. **C18 closed:** the delta stayed in scope (tests only; `gmail_pdf/` and `.github/` untouched). The docstring now lists all five resolver entry points as guarded, and `gethostbyname_ex`, `gethostbyaddr` and `getnameinfo` are wrapped and tested. reviewer-quality verified the fix with a stubbed-resolver probe (r4419691700), and the optional QUA-14 change was also verified (r4419691990). No new findings. CI 10/10 on `f85d267` |
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | Test report matrix L22–30: all 9 ACs pass, each with test IDs, technique and fresh evidence. **AC-3:** 10/10 on `f85d267`, with each stage checked against the AC text (D-43). **AC-6:** the QUA-01 `__init__` cases were re-checked, and a mutation of the real tree turns the shipped test red. **AC-5:** mutation with `requests` and `PySide6-Essentials` turns the shipped tests red. **AC-4:** CI `security` evidence only, because the advisory service needs the network; the requirements are unchanged since `6bb1da8`, and a re-run is due at G8. **AC-8:** 24 refusal probes plus a loopback positive control |
+| 2 | No open Sev-1/Sev-2 defects | ✱ | ✅ | Report L82: Sev-1 0, Sev-2 0, Sev-3 0, Sev-4 2. JQL `project = PGD AND issuetype = Bug` returns only PGD-63 and PGD-64, both priority Low with label `sev-4` |
+| 3 | Regression suite result recorded and green | ✱ | ✅ | 271/271 on Python 3.12.10 (four runs, per-file isolation, no flakiness); `--cov-fail-under=80` met at 98.90 %; diff-cover 100 %; ruff, `mypy --strict` and bandit clean (L37–47). The local 3.10 run (270/271) missed only the console-script test in an offline scratch venv without the editable install. That is the test's own "run `pip install -e .`" message, and CI `test (win-310)` is green on `f85d267`. Accepted as an environment artefact |
+| 4 | Exploratory testing notes present | | ✅ | Report L64–73: charter, 90-minute time box, areas covered, observations, 2 defects |
+| 5 | Accessibility checks for UI stories | | n/a | No UI in this story (L62). CLAUDE.md §9 is not applicable until R2 |
+| 6 | Security and scope | | ✅ | NFR-014 egress: all probes refused before sending (L56). NFR-015/012: no credentials in the diff; only `example.com`/`example.org`; gitleaks green. Error leakage: hook messages never echo the path (L58). Protected files untouched (L61) |
+
+**Defect dispositions**
+| Defect | Severity | Disposition |
+|---|---|---|
+| DEF-001 · [PGD-63](https://sankumar76.atlassian.net/browse/PGD-63) · [#15](https://github.com/sankumar76/pdf-download-gmail/issues/15): the hook and FakeGmail let crafted input escape as raw `RecursionError`, `ValueError` or `KeyError` | Sev-4 (test support) | **Keep open; do not fix in PR #6.** It fails no AC, affects only hand-written fixture files behind two env vars, and belongs with the fake-fidelity bundle (RISK-021). **Target:** PGD-15 (STORY-02.02), which already carries #11 in the same files, before its G5. scrum-master adds a remote link like C17 |
+| DEF-002 · [PGD-64](https://sankumar76.atlassian.net/browse/PGD-64) · [#16](https://github.com/sankumar76/pdf-download-gmail/issues/16): `socket.sendmsg(address)` is not guarded on Unix | Sev-4 (test support) | **Keep open; do not fix in PR #6.** `sendmsg` does not exist on Windows 11, the target OS (D-33). It is reachable only on the Ubuntu and macOS CI legs, and only through a deliberate call. **Target:** the next story that changes `tests/support/`, and no later than the sprint-02 G4, where master checks it. Until then the docstring's "every entry point" claim is one call too wide on POSIX. This is the third over-claim on this module (QUA-09, QUA-13, DEF-002), so the fix should also add `sendmsg` to the guard, or name it under "Not covered" |
+
+**Residual items**
+| Item | Disposition |
+|---|---|
+| `docs/07-qa/test-plan.md` does not exist (it carries the PQ-02/D-21 exit-code confirmation and the C12/CC-02 benchmark case) | **C19** (project level, not on PGD-12). Tracked item T-03 |
+| CI checks are not required on `main` (branch protection, #7) | **RISK-022** registered. Delivery-lead action; recommended before or with the PR #6 merge |
+| AC-6 cannot see dynamic imports (`importlib.import_module`, `__import__`) | **Accepted** as within AC-6, which specifies an AST walk. The application uses dynamic import only in the gated test hook, by design. Reviewers flag any new dynamic import in `gmail_pdf/`. No issue |
+| The hook's exception chain (`from exc`) still holds the mailbox path | No action for PGD-12. The path is a test fixture path, not a secret. The CLI's "no stack trace" rule (D-21) must hold when the hook is wired into CLI runs. qa-engineer adds this check to the test plan (C19) |
+| AC-4 was not re-run from the package index | Re-run `pip-audit -r requirements.txt` at G8 (master's G8 checklist). Add `-r requirements-dev.txt` when #14 lands |
+| PR head is now `88bf54d` (docs-only, the test report); its CI run 40989128456 was still in progress when this decision was taken | **Merge precondition:** before the delivery lead merges, all 10 CI jobs on the PR head must be green. The orchestrator confirms this in the approval request |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C19 | qa-engineer (with solution-architect for the C12 case) | `docs/07-qa/test-plan.md` | Write the project test plan from `docs/templates/test-plan.md`. It must contain the D-21 exit-code mapping confirmation (PQ-02; observed now: `--help` exits 0, an unknown argument exits 2), the ratio 0.6 benchmark case for CC-02/C12, a "no traceback, no fixture path on screen" check for the hook in CLI runs, and the G8 `pip-audit` re-run | The next story's G7 (PGD-13 or whichever reaches G7 first). Master checks it as G7 check 0 |
+| C20 | scrum-master | Jira PGD-15 (remote link to #15); sprint-02 plan | Link DEF-001 (#15, PGD-63) to PGD-15 "before G5". Schedule DEF-002 (#16, PGD-64) into the next story that changes `tests/support/`, or into sprint 02 | PGD-15 link: before PGD-15 goes In Progress. DEF-002: sprint-02 G4 |
+
+Follow-ups (not conditions):
+- qa-engineer: after this decision, move PGD-12 to Done (CLAUDE.md §4).
+- orchestrator: post the merge request to Santhosh (playbook §3.4) with the precondition above, and remove `gate:g6-changes` if it is still present. Commit the uncommitted governance files and `docs/05-backlog/sprint-01-plan.md` (C17 evidence). Optionally, before merging, ask Santhosh to configure branch protection (#7).
+
+**Risks registered:** RISK-022 (CI checks not required on `main`). RISK-005 re-assessed: the egress guard and the gitleaks/bandit/pip-audit stages are now evidenced (G6/G7 PGD-12), but redaction (STORY-01.01) is not yet built, so the score is unchanged. RISK-021 now also tracks DEF-001 and DEF-002.
+**Rationale:** All three mandatory G7 items have file-, CI- and Jira-level evidence. Every AC was verified on the final code with fresh runs, and the two gate-style ACs (5 and 6) were mutation-tested. There is no Sev-1, Sev-2 or Sev-3 defect, and the full regression is green locally and on all ten CI jobs. The two Sev-4 defects sit in test-support code, fail no AC and are scheduled with owners. The missing project test plan is a QA-process gap, not a defect in this story, so it is a condition on the next G7 (C19) and does not block PGD-12. G7 is not in `HUMAN_APPROVAL_POINTS`, but the code merge is human under `MERGE_POLICY`.
