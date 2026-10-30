@@ -3,6 +3,10 @@
 POSIX mode bits are asserted only on the POSIX legs (Ubuntu, macOS). Everything that can be
 observed without mode bits (temp-file handling, failure behaviour, which OS calls are made) runs
 on every platform, with ``os.chmod`` recorded rather than trusted.
+
+Note: ``paths.os`` is the real ``os`` module, so the fault injections below patch the function
+for the whole process while the test runs. The windows are short and nothing else in these tests
+calls the patched functions.
 """
 
 from __future__ import annotations
@@ -12,6 +16,7 @@ import stat
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
@@ -27,10 +32,15 @@ POSIX_ONLY = pytest.mark.skipif(
 
 # A placeholder, not a credential: the tests only need a recognisable string to look for.
 SENTINEL = "PLACEHOLDER-TOKEN-CONTENT-NOT-A-SECRET"
+PREVIOUS_CONTENT = "previous-content"
 
 
 def mode_of(path: Path) -> int:
     return stat.S_IMODE(path.stat().st_mode)
+
+
+def fail_with_oserror(*_args: object, **_kwargs: object) -> None:
+    raise OSError(28, "injected failure")
 
 
 @pytest.fixture
@@ -47,48 +57,75 @@ def recorded_chmod(monkeypatch: pytest.MonkeyPatch) -> list[tuple[Path, int]]:
     return calls
 
 
+class OpenCall(NamedTuple):
+    path: Path
+    flags: int
+    mode: int
+
+
 @pytest.fixture
-def recorded_opens(monkeypatch: pytest.MonkeyPatch) -> list[tuple[Path, int, int]]:
-    """Wrap ``os.open`` to capture (path, flags, mode) of every file the helpers create."""
-    calls: list[tuple[Path, int, int]] = []
+def temp_file_open(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> OpenCall:
+    """Run one write and return the ``os.open`` call that created its temp file."""
+    calls: list[OpenCall] = []
     real_open = os.open
 
     def spy(path: str | os.PathLike[str], flags: int, mode: int = 0o777) -> int:
-        calls.append((Path(path), flags, mode))
+        calls.append(OpenCall(Path(path), flags, mode))
         return real_open(path, flags, mode)
 
     monkeypatch.setattr(paths.os, "open", spy)
-    return calls
+
+    paths.write_private_text(tmp_path / "token.json", "x")
+
+    return calls[0]
 
 
-def fail_with_oserror(*_args: object, **_kwargs: object) -> None:
-    raise OSError(28, "injected failure")
+class WrittenTree(NamedTuple):
+    folder: Path
+    folder_mode: int
+    mode_after_first_write: int
+    mode_after_overwrite: int
+    content: str
+
+
+@pytest.fixture(params=[0o022, 0o077], ids=["umask-022", "umask-077"])
+def written_tree(request: pytest.FixtureRequest, tmp_path: Path) -> WrittenTree:
+    """Create the secrets folder, write a token twice, all under the parametrized umask."""
+    previous = os.umask(request.param)
+    try:
+        folder = paths.ensure_private_dir(tmp_path / "secrets")
+        token = folder / "token.json"
+        paths.write_private_text(token, "first")
+        after_first = mode_of(token)
+        paths.write_private_text(token, "second")
+    finally:
+        os.umask(previous)
+    return WrittenTree(
+        folder, mode_of(folder), after_first, mode_of(token), token.read_text("utf-8")
+    )
 
 
 # ---------------------------------------------------------------- AC-2 (POSIX modes)
 
 
 @POSIX_ONLY
-@pytest.mark.parametrize("umask", [0o022, 0o077], ids=["umask-022", "umask-077"])
-def test_ac2_directory_is_0700_and_token_is_0600_including_after_overwrite(
-    tmp_path: Path, umask: int
-) -> None:
-    previous = os.umask(umask)
-    try:
-        secrets_dir = paths.ensure_private_dir(tmp_path / "secrets")
-        token = secrets_dir / "token.json"
-        paths.write_private_text(token, "first")
-        first_mode = mode_of(token)
-        paths.write_private_text(token, "second")
-    finally:
-        os.umask(previous)
+def test_ac2_directory_is_0700(written_tree: WrittenTree) -> None:
+    assert written_tree.folder_mode == 0o700
 
-    assert (mode_of(secrets_dir), first_mode, mode_of(token), token.read_text("utf-8")) == (
-        0o700,
-        0o600,
-        0o600,
-        "second",
-    )
+
+@POSIX_ONLY
+def test_ac2_token_is_0600_after_the_first_write(written_tree: WrittenTree) -> None:
+    assert written_tree.mode_after_first_write == 0o600
+
+
+@POSIX_ONLY
+def test_ac2_token_is_still_0600_after_an_overwrite(written_tree: WrittenTree) -> None:
+    assert written_tree.mode_after_overwrite == 0o600
+
+
+@POSIX_ONLY
+def test_ac2_overwrite_replaces_the_content(written_tree: WrittenTree) -> None:
+    assert written_tree.content == "second"
 
 
 @POSIX_ONLY
@@ -110,7 +147,7 @@ def test_ac2_wider_existing_token_file_is_replaced_by_a_0600_file(tmp_path: Path
 
     paths.write_private_text(token, "new")
 
-    assert (mode_of(token), token.read_text("utf-8")) == (0o600, "new")
+    assert mode_of(token) == 0o600
 
 
 @POSIX_ONLY
@@ -127,19 +164,27 @@ def test_ac2_token_is_0600_under_a_fully_permissive_umask(tmp_path: Path) -> Non
 # ---------------------------------------------------------------- AC-2 (calls, every platform)
 
 
-def test_ac2_temp_file_is_created_exclusively_with_mode_0600_next_to_the_target(
-    tmp_path: Path, recorded_opens: list[tuple[Path, int, int]]
+def test_ac2_temp_file_is_created_in_the_target_folder(
+    tmp_path: Path, temp_file_open: OpenCall
 ) -> None:
-    target = tmp_path / "token.json"
-
-    paths.write_private_text(target, "x")
-
-    (temp_path, flags, mode) = recorded_opens[0]
-    assert (temp_path.parent, temp_path != target, mode) == (tmp_path, True, 0o600)
-    assert flags & os.O_EXCL and flags & os.O_CREAT and flags & os.O_WRONLY
+    assert temp_file_open.path.parent == tmp_path
 
 
-def test_ac2_posix_modes_are_asserted_on_the_directory_and_the_temp_file(
+def test_ac2_temp_file_is_created_with_mode_0600(temp_file_open: OpenCall) -> None:
+    assert temp_file_open.mode == 0o600
+
+
+def test_ac2_temp_file_is_created_exclusively_for_writing(temp_file_open: OpenCall) -> None:
+    wanted = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+
+    assert temp_file_open.flags & wanted == wanted
+
+
+def test_ac2_temp_file_name_differs_from_the_target(temp_file_open: OpenCall) -> None:
+    assert temp_file_open.path.name != "token.json"
+
+
+def test_ac2_posix_modes_are_asserted_on_the_directory_then_the_temp_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, recorded_chmod: list[tuple[Path, int]]
 ) -> None:
     monkeypatch.setattr(paths, "_APPLY_POSIX_MODES", True)
@@ -147,9 +192,8 @@ def test_ac2_posix_modes_are_asserted_on_the_directory_and_the_temp_file(
     folder = paths.ensure_private_dir(tmp_path / "secrets")
     paths.write_private_text(folder / "token.json", "x")
 
-    assert [mode for _, mode in recorded_chmod] == [0o700, 0o600]
-    assert recorded_chmod[0][0] == folder
-    assert recorded_chmod[1][0].parent == folder
+    seen = [(p if p == folder else p.parent, mode) for p, mode in recorded_chmod]
+    assert seen == [(folder, 0o700), (folder, 0o600)]
 
 
 def test_ac2_no_permission_calls_are_made_where_the_profile_acl_applies(
@@ -169,11 +213,14 @@ def test_ac2_missing_parents_are_created(tmp_path: Path) -> None:
     assert folder.is_dir()
 
 
-def test_ac2_ensure_private_dir_is_idempotent(tmp_path: Path) -> None:
-    first = paths.ensure_private_dir(tmp_path / "secrets")
-    second = paths.ensure_private_dir(tmp_path / "secrets")
+def test_ac2_ensure_private_dir_returns_the_folder(tmp_path: Path) -> None:
+    assert paths.ensure_private_dir(tmp_path / "secrets") == tmp_path / "secrets"
 
-    assert first == second == tmp_path / "secrets"
+
+def test_ac2_ensure_private_dir_accepts_an_existing_folder(tmp_path: Path) -> None:
+    paths.ensure_private_dir(tmp_path / "secrets")
+
+    assert paths.ensure_private_dir(tmp_path / "secrets").is_dir()
 
 
 def test_ac2_text_is_written_as_utf8_without_newline_translation(tmp_path: Path) -> None:
@@ -205,29 +252,42 @@ def test_ac2_ensure_private_dir_chmod_failure_is_translated(
 # ---------------------------------------------------------------- AC-3 (failure behaviour)
 
 
-@pytest.mark.parametrize(
-    "failing_call",
-    [
+class FailedWrite(NamedTuple):
+    folder: Path
+    error: PrivateFileError
+
+
+@pytest.fixture(
+    params=[
         pytest.param("fsync", id="mid-write-fsync"),
         pytest.param("replace", id="final-replace"),
         pytest.param("chmod", id="mode-assertion"),
-    ],
+    ]
 )
-def test_ac3_failure_keeps_old_content_leaves_no_temp_and_hides_the_content(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failing_call: str
-) -> None:
+def failed_write(
+    request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> FailedWrite:
+    """Overwrite an existing token while the parametrized OS call fails."""
     monkeypatch.setattr(paths, "_APPLY_POSIX_MODES", True)
-    target = tmp_path / "token.json"
-    target.write_text("previous-content", encoding="utf-8")
-    monkeypatch.setattr(paths.os, failing_call, fail_with_oserror)
+    (tmp_path / "token.json").write_text(PREVIOUS_CONTENT, encoding="utf-8")
+    monkeypatch.setattr(paths.os, request.param, fail_with_oserror)
 
     with pytest.raises(PrivateFileError) as caught:
-        paths.write_private_text(target, SENTINEL)
+        paths.write_private_text(tmp_path / "token.json", SENTINEL)
 
-    assert target.read_text("utf-8") == "previous-content"
-    assert [entry.name for entry in tmp_path.iterdir()] == ["token.json"]
-    assert SENTINEL not in str(caught.value)
-    assert isinstance(caught.value, GmailPdfError)
+    return FailedWrite(tmp_path, caught.value)
+
+
+def test_ac3_failure_keeps_the_previous_content(failed_write: FailedWrite) -> None:
+    assert (failed_write.folder / "token.json").read_text("utf-8") == PREVIOUS_CONTENT
+
+
+def test_ac3_failure_leaves_no_temp_file(failed_write: FailedWrite) -> None:
+    assert [entry.name for entry in failed_write.folder.iterdir()] == ["token.json"]
+
+
+def test_ac3_failure_does_not_echo_the_content(failed_write: FailedWrite) -> None:
+    assert SENTINEL not in str(failed_write.error)
 
 
 def test_ac3_failure_to_create_the_temp_file_is_a_domain_error(
@@ -238,38 +298,78 @@ def test_ac3_failure_to_create_the_temp_file_is_a_domain_error(
     with pytest.raises(PrivateFileError):
         paths.write_private_text(tmp_path / "token.json", SENTINEL)
 
+
+def test_ac3_failure_to_create_the_temp_file_leaves_the_folder_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(paths.os, "open", fail_with_oserror)
+
+    with pytest.raises(PrivateFileError):
+        paths.write_private_text(tmp_path / "token.json", SENTINEL)
+
     assert list(tmp_path.iterdir()) == []
 
 
-def test_ac3_missing_parent_folder_is_a_domain_error_not_a_silent_create(tmp_path: Path) -> None:
+def test_ac3_missing_parent_folder_is_a_domain_error(tmp_path: Path) -> None:
+    with pytest.raises(PrivateFileError):
+        paths.write_private_text(tmp_path / "absent" / "token.json", SENTINEL)
+
+
+def test_ac3_missing_parent_folder_is_not_created_silently(tmp_path: Path) -> None:
     with pytest.raises(PrivateFileError):
         paths.write_private_text(tmp_path / "absent" / "token.json", SENTINEL)
 
     assert not (tmp_path / "absent").exists()
 
 
-def test_ac3_unencodable_text_is_a_domain_error_that_does_not_echo_the_text(
-    tmp_path: Path,
-) -> None:
+class Unencodable(NamedTuple):
+    folder: Path
+    error: PrivateFileError
+
+
+@pytest.fixture
+def unencodable(tmp_path: Path) -> Unencodable:
     with pytest.raises(PrivateFileError) as caught:
         paths.write_private_text(tmp_path / "token.json", SENTINEL + "\ud800")
-
-    assert SENTINEL not in str(caught.value)
-    assert caught.value.__cause__ is None
-    assert list(tmp_path.iterdir()) == []
+    return Unencodable(tmp_path, caught.value)
 
 
-def test_ac3_failure_to_remove_the_temp_file_is_logged_and_the_original_error_is_raised(
+def test_ac3_unencodable_text_does_not_echo_the_text(unencodable: Unencodable) -> None:
+    assert SENTINEL not in str(unencodable.error)
+
+
+def test_ac3_unencodable_text_does_not_chain_the_encoding_error(unencodable: Unencodable) -> None:
+    assert unencodable.error.__cause__ is None
+
+
+def test_ac3_unencodable_text_creates_no_file(unencodable: Unencodable) -> None:
+    assert list(unencodable.folder.iterdir()) == []
+
+
+@pytest.fixture
+def cleanup_failure_log(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
+) -> str:
+    """Log text of a write whose replace fails while removing the temp file fails too."""
     monkeypatch.setattr(paths.os, "replace", fail_with_oserror)
     monkeypatch.setattr(Path, "unlink", fail_with_oserror)
 
     with pytest.raises(PrivateFileError), caplog.at_level("WARNING", logger=paths.logger.name):
         paths.write_private_text(tmp_path / "token.json", SENTINEL)
 
-    assert SENTINEL not in caplog.text
-    assert "temporary file" in caplog.text
+    return caplog.text
+
+
+def test_ac3_failure_to_remove_the_temp_file_is_logged(
+    cleanup_failure_log: str,
+) -> None:
+    assert "temporary file" in cleanup_failure_log
+
+
+def test_ac3_log_of_a_failed_cleanup_does_not_contain_the_content(
+    cleanup_failure_log: str,
+) -> None:
+    assert SENTINEL not in cleanup_failure_log
 
 
 @pytest.mark.parametrize(

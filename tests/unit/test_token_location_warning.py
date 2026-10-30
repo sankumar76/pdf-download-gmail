@@ -101,22 +101,44 @@ def test_ac4_symlink_inside_the_profile_that_points_out_is_outside(
     [
         pytest.param(OSError("injected"), id="os-error"),
         pytest.param(RuntimeError("loop"), id="loop"),
+        pytest.param(ValueError("embedded null character"), id="value-error"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("location", "expected"),
+    [
+        pytest.param("inside", None, id="inside"),
+        pytest.param("outside", EXPECTED, id="outside"),
     ],
 )
 def test_ac4_unresolvable_path_never_raises_and_is_still_classified(
-    home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: Exception
+    home: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    location: str,
+    expected: events.Warning | None,
 ) -> None:
+    candidate = home / "token.json" if location == "inside" else tmp_path / "x" / "token.json"
+
     def broken_resolve(self: Path, strict: bool = False) -> Path:
         raise error
 
     monkeypatch.setattr(Path, "resolve", broken_resolve)
 
-    results = (
-        paths.token_location_warning(home / "token.json", home),
-        paths.token_location_warning(tmp_path / "elsewhere" / "token.json", home),
-    )
+    # ValueError escapes the lexical fallback too, so it is judged "cannot classify" -> warn.
+    if isinstance(error, ValueError):
+        expected = EXPECTED
 
-    assert results == (None, EXPECTED)
+    assert paths.token_location_warning(candidate, home) == expected
+
+
+def test_ac4_path_with_an_embedded_nul_gives_the_warning_instead_of_raising(home: Path) -> None:
+    assert paths.token_location_warning(home / "a\x00b" / "token.json", home) == EXPECTED
+
+
+def test_ac4_home_with_an_embedded_nul_gives_the_warning_instead_of_raising(home: Path) -> None:
+    assert paths.token_location_warning(home / "token.json", home / "a\x00b") == EXPECTED
 
 
 @WINDOWS_ONLY

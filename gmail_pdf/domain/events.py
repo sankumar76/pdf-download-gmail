@@ -20,6 +20,9 @@ class WarningCode(Enum):
 class Warning:
     """A non-blocking notice for the user (architecture 6.8; the name is the spec's).
 
+    The name shadows the built-in ``Warning`` exception class. Always import this module and
+    write ``events.Warning``; never ``from gmail_pdf.domain.events import Warning``.
+
     Attributes:
         code: Which notice this is.
         count: How many items the notice is about (0 when not applicable).

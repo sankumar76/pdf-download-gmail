@@ -72,6 +72,10 @@ def write_private_text(path: Path, text: str) -> None:
     step fails, ``path`` keeps its previous content and the temp file is removed on a best-effort
     basis. The parent folder must already exist (see ``ensure_private_dir``).
 
+    For app-owned state only (the token; the manifest snapshot in its own module). Never use it
+    for a user-visible file: those use the no-clobber move or exclusive create, because the
+    standards forbid overwriting them (coding-standards 10, decision D-32).
+
     Args:
         path: The target file, for example ``<root>/secrets/token.json``.
         text: The file content. It is never included in an error message.
@@ -101,7 +105,9 @@ def token_location_warning(path: Path, home: Path) -> events.Warning | None:
 
     Both paths are resolved first, so ``..`` segments and symlinks are followed, and the
     comparison uses the platform's own path rules (case-insensitive on Windows). This is a
-    notice only: it never raises and the caller never blocks on it (decision D-23).
+    notice only: it never raises and the caller never blocks on it (decision D-23). A path that
+    cannot be judged at all (for example one with an embedded NUL character) is reported as
+    outside the profile, so the user is told rather than the program failing.
 
     Args:
         path: The token file location in use.
@@ -110,7 +116,12 @@ def token_location_warning(path: Path, home: Path) -> events.Warning | None:
     Returns:
         ``None`` when ``path`` is inside ``home``; otherwise the warning event.
     """
-    if _resolved(path).is_relative_to(_resolved(home)):
+    try:
+        inside = _resolved(path).is_relative_to(_resolved(home))
+    except (ValueError, OSError, RuntimeError):
+        # Unclassifiable input (NUL character, unusable component): fail safe by warning.
+        inside = False
+    if inside:
         return None
     return events.Warning(events.WarningCode.TOKEN_OUTSIDE_PROFILE)
 

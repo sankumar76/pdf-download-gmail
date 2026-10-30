@@ -21,5 +21,12 @@ logs/
 # --- Python build and test artefacts ---
 __pycache__/
 *.egg-info/
-.coverage*
+.coverage
+.coverage.*
 coverage.xml
+.venv/
+venv/
+dist/
+build/
+# Token temp files (.<name>.<hex>.tmp) left behind if the process is killed mid-write
+.*.tmp

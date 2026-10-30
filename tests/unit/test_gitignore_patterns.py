@@ -32,8 +32,14 @@ REQUIRED_SECRET_PATTERNS = (
 REQUIRED_ARTEFACT_PATTERNS = (
     "__pycache__/",
     "*.egg-info/",
-    ".coverage*",
+    ".coverage",
+    ".coverage.*",
     "coverage.xml",
+    ".venv/",
+    "venv/",
+    "dist/",
+    "build/",
+    ".*.tmp",
 )
 
 # The lines that existed before PGD-14; the story requires that none is removed.
