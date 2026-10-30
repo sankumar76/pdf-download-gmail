@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+import subprocess
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 SUPPORT_DIR = Path(__file__).resolve().parent
@@ -23,3 +24,21 @@ def guarded_env(extra: Mapping[str, str] | None = None) -> dict[str, str]:
     if extra:
         env.update(extra)
     return env
+
+
+SUBPROCESS_TIMEOUT_S = 60
+
+
+def run_guarded(
+    args: Sequence[str], cwd: Path, extra_env: Mapping[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run a child process with the egress guard active and capture its text output."""
+    return subprocess.run(
+        list(args),
+        cwd=cwd,
+        env=guarded_env(extra_env),
+        capture_output=True,
+        text=True,
+        timeout=SUBPROCESS_TIMEOUT_S,
+        check=False,
+    )

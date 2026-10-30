@@ -1,19 +1,19 @@
-"""AC-1: the three entry points print usage and exit 0 without touching the network."""
+"""AC-1 (in-process): the CLI entry points print usage and exit 0.
+
+The subprocess runs of the same entry points are in ``tests/e2e/test_cli_subprocess.py``.
+"""
 
 from __future__ import annotations
 
 import runpy
-import subprocess
 import sys
-import sysconfig
 from importlib import metadata
-from pathlib import Path
 
 import pytest
 
 from gmail_pdf import __version__
 from gmail_pdf.cli import main as cli_main
-from tests.support.subprocess_env import REPO_ROOT, guarded_env
+from tests.support.subprocess_env import REPO_ROOT
 
 pytestmark = pytest.mark.req("NFR-020", "AC-1")
 
@@ -111,44 +111,3 @@ def test_console_script_is_declared_for_the_cli_entry() -> None:
     # ADR-005: the GUI launcher is an R2 deliverable and must not exist yet.
     assert "gmail-pdf-gui" not in metadata.entry_points(group="gui_scripts").names
     assert "gmail-pdf-gui" not in metadata.entry_points(group="console_scripts").names
-
-
-def _run_guarded(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        args,
-        cwd=cwd,
-        env=guarded_env(),
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-
-
-@pytest.mark.parametrize(
-    "args",
-    [
-        pytest.param([sys.executable, "-m", "gmail_pdf", "--help"], id="python-m"),
-        pytest.param([sys.executable, str(SHIM), "--help"], id="shim"),
-    ],
-)
-def test_subprocess_entry_points_print_usage_under_the_socket_guard(
-    args: list[str], tmp_path: Path
-) -> None:
-    result = _run_guarded(args, tmp_path)
-
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.startswith("usage: gmail-pdf")
-
-
-def test_installed_console_script_prints_usage_under_the_socket_guard(tmp_path: Path) -> None:
-    # A venv puts scripts beside python.exe; a system install (CI runner) uses sysconfig's dir.
-    scripts_dirs = [Path(sysconfig.get_path("scripts")), Path(sys.executable).parent]
-    candidates = [d / name for d in scripts_dirs for name in ("gmail-pdf.exe", "gmail-pdf")]
-    script = next((path for path in candidates if path.exists()), None)
-    assert script is not None, "gmail-pdf console script missing: run `pip install --no-deps -e .`"
-
-    result = _run_guarded([str(script), "--help"], tmp_path)
-
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.startswith("usage: gmail-pdf")
