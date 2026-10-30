@@ -60,25 +60,21 @@ def fail_during_cleanup() -> None:
 
 def raised_during(inner: BaseException) -> BaseException:
     """A RuntimeError raised while ``inner`` was being handled (implicit ``__context__``)."""
-    try:
+    with pytest.raises(RuntimeError) as caught:
         try:
             raise inner
         except BaseException:
             fail_during_cleanup()
-    except RuntimeError as outer:
-        return outer
-    raise AssertionError("unreachable")  # pragma: no cover
+    return caught.value
 
 
 def raised_from_none(inner: BaseException) -> BaseException:
-    try:
+    with pytest.raises(RuntimeError) as caught:
         try:
             raise inner
         except BaseException:
             raise RuntimeError(SECRET_TEXT) from None
-    except RuntimeError as outer:
-        return outer
-    raise AssertionError("unreachable")  # pragma: no cover
+    return caught.value
 
 
 CASES: list[tuple[str, Callable[[], BaseException], str | None]] = [
@@ -164,12 +160,24 @@ def test_the_result_is_the_fixed_sentence_for_the_type(
 @pytest.mark.parametrize(
     "factory", [pytest.param(factory, id=case_id) for case_id, factory, _ in CASES]
 )
-def test_the_result_is_one_clean_line(factory: Callable[[], BaseException]) -> None:
+def test_the_result_is_one_line(factory: Callable[[], BaseException]) -> None:
     line = safe_message(factory())
 
     assert line.splitlines() == [line]
-    assert "Traceback" not in line
-    assert sentinels.leaked(line) == []
+
+
+@pytest.mark.parametrize(
+    "factory", [pytest.param(factory, id=case_id) for case_id, factory, _ in CASES]
+)
+def test_the_result_has_no_traceback(factory: Callable[[], BaseException]) -> None:
+    assert "Traceback" not in safe_message(factory())
+
+
+@pytest.mark.parametrize(
+    "factory", [pytest.param(factory, id=case_id) for case_id, factory, _ in CASES]
+)
+def test_the_result_has_no_sentinel(factory: Callable[[], BaseException]) -> None:
+    assert sentinels.leaked(safe_message(factory())) == []
 
 
 # ------------------------------------------------------------- errors this application raises
