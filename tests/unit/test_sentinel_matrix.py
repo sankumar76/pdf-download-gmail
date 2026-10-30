@@ -15,8 +15,9 @@ Each addition is then checked against every existing surface or path with no oth
 How the surfaces are observed: ``Harness.run`` redirects ``sys.stdout`` and ``sys.stderr``
 *inside the test body*. Patching them in a fixture does not work, because pytest's own capture
 puts its streams back for the call phase. Paths that pytest itself intercepts (an exception
-ignored by the interpreter, a library warning) run in a child interpreter, whose output is
-appended to the same surfaces. The CLI is exercised in-process;
+ignored by the interpreter, a library warning) or that end the process (an uncaught exception
+whose hook meets a failure) run in a child interpreter, whose output is appended to the same
+surfaces. The CLI is exercised in-process;
 ``tests/e2e/test_redaction_subprocess.py`` repeats the hook paths in a child interpreter.
 """
 
@@ -114,15 +115,18 @@ class Harness:
             worker.start()
             worker.join(timeout=10)
 
-    def in_child_interpreter(self, body: str) -> None:
+    def in_child_interpreter(self, body: str, expected_returncode: int = 0) -> None:
         """Run ``body`` after the application's start-up in a fresh interpreter.
 
         Its stdout and stderr are appended to this harness's surfaces; its log records go to
-        the same log file.
+        the same log file. ``expected_returncode`` is 1 for a body that ends in an uncaught
+        exception.
         """
         code = CHILD_PREAMBLE.format(log_path=str(self.log_path)) + body
         result = run_guarded([sys.executable, "-c", code], REPO_ROOT)
-        assert result.returncode == 0, f"child interpreter failed: {result.stderr[-800:]}"
+        assert result.returncode == expected_returncode, (
+            f"child interpreter ended with {result.returncode}: {result.stderr[-800:]}"
+        )
         self.stdout.write(result.stdout)
         self.stderr.write(result.stderr)
 
@@ -231,6 +235,35 @@ def library_warning(h: Harness) -> None:
     h.in_child_interpreter("warnings.warn(SECRET_TEXT)\n")
 
 
+def hook_failure(h: Harness) -> None:
+    """Hooks that meet an exception whose traceback cannot be formatted (QUA-27).
+
+    ``Hostile.__cause__`` raises a sentinel, so ``traceback.format_exception`` fails inside each
+    hook: for an exception ignored in ``__del__``, for an uncaught exception in a worker thread,
+    and for the uncaught exception that ends the process (exit code 1). A hook that lets that
+    failure escape makes CPython print the original exception, unredacted.
+    """
+    h.in_child_interpreter(
+        "import threading\n"
+        "class Hostile(Exception):\n"
+        "    @property\n"
+        "    def __cause__(self):\n"
+        "        raise ValueError(SECRET_TEXT)\n"
+        "class Leaky:\n"
+        "    def __del__(self):\n"
+        "        raise Hostile(SECRET_TEXT)\n"
+        "Leaky()\n"
+        "gc.collect()\n"
+        "def fail():\n"
+        "    raise Hostile(SECRET_TEXT)\n"
+        "worker = threading.Thread(target=fail)\n"
+        "worker.start()\n"
+        "worker.join()\n"
+        "raise Hostile(SECRET_TEXT)\n",
+        expected_returncode=1,
+    )
+
+
 # Append later stories' paths here (see the module docstring).
 ERROR_PATHS = [
     pytest.param(uncaught_exception, id="uncaught-exception"),
@@ -239,6 +272,7 @@ ERROR_PATHS = [
     pytest.param(keyboard_interrupt, id="keyboard-interrupt"),
     pytest.param(unraisable_exception, id="unraisable-exception"),
     pytest.param(library_warning, id="library-warning"),
+    pytest.param(hook_failure, id="hook-failure"),
 ]
 
 

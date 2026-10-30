@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import logging
 import sys
+import traceback
 import types
 import warnings
 from collections.abc import Iterator
@@ -263,6 +264,13 @@ def test_stack_info_text_is_redacted() -> None:
     assert record.stack_info == f"Stack (most recent call last):\n  frame using {REDACTED}"
 
 
+def test_stack_info_of_a_logged_record_is_redacted(capture: Capture) -> None:
+    redaction.register_secret("stack_info=True")  # text that this frame's source line holds
+    logging.getLogger("gmail_pdf.test").warning("where", stack_info=True)
+
+    assert "stack_info=True" not in capture.text
+
+
 def test_an_already_formatted_exception_text_is_redacted() -> None:
     record = logging.LogRecord("n", logging.ERROR, __file__, 1, "m", None, None)
     record.exc_text = f"Traceback ... {sentinels.UNREGISTERED_GOCSPX}"
@@ -311,3 +319,70 @@ def test_a_library_warning_is_routed_through_logging(capture: Capture) -> None:
     library_warning(f"token {sentinels.CLIENT_SECRET} refreshed")
 
     assert f"token {REDACTED} refreshed" in capture.text
+
+
+# ------------------------------------------------------------------ a failing filter (QUA-27)
+# ``logger.exception()`` must neither abort its caller nor print the original failure when
+# formatting or redaction fails inside the filter.
+def raise_with_a_secret(*args: object, **kwargs: object) -> None:
+    raise MemoryError(sentinels.CLIENT_SECRET)
+
+
+def log_an_exception_with_a_secret() -> None:
+    try:
+        raise RuntimeError(f"failed with {sentinels.CLIENT_SECRET}")
+    except RuntimeError:
+        logging.getLogger("gmail_pdf.test").exception("step failed")
+
+
+@pytest.fixture
+def logged_with_formatting_broken(capture: Capture, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Log text of ``logger.exception`` while ``traceback.format_exception`` fails."""
+    monkeypatch.setattr(traceback, "format_exception", raise_with_a_secret)
+    log_an_exception_with_a_secret()
+    return capture.text
+
+
+@pytest.fixture
+def logged_with_redact_broken(capture: Capture, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Log text of ``logger.exception`` while ``redact`` fails."""
+    monkeypatch.setattr(redaction, "redact", raise_with_a_secret)
+    log_an_exception_with_a_secret()
+    return capture.text
+
+
+def test_a_traceback_that_cannot_be_formatted_leaves_no_sentinel(
+    logged_with_formatting_broken: str,
+) -> None:
+    assert sentinels.leaked(logged_with_formatting_broken) == []
+
+
+def test_a_traceback_that_cannot_be_formatted_is_replaced_by_the_placeholder(
+    logged_with_formatting_broken: str,
+) -> None:
+    assert redaction.TRACEBACK_UNAVAILABLE in logged_with_formatting_broken
+
+
+def test_a_traceback_that_cannot_be_formatted_keeps_the_log_message(
+    logged_with_formatting_broken: str,
+) -> None:
+    assert "step failed" in logged_with_formatting_broken
+
+
+def test_a_failing_redact_leaves_no_sentinel_in_the_log(logged_with_redact_broken: str) -> None:
+    assert sentinels.leaked(logged_with_redact_broken) == []
+
+
+def test_a_failing_redact_reduces_the_record_to_the_placeholder_message(
+    logged_with_redact_broken: str,
+) -> None:
+    assert redaction.UNFORMATTABLE_LOG_MESSAGE in logged_with_redact_broken
+
+
+def test_the_filter_still_returns_true_when_redaction_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(redaction, "redact", raise_with_a_secret)
+    record = logging.LogRecord("n", logging.ERROR, __file__, 1, "m", None, None)
+
+    assert RedactingFilter().filter(record) is True
