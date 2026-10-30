@@ -15,6 +15,10 @@ else that writes to the console on its own, such as ``argparse`` usage errors, i
 4. Structural rules for the rest of the code base (not enforceable here): never format a
    ``Credentials`` object, HTTP headers or request URIs into any message.
 
+Over 400 lines on purpose (Coding Standards, files): the one redaction path (ADR-003 section 6)
+stays in one module, so the import rule below can be checked in one place and no surface keeps a
+second copy of the rules.
+
 Import rule (PGD-13 AC-7): this module imports only the standard library and
 ``gmail_pdf.domain.messages`` (itself dependency-free), so ``cli.main`` can load it before
 anything else exists. Third-party exception types are therefore recognised by their qualified
@@ -66,6 +70,7 @@ MAX_MESSAGE_LENGTH = 300
 # Longest ``__cause__`` / ``__context__`` chain ``safe_message`` follows (guards cycles too).
 MAX_CHAIN_DEPTH = 16
 UNFORMATTABLE_LOG_MESSAGE = "<log message could not be formatted>"
+TRACEBACK_UNAVAILABLE = "<traceback could not be formatted>"
 THIRD_PARTY_LOGGERS = ("googleapiclient", "google_auth_oauthlib", "urllib3", "oauthlib")
 
 # ------------------------------------------------------------------------------ registry
@@ -143,9 +148,6 @@ def redact(text: str) -> str:
     return text
 
 
-TRACEBACK_UNAVAILABLE = "<traceback could not be formatted>"
-
-
 def _redacted_traceback(
     exc_type: type[BaseException] | None,
     exc_value: BaseException | None,
@@ -155,8 +157,10 @@ def _redacted_traceback(
 
     Formatting walks the exception chain and calls ``__str__`` of arbitrary objects, and
     ``redact`` can fail too (for example at interpreter shutdown). A hook or filter that lets
-    such a failure escape makes CPython print the original exception, unredacted. So this
-    never raises and never returns text that has not been through ``redact``.
+    such a failure escape makes CPython print the original exception, unredacted. So no
+    ``Exception`` escapes this function, and it never returns text taken from the exception that
+    has not been through ``redact`` (the placeholder is fixed text). A ``BaseException`` passes
+    on purpose: this runs inside ``logger.*`` calls, where Ctrl+C must still stop the run.
     """
     try:
         return redact("".join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
@@ -169,16 +173,17 @@ class RedactingFilter(logging.Filter):
     """Redacts the message, the exception text and the stack text of every record it sees.
 
     Attach it to a handler (a filter on a logger does not see records from child loggers).
-    It never drops a record and never raises: if sanitising fails, the record is reduced to a
-    fixed placeholder message with no exception or stack text. Only the message, ``args``,
-    exception and stack text are sanitised; values passed through ``extra=`` are left alone,
-    so do not put secrets there.
+    It never drops a record. No ``Exception`` escapes it: if sanitising fails, the record is
+    reduced to a fixed placeholder message with no exception or stack text. A ``BaseException``
+    passes on purpose, so Ctrl+C during ordinary logging still stops the run. Only the message,
+    ``args``, exception and stack text are sanitised; values passed through ``extra=`` are left
+    alone, so do not put secrets there.
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
         try:
             self._sanitise(record)
-        except Exception:  # nothing may escape: the caller of logger.exception() would abort
+        except Exception:  # not BaseException: Ctrl+C during logging must still stop the run
             record.msg = UNFORMATTABLE_LOG_MESSAGE
             record.args = None
             record.exc_info = None
@@ -395,9 +400,11 @@ def _handle_uncaught(
             report_cancelled()
         else:
             report_unexpected_failure(exc_type, exc_value, exc_traceback)
-    except Exception:
-        # A hook that raises makes CPython print the original exception, unredacted. There
-        # is nowhere safer to report this failure, so it is dropped.
+    except BaseException:
+        # A hook that raises, whatever it raises, makes CPython print the original exception,
+        # unredacted. BaseException on purpose: the failure being reported has already ended
+        # its thread or the run, so catching an interrupt here stops nothing. There is
+        # nowhere safer to report it.
         return
 
 
@@ -420,7 +427,9 @@ def _unraisable_hook(args: sys.UnraisableHookArgs) -> None:
             "Ignored exception (redacted traceback):\n%s",
             _redacted_traceback(args.exc_type, args.exc_value, args.exc_traceback),
         )
-    except Exception:  # see _handle_uncaught: a raising hook falls back to the raw default
+    except BaseException:
+        # BaseException on purpose, as in _handle_uncaught: CPython discards an interrupt in
+        # this hook anyway, so catching it loses nothing and keeps the raw original off stderr.
         return
 
 
@@ -430,10 +439,13 @@ def install_excepthooks() -> Callable[[], None]:
     An uncaught exception on any thread then prints ``error: unexpected failure, see the run
     log`` (or ``Run cancelled`` for Ctrl+C) to stderr, and the hook writes nothing else. An
     exception the interpreter ignores (for example in ``__del__``) is not written to stderr by
-    the hook; its redacted traceback goes to the logger at DEBUG. No failure inside a hook
-    escapes it (CPython would print the original exception unredacted); if the traceback
-    cannot be formatted or redacted, a fixed placeholder is logged and the fixed line is still
-    printed. The hooks do not call the previous hooks.
+    the hook; its redacted traceback goes to the logger at DEBUG. No exception of any kind
+    raised inside a hook's guarded body reaches CPython (it would print the original exception
+    unredacted); if the traceback cannot be formatted or redacted, a fixed placeholder is
+    logged and the fixed line is still printed. Not covered: a real interrupt delivered at
+    hook entry, before the guarded body starts, which no ``except`` clause can catch (accepted
+    residual, closed by STORY-06.02, where SIGINT sets a flag). The hooks do not call the
+    previous hooks.
 
     Returns:
         A function that puts back the hooks that were installed before this call.
