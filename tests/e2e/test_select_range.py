@@ -17,6 +17,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -241,12 +242,12 @@ Edit = Callable[[dict[str, object]], None]
 
 
 def _resource(doc: dict[str, object]) -> dict[str, object]:
-    first: dict[str, object] = doc["messages"][0]  # type: ignore[index]
-    return first["resource"]  # type: ignore[return-value]
+    entries = cast("list[dict[str, dict[str, object]]]", doc["messages"])
+    return entries[0]["resource"]
 
 
 def _payload(doc: dict[str, object]) -> dict[str, object]:
-    return _resource(doc)["payload"]  # type: ignore[return-value]
+    return cast("dict[str, object]", _resource(doc)["payload"])
 
 
 def _nested(levels: int) -> str:
@@ -283,7 +284,7 @@ def _top(doc: dict[str, object]) -> dict[str, object]:
 
 def _add_deep_part(doc: dict[str, object]) -> None:
     """Keep the real PDF part and add one more child part, to be spliced."""
-    _payload(doc)["parts"].append(DEEP)  # type: ignore[attr-defined]
+    cast("list[object]", _payload(doc)["parts"]).append(DEEP)
 
 
 CONTENT_FILES = [
@@ -321,6 +322,8 @@ def test_content_that_parses_but_cannot_be_read_still_ends_in_the_fixed_line(
 READABLE_FILES = [
     pytest.param(_spliced(_set(_top, "unread", DEEP), _nested(199)), id="unread-key-199-levels"),
     pytest.param(_spliced(_add_deep_part, _part_chain(20)), id="parts-20"),
+    # QUA-55: the deepest legal chain; read through ``get_message`` on every interpreter.
+    pytest.param(_spliced(_add_deep_part, _part_chain(96)), id="parts-96"),
     pytest.param(_spliced(_set(_resource, "labelIds", [])), id="label-ids-empty"),
 ]
 
