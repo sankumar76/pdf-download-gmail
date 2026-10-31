@@ -1201,3 +1201,150 @@ Follow-ups (not conditions): orchestrator sets the label and requests the human 
 - The row reading paid for itself again: four rows short of the plan, all of which held when run. A "Pass" row whose evidence differs from the row's words needs a correction, even when the result stands.
 
 **Posted:** PR #33 comment 6540247264; Jira PGD-15 c.10284; #39 comment 6540239278; new issue #40; risks PGD-1 c.10285.
+
+---
+
+## G6 – Peer Review — STORY-02.03 (PGD-16) — 2026-10-31
+
+- **Decision:** NO-GO. Attempt 2 follows on a new head under the exit rule below (D-78)
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no; both Critical ratings are named to the delivery lead, who may overrule them
+- **Attempt:** 1, loop 1 of 3. Head `93fb918`, base `main` `9a1ffe5`
+- **Artefacts evaluated:**
+  - Consolidated findings PR #41 comment 6541390048; reviews 5722058811 (quality), 5721961706 (standards), 5722048956 (performance), bodies and all inline comments read with `gh api`; SA ruling 6541109827; G5 comment 6541000495. 3 reviews, all `COMMENTED`.
+  - Jira PGD-16 description, AC-1..9 as amended, comments c.10296, c.10298, c.10299, c.10300, c.10302..10307; issue links (PGD-69 blocks PGD-16); remote link #38 read with `listJiraIssueRemoteIssueLinks`.
+  - Source at `93fb918`: `infra/tz.py`, `cli/main.py`, `cli/args.py`, `bootstrap.py`, `domain/validation.py`, `domain/daterange.py`, `domain/errors.py`; `tests/unit/test_cli_select_range.py`, `tests/unit/test_daterange.py` in part; base `tests/unit/test_daterange.py` row `test_the_last_representable_day_is_rejected_not_crashed`; tzlocal 5.4.5 `win32.py`, `unix.py`, `utils.py`.
+  - PRD v0.5 at `52fecb7`; `sprint-01-plan.md`; architecture line 187; Coding Standards lines 10 and 70; reviewer severity scales; #34's last comment; `test-plan.md` OQ-3, R-10, NT-01, NT-09.
+  - Check runs on `93fb918`: 10/10 `success`, read by master. `main` `9a1ffe5` current; `mergeable_state` clean.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 0 | Prerequisites C34, C38 (a), C39 (a..d) | | ✅ | PGD-16 description; remote link #38; PGD-69 blocks PGD-16; plan rows for #38 and #39 |
+| 1 | Three reports present | ✱ | ✅ | Reviews above; quality and standards REQUEST CHANGES, performance APPROVE WITH COMMENTS |
+| 2 | Zero open Blocker/Critical | ✱ | ❌ | QUA-57 Critical (D-75); STD-64 = QUA-58 re-rated Critical (D-76) |
+| 3 | Majors fixed or accepted | | ✅ | None left after re-rating |
+| 4 | Findings cite file:line | | ✅ | All inline but PERF-20, which has no code location |
+| 5 | Architecture acknowledgement (D-44) | | ⚠️ | Six acknowledged, one rejected, R1..R5 required (D-77); not on the branch |
+| 6 | Other ACs, CI | | ✅ | Quality AC table: AC-1, 2, 3, 5, 6, 7, 8, 9 met; AC-4 partly. Orchestrator: 1423 passed, 12 skipped, 99.89 %; ruff, mypy --strict (25 files), bandit clean. CI 10/10, run 41183160333 |
+| 7 | T-05 interim control | | ✅ | Reviewer-standards pass; no text-carrying exit (orchestrator) |
+| 8 | Issues tied to this story | | ✅ | #38: all six rows read done; closes with the merge. DEF-007 rows hold; QA verifies PGD-69 at G7. DEF-005 mutants 17, 5, 3, 3 |
+| 9 | Traceability sample | | ✅ | GOAL-01 → FR-015 (PRD line 93) → PGD-16 AC-9 → `tests/e2e/test_invalid_input.py`. Reverse: `req("AC-4")` on `test_an_unusable_system_zone_without_tz_gets_the_zone_sentence` → AC-4 → FR-015, VAL-02 |
+
+**Binding outcomes**
+- **O1, QUA-57:** with no `--tz`, any exception of class `LookupError`, `ValueError`, `OSError`, `AttributeError` or `TypeError`, subclasses included, from `tzlocal.get_localzone_name()` means the system zone is unresolved. `system_zone_name()` returns `None` and the command exits 2 with the exact AC-4 sentence, after any date lines in AC-5 order, in both modes, before `build_deps`, with 0 Google calls and nothing created. A given `--tz` never looks the zone up. Not claimed: any other class (none found reading tzlocal 5.4.5), which stays on the last line of defence; `MemoryError`; `KeyboardInterrupt`; a wrong but valid system zone.
+- **O2, STD-64:** nothing under `gmail_pdf/cli/` imports `gmail_pdf.infra`, the same for `gui`; both names come through `bootstrap`; the boundary test enforces it; no behaviour changes.
+
+**Master's probes** (fresh `git archive` of `93fb918` in the scratchpad, folder `g6m16`; Windows, CPython 3.12.10, tzlocal 5.4.5; real children; `gmail_pdf.__file__` asserted inside each export; scripts `reg_child.py`, `reg_run.py`, `rows.py`, `fx_build.py`):
+
+| Registry, no `--tz`, real mode | `93fb918` | SA's tuple | O1 tuple |
+|---|---|---|---|
+| Good value | exit 3, sign-in line | same | same |
+| No `TimeZoneKeyName` | **exit 1, unexpected-failure line** | exit 2 | exit 2 |
+| Same, `--start x` | **exit 1, date line lost** | exit 2, two lines | exit 2, two lines |
+| Unknown name; `FileNotFoundError`; `PermissionError`; DST-off row | exit 2 | exit 2 | exit 2 |
+| `REG_DWORD`, `REG_BINARY`, none | **exit 1** | **exit 1** | exit 2 |
+| `REG_DWORD`, `--start x` | **exit 1** | **exit 1** | exit 2, two lines |
+| No key, `--tz UTC` | exit 3, no lookup | same | same |
+
+All rows: one stderr line unless stated, working directory empty.
+
+| Sample row on `93fb918` | Result |
+|---|---|
+| `1970-01-01..2026-12-31` New_York; `1960-01-01..2026-12-31` UTC, hook and real | exit 2, one `--start:` line |
+| `1970-01-02..2026-12-31` New_York, Etc/GMT-14; `2026-01-01..9999-12-30` Etc/GMT+12 | exit 0, count 4, future-end warning |
+| `2026-01-01..9999-12-31` UTC | exit 2, one `--end:` line |
+| Real mode: reversed; `Mars/Olympus`; `--sta` | exit 2 each; working directory empty |
+| Refused hook: bad date; valid input | exit 2, date line; exit 1, refused line |
+| `DateRange.from_days(date.max, date.max, UTC)` | `OverflowError` (QUA-59) |
+| `DateRange.from_days(1970-01-01, ...)` UTC | `ValueError`, "starts before the epoch" at S = 0 (STD-69) |
+| `git grep after:-` equivalent over `gmail_pdf`, `tests` | One test comment only |
+
+| Mutant on a scratch copy with the O1 tuple, class rows for `OSError`, `LookupError`, `ValueError`, `AttributeError`, `TypeError`, and one row each for F7 and F8 | Fails |
+|---|---|
+| T2 drop `OSError` | `lookup-fails`, `os-error` |
+| T3 drop `ValueError` | `value-error` |
+| T4a drop `LookupError`; T4b `LookupError` to `KeyError` | `lookup-error` |
+| T5 drop `AttributeError`; T6 drop `TypeError` | `attribute-error`; `type-error` |
+| C3 UTC clock in `main` | Kiritimati row |
+| C4 `SystemClock` one day ahead | bracket row |
+| V5 refusal before validation | refused-hook row |
+
+Limits: 3.12.10 only. The registry is faked; no real machine was damaged. The `ZoneInfoNotFoundError` row and the `--start x` CLI row were not in the mutant copy. Reading, not a run: the SA's single `lookup-error` row cannot kill T3. No real Gmail call. The AC-9 sweep is the reviewer's, 2,990 children; master ran samples only.
+
+**Ratings and dispositions** (D-75, D-76, D-79)
+| Finding | Reviewer | Master | Disposition |
+|---|---|---|---|
+| QUA-57 `infra/tz.py:21` | Critical | **Critical, wider** | F1 |
+| STD-64 = QUA-58 `cli/main.py:52` | Major | **Critical** | F2 |
+| STD-67 = QUA-60 `domain/errors.py:43` | Minor | Minor | F3 (R3) |
+| STD-65 = QUA-64 `validation.py:3` | Minor, Info | Minor | F5 (R5) |
+| STD-68 = QUA-65 `runner.py:34` | Minor, Info | Minor; `None` branch to #43 | F5 (R5) |
+| QUA-59 `daterange.py:54` | Minor | Minor; no guard | F6 |
+| QUA-61 `test_daterange.py:283` | Minor | Minor | F7 |
+| QUA-62 `cli/main.py:144` | Info | **Minor, re-rated up** | F8 |
+| STD-66 `validation.py:5`, `messages.py:47`, `main.py` | Minor | Minor | F9 |
+| STD-69 `daterange.py:52` | Minor | Minor | F10 |
+| STD-70 five test files | Minor | Minor | F11 now; split to #42 |
+| STD-71 `test_cli_select_range.py:199` | Minor | Minor | F12 |
+| STD-72, STD-73, PERF-17 | Minor | Minor | #42, PGD-17 |
+| QUA-66 | Info | Info | F13 |
+| STD-74 | Info | Info | #42 |
+| STD-75, PERF-19 | Info | Info | #43 |
+| QUA-63 | Info | Info | No code; C43 |
+| PERF-20 | Info | Info | C44 |
+| STD-76, PERF-18 | Info | Info | No action |
+
+**Survivors (item 6).** T3, T4, C3, C4 and V5 are all real and all must fail on H. T4 is restated as T4a and T4b, because the tuple changes; T2, T5 and T6 join them. N1, N2, R3 and I4 are equivalent, and the developer's "one survivor" is corrected in the PR text (F14).
+
+**Fix list.** All owned by developer, one commit series, then H is frozen.
+| # | Item | Files | Severity | Verified by |
+|---|---|---|---|---|
+| F1 | QUA-57, R1 widened: `except (LookupError, ValueError, OSError, AttributeError, TypeError):` with the reason inline; unused import dropped. Rows in both zone tests for `LookupError`, `ZoneInfoNotFoundError`, `ValueError`, `OSError`, `AttributeError`, `TypeError`. CLI row: `--start x` with `LookupError` gives the date line, then the zone line | `gmail_pdf/infra/tz.py`; `tests/unit/test_cli_select_range.py`; `tests/unit/test_daterange.py` | Critical | quality |
+| F2 | STD-64 = QUA-58, R2, with synthetic `cli` and `gui` rows | `gmail_pdf/bootstrap.py`; `gmail_pdf/cli/main.py`; `tests/unit/test_import_boundaries.py` | Critical | standards |
+| F3 | STD-67 = QUA-60, R3; name dropped from the set at `test_validation.py:486`, test renamed | `gmail_pdf/domain/errors.py`; `tests/unit/test_validation.py` | Minor | standards |
+| F4 | R4, `test_only_validation_builds_a_run_request` | `tests/unit/test_validation.py` | SA condition | quality |
+| F5 | STD-65 = QUA-64, STD-68 = QUA-65, R5 | `gmail_pdf/domain/models.py`; `gmail_pdf/app/runner.py`; `gmail_pdf/domain/validation.py` | Minor | standards |
+| F6 | QUA-59: `OverflowError` in the `from_days` `Raises`; row restored as `pytest.raises(OverflowError)`; "It trusts its input" reworded | `gmail_pdf/domain/daterange.py`; `tests/unit/test_daterange.py` | Minor | quality |
+| F7 | QUA-61: bracket before and after; row `--tz Pacific/Kiritimati --end 2026-02-16`, no warning | `tests/unit/test_daterange.py`; `tests/unit/test_cli_select_range.py` | Minor | quality |
+| F8 | QUA-62: `hook_env(path, testing=None)` with a bad date gives exit 2 | `tests/e2e/test_invalid_input.py` | Minor | quality |
+| F9 | STD-66 | `gmail_pdf/domain/validation.py`; `gmail_pdf/domain/messages.py`; `gmail_pdf/cli/main.py` | Minor | standards |
+| F10 | STD-69: named constant, not a copy of `EARLIEST_DATE`; message "at or before the epoch" | `gmail_pdf/domain/daterange.py` | Minor | standards |
+| F11 | STD-70 first part: one justification line per file, naming #42 where it applies | `tests/unit/test_cli_select_range.py`, `tests/unit/test_validation.py`, `tests/e2e/test_invalid_input.py`, `tests/integration/test_gateway_httpmock.py`, `tests/unit/test_fake_gmail_canonical.py` | Minor | standards |
+| F12 | STD-71 | `tests/unit/test_cli_select_range.py` | Minor | standards |
+| F13 | QUA-66 | `tests/unit/test_daterange.py` | Info | standards |
+| F14 | PR text: "none weakened"; survivors; deviation 3; follow-up (a); the `cli` import | PR #41 body | none | master |
+
+**Exit rule, attempt 2, loop 2 of 3 (D-78).** Scope: the files above and no others, no new file. Master decides on head H.
+| Verifier | Must show on H |
+|---|---|
+| orchestrator | Diff `93fb918..H` in scope; local rerun, ruff, format, mypy --strict, bandit; CI 10/10 from check runs on H; `main` compared (RISK-023); no manifest changed |
+| reviewer-quality | Delta plus a fresh export: every O1 registry row in real children; T2, T3, T4a, T4b, T5, T6, C3, C4, V5 each fail a named test; F1, F4, F6, F7, F8 |
+| reviewer-standards | Delta: F2, F3, F5, F9..F13; T-05 on the delta |
+| solution-architect | One PR comment on H: R1 as widened accepted, and the ruling carries, because the delta is wider than its carry test. Not a review, not a loop |
+| reviewer-performance | Not needed, unless the delta changes `validate`'s logic or adds child processes beyond F8's row |
+| master | F14; decides attempt 2 |
+
+- All listed items verified, no new Major or higher: **GO, no further fix.**
+- New Minor or Info in the delta: rating and a tech-debt issue, no commit. A reviewer's added mutant is a finding, not a listed check. Items ruled here are not reopened. A delta finding is measured against `main`.
+- A miss on a Minor item alone (F3..F13): fixed in the same file under D-47, no new attempt.
+- A miss on F1 or F2, an unapproved file, or a new Major or higher: attempt 3, loop 3 of 3, the last. A failure there goes to Santhosh.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C42 | qa-engineer | `docs/07-qa/test-plan.md` | OQ-3 and R-10 closed (D-80). NT-01 says "valid arguments" and states that invalid input beats the refused hook (QUA-62). NT-09 and section 11 follow the PO's answer on QUA-63. AC-4 rows for the O1 classes | Before the PGD-16 G7 report |
+| C43 | product-owner | Jira PGD-16 | Estimate phrase and Tasks line (c.10299). AC-7 notes `ValidationResult.request`. Dev Context drops "in `runner.run`", per the SA. File list gains `console.py`, `fake_time.py`, `test_gateway_httpmock.py`, `bootstrap.py`, `errors.py`, `models.py`, `test_import_boundaries.py`. Trace line cites FR-015 v0.5. States whether the future-end warning stays before `build_deps` (QUA-63); master recommends it stays | Before G7 PGD-16 |
+| C44 | product-manager; ux-expert | PRD section 14.3; ux-spec section 12 | PM: add PA-12 to section 14.3, which G8 reads; say whether PERF-20 needs a number. ux-expert: add the A-3 and A-4 lines | PM: with C36, at the latest the sprint-02 G4. ux-expert: sprint-02 G4 |
+| C45 | scrum-master | `sprint-01-plan.md`; Jira PGD-17 | Rows: #42 → PGD-17, before its G5, no AC change, estimate confirmed; #43 → the FR-048 story in the follow-ups table, naming the SA condition | #42 row before PGD-17 starts, with C40; #43 row by the sprint-02 G4 |
+
+Earlier conditions: C34, C38 (a), C39 (a), (b), (c), (d) closed. C41 (c) stays due before the PGD-16 G7. At G7 PGD-16: QA tests H only, PGD-69 and #39 verified, #38 named as closing with the merge.
+
+**Logged today:** D-80 (PO), D-81 (PM), D-82 (scrum-master, go-ahead, T-10).
+
+**Risks registered:** no new risk. RISK-026 stays 4: AC-9 holds on the head, unmerged; it closes when PGD-69 closes. RISK-010 and RISK-021 notes added. RISK-005, 011, 020, 023, 025 unchanged.
+
+**Rationale:**
+- QUA-57 is the D-57 case: the AC names the Given and the Given fails. Everything offered against Critical is likelihood or size. The check worth running was the fix, not the finding: the SA's tuple clears the reviewer's row and leaves three of the same family on the failure line, so the outcome was written first and the recipe widened to meet it.
+- STD-64 was the harder call. The stated reason for Major was size, and the scale's words have no behaviour clause, so master followed the words and stated the cost of doing so. It changes no fix and no loop here. Both Criticals are named to the delivery lead.
+- The story is close: AC-9, the hard point, held. The exit rule keeps a verified fix from spending a further loop.
+
+**Posted:** PR #41 comment 6541541697; Jira PGD-16 c.10309; risks PGD-1 c.10310; new issues #42, #43.
