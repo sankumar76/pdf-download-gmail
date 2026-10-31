@@ -850,3 +850,138 @@ Follow-ups (not conditions): qa-engineer sets Done. orchestrator sets the label 
 - The double press is new evidence that QA's "needs a failure" understates the limit. It stays in class: a second event during the report of the first, and it needed forced timing. It is named to Santhosh rather than left in a table.
 
 **Posted:** PR #22 comment 6536097991; Jira PGD-13 c.10244; #29 comment 6536098631; #31 comment 6536098986; #32 comment 6536099416; risks PGD-1 c.10245.
+
+---
+
+## G6 – Peer Review — STORY-02.02 (PGD-15) — 2026-10-31
+
+- **Decision:** NO-GO. The story goes to Changes Requested, and G6 attempt 2 is required
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no
+- **Attempt:** 1 (dev↔review loop 1 of 3)
+- **Artefacts evaluated:**
+  - PR #33 `feat/PGD-15-date-range-selection`, head `c847e1a`, base `main` `2743016` (41 files, 8 commits). PR description and Dev Record read in full.
+  - Reviews 5720567531 (quality, REQUEST CHANGES; correction 6537777230), 5720364445 (standards, REQUEST CHANGES), 5720404048 (performance, APPROVE WITH COMMENTS). All 29 inline comments read with `gh api`. Consolidated comment 6537798473.
+  - SA ruling PR #33 6537214922 and #34 6537220451.
+  - Check runs on `c847e1a`: 10/10 `success` (run 41154541843), read by master. `mergeable_state` clean. `main` is still `2743016` (read from the API).
+  - Jira PGD-15 AC-1..10 with AC-6 as amended (c.10250), c.10261–10267. PGD-16. JQL: no issue labelled `aiid-STORY-02.04`, `01.04`, `01.07`, `06.01`, `06.02`, `07.01`, `02.08` or `03.02`.
+  - Code read at `c847e1a`: `cli/main.py`, `cli/console.py`, `cli/args.py`, `bootstrap.py`, `app/planner.py`, `app/runner.py`, `infra/retry.py`, `infra/gmail_gateway.py`, `domain/errors.py`, `domain/events.py`, `tests/fakes/fake_gmail.py`, `tests/fakes/fake_gmail_json.py`, `tests/unit/test_exit_statements.py`, `tests/e2e/test_select_range.py`.
+  - Reviewer evidence: `qual/mut1.jsonl` recounted, 151 mutants, 13 survivors, the same 13 named in the review.
+  - Architecture 6.3..6.5, lines 381 and 587; PRD FR-036, FR-038, NFR-001, NFR-002, NFR-006; EPIC-01, EPIC-02, EPIC-06 story lists; test plan NT-01..06, OQ-1; `sprint-01-plan.md` follow-up tables.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Three PR reviews, all on `c847e1a` |
+| 2 | Zero open Blocker/Critical | ✱ | ❌ | **QUA-39 Critical confirmed** (D-57): AC-6 (iii) names "deeply nested JSON", and a parseable deep file prints the unexpected-failure line |
+| 3 | Majors fixed or accepted | | ✅ | STD-48 re-rated Minor (D-58). PERF-11 and PERF-12 stay Major, accepted deferred with conditions (D-59), #35, #37 |
+| 4 | Findings cite file:line | | ✅ | All inline comments anchored |
+| 5 | Architecture acknowledgement (D-44) | | ⚠️ | Eight acknowledged (D-60). A ninth is owed before G7 GO: fixed build-failure lines bypass `safe_message` (architecture lines 381, 587), which reviewer-standards raised and the SA ruling does not address |
+| 6 | Other ACs, CI | | ✅ | Quality AC table: AC-1..5 and 7..10 pass. Orchestrator: 1077 passed, 12 skipped, 99.88 %; ruff, mypy --strict, bandit clean. CI 10/10 |
+| 7 | T-05 interim control | | ✅ | Reviewer-standards pass. Master's grep over `gmail_pdf/` and the root shim: the only raises are `raise SystemExit(main())` at `__main__.py:6` and the shim, plus the argparse catch in `cli/main.py:134` |
+| 8 | Issues tied to this story | | ⚠️ | #11 and #31 done (four DEF-005 mutants fail 17, 5, 3, 3). **QUA-39 is DEF-001's residual, so #15 stays open** until it is fixed; QA confirms at G7 |
+| 9 | Traceability sample | | ✅ | GOAL-01 → FR-012 → PGD-15 AC-2 → `tests/unit/test_planner.py` (`req("AC-2")`). Reverse: `test_select_range.py` `req("AC-6")` → AC-6 → FR-008, FR-012, D-21 |
+
+**Master's probes** (`c847e1a` export and worktree unchanged; real child interpreters, Python 3.12.10 from the PGD-15 venv; `gmail_pdf.__file__` inside the export; scripts in the session scratchpad, folder `g6m`):
+
+| Case | Result |
+|---|---|
+| `payload.parts` depth 2..244, name at the root | exit 0, `Messages in range: 1` |
+| `payload.parts` depth 247, 300, 500, 1000, 1400, 1490 | exit 1, **unexpected-failure line** |
+| `payload.parts` depth 1600, 5000, 100000; `"[" * 200000` | exit 1, fixed line |
+| Deep list in `resource.x`, depth up to 494 | exit 0 |
+| Deep list in `resource.x`, depth 496, 1000, 2900 | exit 1, **unexpected-failure line** |
+| Deep list under an unread top-level key, depth 1000, 2900 | exit 0, count 0 |
+| `parts` `[5]`, `[null]`, `["x"]` with no root filename; `labelIds` `5`, `null`, `[[]]`; `internalDate` 5000 digits | exit 1, **unexpected-failure line** |
+| `latency_s` `"inf"`, `1e300` (**not in the review**) | exit 1, **unexpected-failure line** |
+| `page_size` 0 or negative, bad `epoch_bounds`, duplicate ids, bad base64, bad seed | exit 1, fixed line |
+| All rows above | one stderr line, no `Traceback`, the content sentinel on no surface |
+| `deepcopy` at load only, patched on an export | The deep rows give the fixed line at the sampled depths; an unread deep key stays exit 0. Largest `parts` depth that copies: 248 on 3.12.10 and 3.14.7 |
+| Depth cap 200 by an iterative walk, plus shape, date and latency checks, patched on an export | Every row gives success or the fixed line; 199 levels under a top-level key pass, 200 fail. 241 tests of the e2e, fake, bootstrap and planner files pass |
+| Real mode, `--tz Mars/Olympus`; reversed range; bad date | 3; 3; 2 (QUA-47 confirmed) |
+| `--help` with stdout on a closed pipe | 120 (QUA-46 confirmed) |
+| `DateRange` literals for QUA-43 | Havana S=1772946000, Cairo S=1776981600, Pago_Pago S=1767265200, Apia S==E |
+| `users().messages()` rebuilt or reused | 1.07 ms or 0.03 ms per request build, best of 5 runs of 500 (PERF-13 confirmed in direction) |
+| Raise inside or outside the `except` | `from None` keeps the original on `__context__`; outside the clause it is `None` (STD-51) |
+| `CancelToken.wait(3.0)` with `signal.raise_signal` from a helper thread | `KeyboardInterrupt` 2.71 s after the signal (PERF-14 confirmed, one run; no key pressed) |
+| The nine STD-48 sample sources | None flagged. `raise SystemExit(x)` and `sys.exit(CONST)` are flagged, so the docstring's "known int constant" branch does not exist |
+
+Limits: 3.12.10 only for the CLI rows; CI covers 3.10 and 3.11 for the suite, not these rows. No real Gmail call was made. The candidate fixes were patched on exports and are not an implementation. First-run figures for quota are the SA's arithmetic; master checked the sums, including 15.0, 16.1, 10.0 and 11.1. One SA sentence is conditional: "at least 20 min" if `get(full)` takes 600 ms or more needs `attachments.get` at 600 ms too; with 300 ms it is 15 min (for the #34 docs). The first posted text said the `deepcopy` limit moves with Python version; measurement did not show that, and PR comment 6537957962 corrects it.
+
+**Rulings** are in D-57..D-63. In short:
+- **QUA-39** stays Critical, and the finding is wider than reviewed (`latency_s`).
+- **STD-48** is Minor. T-05 stays a review step; the test is a guard.
+- **PERF-11:** pacing is a mitigation of throttling, not of the time floor, so the reviewer's condition is not satisfied by the SA's ruling, but its deadline has not passed. No escalation today; armed through C33 and C36.
+- **PERF-12:** uncaught is correct in this story. Isolation belongs in the application-layer per-message loop.
+
+**Dispositions**
+| Finding(s) | Reviewer | Master | Disposition |
+|---|---|---|---|
+| QUA-39 | Critical | **Critical** | Fix now, R1 |
+| STD-48 | Major | **Minor**, re-rated down | Fix now (docstring over-claim; a commit lands anyway) |
+| PERF-11 | Major, conditional | **Major** | Accepted deferred; no code change; #35; closes on Q-15 |
+| PERF-12 | Major, conditional | **Major** | Accepted deferred; #35 (pacer), #37 (isolation) |
+| QUA-40, 41, 42, 43, 44 | Minor | Minor | Fix now: seven real test gaps, each a few lines |
+| QUA-47 | Minor | Minor | Docstrings now; behaviour to PGD-16 (C34) |
+| QUA-49 | Minor | Minor | Fix now: test-strategy 6 lists 403 and 500; RISK-005 surface |
+| STD-49, 50, 51, 52, 56 | Minor | Minor | Fix now. STD-51 takes the code option, so "dropped" is true. STD-56 by inline justification (463 and 404 lines; the review's 464 and 405 are one high) |
+| PERF-13 | Minor | Minor | Fix now: one line in a file already being changed |
+| QUA-45 | Minor | Minor | Deferred, #35: the code follows architecture 6.4, so the SA rules first |
+| QUA-46 | Minor | Minor | Deferred, #32, STORY-07.01: DEF-006's class (D-55) |
+| QUA-48 | Minor | Minor | Deferred, #36, STORY-01.04: its first consumer (D-41 rule) |
+| STD-53, QUA-51 | Minor, Info | Same | Deferred, #37, STORY-06.01: the type is shaped by its consumer |
+| STD-54 | Minor | Minor | Deferred, #21, before STORY-01.03: needs the first producer |
+| STD-55 | Minor | Minor | Deferred to PGD-16, which rewrites those sentences (C34) |
+| STD-57 | Minor | Minor | No action: the squash-merge removes it; no history rewrite |
+| PERF-14 | Minor | Minor | Deferred, #29, STORY-06.02 as an AC |
+| PERF-15, PERF-16 | Info | Info | #35 before STORY-01.07; #36 |
+| STD-58 | Info | Info | #23, STORY-07.01 |
+| QUA-50, STD-59 | Info | Info | No action |
+
+**Remediation (fix list, all developer, attempt 2)**
+| # | Item | Sev | ACs | Files | Required outcome |
+|---|---|---|---|---|---|
+| R1 | QUA-39 | Critical | AC-6 (iii) | `tests/fakes/fake_gmail_json.py`, `tests/e2e/test_select_range.py`, `tests/unit/test_fake_gmail_canonical.py` | **Binding:** for any file content, the AC-6 command ends in success or in exit 1 with exactly `FAKE_MAILBOX_UNREADABLE_LINE`; content never produces the unexpected-failure line. Covers any `Exception` caused by content at load, in `list_message_ids` with the baseline query, and in `get_message` for each id. Not claimed: `MemoryError` on a huge file; reads added by later stories, which keep this rule. **Method:** validate at load, with an explicit iterative depth cap over the whole document. `bootstrap.py` does not change. **E2e rows:** the cap passes, cap + 1 fails; `parts` 247, 1000, 1400; resource 500, 2900; unread top-level key 2900; `parts` `[5]`, `[null]`, `["x"]` with no root filename; `labelIds` `5`, `null`, `[[]]`; `internalDate` 5000 digits; `latency_s` `"inf"`, `1e300` |
+| R2 | STD-48 | Minor | T-05 | `tests/unit/test_exit_statements.py` | Flags `import sys as s`, `from sys import exit [as x]`, builtin `exit`/`quit`, a name bound to `sys.exit` or `SystemExit`, a `SystemExit` subclass; one negative case each. Docstring says what is accepted and what is not covered (`getattr`, `parser.error`/`parser.exit`, third-party code, a local `main`) |
+| R3 | QUA-40 | Minor | AC-7 | `tests/unit/test_retry.py` | 408, 409; 400 and 404 with a rate-limit reason |
+| R4 | QUA-41 | Minor | AC-5, FR-043 | `tests/unit/test_cli_select_range.py` | Cancelled summary through `main` gives `(1, "Run cancelled\n", "")` |
+| R5 | QUA-42 | Minor | AC-7, AC-8 | `tests/integration/test_gateway_httpmock.py` | `cache_discovery=False` asserted; a 503 on `get_message` logs `Retrying get_message:` |
+| R6 | QUA-43 | Minor | AC-3 | `tests/unit/test_daterange.py` | Literal rows: Havana, Cairo, Pago_Pago, Apia, values above |
+| R7 | QUA-44 | Minor | AC-10, FR-008 | same | Exact sentence asserted |
+| R8 | QUA-47 | Minor | AC-6 text | `gmail_pdf/cli/main.py`, docstrings only | Lines 23 and 163 state the real-mode exits |
+| R9 | QUA-49 | Minor | AC-7, FR-005 | `tests/unit/test_sentinel_matrix.py`, gateway docstring | Rows for 403, 500, non-JSON 403; docstring names the library's 403 log line |
+| R10 | STD-49 | Minor | none | `gmail_pdf/infra/gmail_gateway.py` | One named alias carrying the justification |
+| R11 | STD-50 | Minor | AC-7 | `gmail_pdf/infra/retry.py` | `call_with_retry` at most 40 lines, behaviour unchanged |
+| R12 | STD-51 | Minor | AC-7, FR-005 | gateway, `gmail_pdf/domain/errors.py` (docstring only), `tests/integration/test_gateway_httpmock.py` | Domain error raised outside the `except`; test asserts `__context__ is None` |
+| R13 | STD-52 | Minor | none | `gmail_pdf/app/planner.py`, `gmail_pdf/app/runner.py`, docstrings only | Complete `Raises:` |
+| R14 | STD-56 | Minor | none | `tests/unit/test_sentinel_matrix.py`, `tests/fakes/fake_gmail.py`, comment only | One-line justification |
+| R15 | PERF-13 | Minor | AC-4 unchanged | gateway | `messages()` built once in `__init__` |
+| R16 | PR text | | | PR #33 description | Correct decision 4, item 10 ("enforces") and "correctness is unaffected" |
+
+**Exit rule, G6 attempt 2, loop 2 of 3 (D-62):**
+1. **Orchestrator, new head H:** project commands; CI 10/10 from check runs; tested `main` SHA (RISK-023); diff only in the files above. A file outside the list: stop and ask before pushing.
+2. **reviewer-quality, own export of H, delta only:** every R1 row; a sweep of depth 1..3000 in steps of 25 in `parts` and in the resource, each a success or the fixed line, 0 unexpected-failure lines; each new check removed in turn fails a named test; `d-fold-1`, `r-add-408`, `r-reason-any-status`, `g-cache-discovery`, `g-method-name-in-log`, `m-return-0`, `tz-system-empty` now fail; restoring `from None` fails; retry mutants re-run after R11; replies in the threads.
+3. **reviewer-standards, delta only:** STD-48 forms each flagged; STD-49..52, 56; R15 read; T-05 on H.
+4. **reviewer-performance:** no re-review, unless the gateway or retry diff goes beyond R9..R12 and R15.
+5. **solution-architect:** does not review the fix. Owes one PR reply before G7 GO (C37).
+6. **Master decides attempt 2** on that evidence. All pass and no new Major or higher: GO, PGD-15 moves to In QA; QA tests H only and re-runs M13, M20, M22, M23 (C30).
+7. **New Minor or Info in the delta:** rating only, a tech-debt issue, no commit. A reviewer's added mutant is a finding, not a listed check (D-51). Items ruled here are not reopened. A delta finding is measured against `main` (D-46).
+8. **A miss on a Minor item alone:** fixed in the same file under D-47, no new attempt.
+9. **A miss on R1, an unapproved file, or a new Major or higher:** attempt 3, loop 3 of 3, the last; after that, Santhosh, under the orchestrator's limit. A CI rerun after an infrastructure failure is not a failure.
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C33 | scrum-master, product-owner | `sprint-01-plan.md` follow-up table; Jira | Rows: STORY-02.04 pacer AC, "must merge before STORY-01.04" (#35); STORY-01.04 (#36); STORY-01.07: `get(full)` latency, 403/429 counts, `Retry-After` seen or not, project quota, counts only (#34, Q-14); STORY-02.08: pacer off and on; STORY-03.02: one `get(full)` per message; STORY-06.01 (#37); STORY-06.02 PERF-14 (#29); STORY-07.01 QUA-46 (#32). Then create STORY-02.04 in Jira after the `aiid-` search, with a Blocks link to STORY-01.04 when that exists. **STORY-01.04 may not be Ready until STORY-02.04 exists with the pacer AC** | Rows before PGD-15 G7 GO; Jira by the sprint-02 G4, with C29 |
+| C34 | product-owner, scrum-master | Jira PGD-16 | Real-mode rows: neither hook variable set, `--tz Mars/Olympus` and a reversed range each exit 2, not 3, with no credential read; validation runs before `build_deps`. Remove the interim sentences so one table remains (FR-064). STD-55 | Before PGD-16 starts |
+| C35 | qa-engineer | `docs/07-qa/test-plan.md` | NT-01 becomes exit 1 with the fixed line; close OQ-1; tie NT-01..05 to PGD-15 AC-6; add the R1 rows to NT-03 and NT-04. The rest of C32 stays due at the sprint-02 G4 | Before the PGD-15 G7 report |
+| C36 | product-manager, solution-architect | PRD NFR-001/002, FR-038; ADR-007 | Q-15 proposal. FR-038 trigger reworded so a pacer-on miss does not promote it. ADR-007 gate restated in units against both NFRs, closing CC-02 and IMP-01 (C12 extended). The delivery lead decides before STORY-02.08 is Ready | Sprint-02 G4 |
+| C37 | solution-architect | PR #33; architecture; #34 | (a) One reply acknowledging or refusing the ninth deviation. (b) The #34 doc updates, plus 6.4 and 6.5 on an exhausted call. (c) QUA-45 ruling. (d) QUA-48 port shape | (a) before G7 GO; (b) sprint-02 G4; (c) before STORY-02.04 is Ready; (d) before STORY-01.04 is Ready |
+
+**Risks registered:** RISK-025 (new, score 9). RISK-011 raised from 6 to 8. RISK-007, RISK-010 and RISK-021 noted. RISK-005 unchanged at 10.
+
+**Rationale:**
+- The label comes from the checklist: a Critical is open, so NO-GO. Master tried to break that reading. The brief's facts are real: test-only hook, exit 1, one line, no leak. They limit the reach, but they do not make a listed case pass, and a rating on this project has turned on the AC's words since D-40. QUA-27 leaked a sentinel and stayed Major because no listed case failed; QUA-22 was a test harness and went Critical because a listed surface was missed. Reading QUA-39 the other way would invert both.
+- The cost is one loop, and it is not the reason. With 15 fix items and production edits, a master decision on the next head would be needed anyway.
+- STD-48 went down and PERF-11 did not go up, for the same reason: the rule asks what the words say, not how the finding feels.
+- The reviewer's QUA-39 recipe missed `latency_s` and an unread deep key, so the outcome is written first and the rows second, as the PGD-13 lessons require.
+
+**Posted:** PR #33 comment 6537950749, correction 6537957962; Jira PGD-15 c.10268; risks PGD-1 c.10269; new issues #35, #36, #37; comments on #21 (6537937814), #23 (6537938120), #29 (6537937382), #32 (6537936974).
