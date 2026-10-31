@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import logging
 from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
@@ -23,6 +24,7 @@ from gmail_pdf.domain.daterange import DateRange
 from gmail_pdf.domain.errors import GmailApiError, RetryExhaustedError, RunCancelledError
 from gmail_pdf.domain.events import CancelToken
 from gmail_pdf.domain.query import baseline_query
+from gmail_pdf.infra import gmail_gateway
 from gmail_pdf.infra.gmail_gateway import GmailGateway, build_service
 from tests.fakes.fake_time import FakeCancelToken, FakeSleeper
 from tests.support import sentinels
@@ -153,6 +155,25 @@ def test_the_client_builds_offline_from_the_bundled_discovery_document() -> None
 
 
 @pytest.mark.req("AC-8")
+def test_the_client_is_built_for_gmail_v1_without_the_discovery_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    built: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    def record(*args: Any, **kwargs: Any) -> object:
+        built.append((args, kwargs))
+        return object()
+
+    monkeypatch.setattr(gmail_gateway, "build", record)
+
+    build_service(http=httplib2.Http())
+
+    [(args, kwargs)] = built
+    assert args == ("gmail", "v1")
+    assert kwargs["cache_discovery"] is False
+
+
+@pytest.mark.req("AC-8")
 @pytest.mark.parametrize(
     "arguments",
     [
@@ -247,6 +268,27 @@ def test_a_permanent_failure_raises_the_domain_error_at_once(
 
 
 @pytest.mark.req("AC-7")
+@pytest.mark.parametrize(
+    ("method", "call"),
+    [
+        pytest.param("list_message_ids", lambda g: g.list_message_ids("has:attachment"), id="list"),
+        pytest.param("get_message", lambda g: g.get_message("m1"), id="get"),
+    ],
+)
+def test_a_retry_is_logged_under_the_name_of_the_gateway_method(
+    method: str, call: Callable[[GmailGateway], object], caplog: pytest.LogCaptureFixture
+) -> None:
+    rig = Rig(error(503), ok({"id": "m1", "messages": []}))
+
+    with caplog.at_level(logging.WARNING):
+        call(rig.gateway)
+
+    assert [r.getMessage() for r in caplog.records if r.name == "gmail_pdf.infra.retry"] == [
+        f"Retrying {method}: attempt 2 of 6 after 1.0 s"
+    ]
+
+
+@pytest.mark.req("AC-7")
 def test_six_failed_attempts_end_in_the_exhaustion_error() -> None:
     rig = Rig(*[error(503)] * 6)
 
@@ -322,6 +364,7 @@ def test_the_domain_error_carries_neither_the_body_nor_the_query_nor_a_chain() -
     assert text == "Gmail answered the request with HTTP 401."
     assert error_.reason == ""
     assert error_.__cause__ is None
+    assert error_.__context__ is None  # the library's HttpError (URL, body) is really dropped
     assert error_.__suppress_context__ is True
     assert sentinels.leaked(repr(vars(error_)) + text) == []
 

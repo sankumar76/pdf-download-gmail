@@ -60,7 +60,9 @@ class GmailApiError(GmailPdfError):
     Built at the gateway boundary from the library's error, so nothing above it depends on
     ``googleapiclient``. Only the status, the short reason token (for example
     ``rateLimitExceeded``) and the raw ``Retry-After`` header value are kept; the response body,
-    the URL and the headers are dropped because they can carry a query or a secret.
+    the URL and the headers are dropped because they can carry a query or a secret. The
+    gateway raises it outside the handler of the library's error, so that error is not
+    attached either (``__cause__`` and ``__context__`` are ``None``).
 
     Attributes:
         status: HTTP status code.

@@ -7,7 +7,12 @@ STORY-03.03. No method that modifies a mailbox exists here, and none may be adde
 Every call goes through ``infra.retry.call_with_retry`` with ``execute(num_retries=0)``, so the
 retry rules of NFR-006 live in one place. The library's ``HttpError`` is turned into the domain
 ``GmailApiError`` here, keeping only the status, the reason token and the ``Retry-After`` header:
-the response body, the URL (which carries the search query) and the headers are dropped.
+the response body, the URL (which carries the search query) and the headers are dropped, and
+the original error is not attached (``__cause__`` and ``__context__`` are ``None``).
+
+This module keeps no body, but the library may: on a 403 it logs the error reason, and on an
+unreadable body the raw text, at WARNING on the ``googleapiclient.http`` logger. That record
+passes the logging redaction filter (a registered secret is masked), not this module.
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ import json
 import re
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeAlias
 
 from google.auth.credentials import Credentials
 from googleapiclient.discovery import build
@@ -28,6 +33,11 @@ from gmail_pdf.domain.errors import GmailApiError
 from gmail_pdf.domain.events import CancelToken
 from gmail_pdf.infra import retry
 
+# The one untyped seam. ``googleapiclient`` ships no type information (see the mypy override in
+# pyproject.toml), so the client, its request objects and the JSON it parses are ``Any``. They
+# stay inside this module: the port returns ``JsonObject`` and ``MessageIdPage``.
+GoogleObject: TypeAlias = Any
+
 USER_ID = "me"
 LIST_PAGE_SIZE = 500  # Gmail's documented maximum for users.messages.list
 LIST_FIELDS = "messages/id,nextPageToken"
@@ -37,7 +47,9 @@ MESSAGE_FORMAT = "full"
 _REASON = re.compile(r"[A-Za-z][A-Za-z0-9]{0,63}")
 
 
-def build_service(*, credentials: Credentials | None = None, http: Http | None = None) -> Any:
+def build_service(
+    *, credentials: Credentials | None = None, http: Http | None = None
+) -> GoogleObject:
     """Build the Gmail client once (``cache_discovery=False``, bundled discovery document).
 
     Exactly one of ``credentials`` (the real run) and ``http`` (tests, a scripted transport)
@@ -76,7 +88,7 @@ class GmailGateway:
 
     def __init__(
         self,
-        service: Any,
+        service: GoogleObject,
         cancel: CancelToken,
         *,
         now: Callable[[], datetime] = retry.utc_now,
@@ -90,17 +102,20 @@ class GmailGateway:
             jitter: ``uniform(low, high)`` for the backoff; tests pass a seeded one.
         """
         self._service = service
+        self._messages = service.users().messages()  # built once, not on every call
         self._cancel = cancel
         self._now = now
         self._jitter = jitter
 
-    def _execute(self, method: str, request: Any) -> Any:
-        def attempt() -> Any:
+    def _execute(self, method: str, request: GoogleObject) -> GoogleObject:
+        def attempt() -> GoogleObject:
             try:
                 return request.execute(num_retries=0)
             except HttpError as error:
-                # ``from None``: the library's error text holds the full request URL.
-                raise _to_domain_error(error) from None
+                domain_error = _to_domain_error(error)
+            # Raised outside the handler, so the library's error (its text holds the request
+            # URL) is not left on ``__context__``; ``from None`` also keeps the flag set.
+            raise domain_error from None
 
         return retry.call_with_retry(
             attempt, method=method, cancel=self._cancel, now=self._now, jitter=self._jitter
@@ -117,7 +132,7 @@ class GmailGateway:
 
         Following ``next_page_token`` to later pages is the caller's job (STORY-02.04).
         """
-        params: dict[str, Any] = {
+        params: dict[str, GoogleObject] = {
             "userId": USER_ID,
             "q": query,
             "maxResults": LIST_PAGE_SIZE,
@@ -126,17 +141,13 @@ class GmailGateway:
         }
         if page_token is not None:
             params["pageToken"] = page_token
-        request = self._service.users().messages().list(**params)
+        request = self._messages.list(**params)
         response = self._execute("list_message_ids", request)
         ids = tuple(str(message["id"]) for message in response.get("messages", ()))
         return MessageIdPage(ids, response.get("nextPageToken"))
 
     def get_message(self, message_id: str) -> JsonObject:
         """Return the message resource with ``format=full`` (nested part tree included)."""
-        request = (
-            self._service.users()
-            .messages()
-            .get(userId=USER_ID, id=message_id, format=MESSAGE_FORMAT)
-        )
+        request = self._messages.get(userId=USER_ID, id=message_id, format=MESSAGE_FORMAT)
         message: JsonObject = self._execute("get_message", request)
         return message
