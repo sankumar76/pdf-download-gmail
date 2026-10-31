@@ -121,7 +121,7 @@ def test_cancelled_still_maps_to_exit_code_one() -> None:
 
 @pytest.mark.req("AC-4")
 def test_a_failed_list_call_raises_out_of_the_run_instead_of_ending_empty() -> None:
-    fake = FakeGmail(edge_mailbox().messages)
+    fake = edge_mailbox()
     fake.fail_with_http("list_message_ids", 503, times=None)
 
     with pytest.raises(FakeGmailHttpError):
@@ -130,7 +130,7 @@ def test_a_failed_list_call_raises_out_of_the_run_instead_of_ending_empty() -> N
 
 @pytest.mark.req("AC-4")
 def test_a_failed_list_call_reads_no_message() -> None:
-    fake = FakeGmail(edge_mailbox().messages)
+    fake = edge_mailbox()
     fake.fail_with_http("list_message_ids", 503, times=None)
 
     with pytest.raises(FakeGmailHttpError):
