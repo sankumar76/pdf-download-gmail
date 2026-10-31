@@ -216,6 +216,14 @@ def test_the_five_retry_records_are_still_logged_at_warning_for_a_future_run_log
     ]
 
 
+def test_the_retry_logger_still_propagates_to_its_parents_after_main(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    Run(monkeypatch, capsys, failing_fake(), RANGE_ARGS)
+
+    assert logging.getLogger(RETRY_LOGGER).propagate is True
+
+
 def test_running_main_twice_adds_the_handler_once(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
