@@ -33,7 +33,7 @@ def run(request: RunRequest, deps: Deps, sink: EventSink, cancel: CancelToken) -
         GmailApiError: Gmail answered a call with a non-retryable HTTP error.
         RetryExhaustedError: a retryable call failed on every attempt.
         KeyError: a message resource has no ``internalDate`` (with ``ValueError`` and
-            ``TypeError`` for a malformed one: STD-53, no domain error for it yet).
+            ``TypeError`` for a malformed one: issue #37, no domain error for it yet).
 
     ``RunCancelledError`` does not escape: it becomes the ``CANCELLED`` summary. The CLI turns
     the other failures into its one fixed unexpected-failure line.
