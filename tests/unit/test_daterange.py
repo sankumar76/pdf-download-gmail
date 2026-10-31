@@ -8,7 +8,7 @@ fixed in every test; nothing depends on the machine's zone.
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pytest
@@ -162,6 +162,14 @@ def test_an_end_day_before_the_start_day_is_refused() -> None:
 
 
 @pytest.mark.req("AC-9")
+def test_the_last_representable_day_has_no_next_day_and_raises_loudly() -> None:
+    # Not guarded (no ceiling check here): it cannot put a bad bound in a query, and
+    # ``domain.validation`` keeps LATEST_DATE below it.
+    with pytest.raises(OverflowError):
+        DateRange.from_days(date.max, date.max, ZoneInfo("UTC"))
+
+
+@pytest.mark.req("AC-9")
 @pytest.mark.parametrize(
     ("day", "zone"),
     [
@@ -190,7 +198,7 @@ def test_the_guard_sits_between_a_start_of_zero_and_a_start_of_one_second() -> N
 
 
 @pytest.mark.req("AC-9")
-def test_the_first_second_the_guard_accepts_gives_a_zero_after_bound() -> None:
+def test_the_floor_date_starts_at_36000_in_the_furthest_east_zone_and_86400_in_utc() -> None:
     # 1970-01-02 00:00 in Etc/GMT-14 is 1970-01-01T10:00:00Z = 36000 s; in UTC it is 86400 s.
     far_east = days("1970-01-02", "1970-01-02", ZoneInfo("Etc/GMT-14"))
     utc = days("1970-01-02", "1970-01-02", ZoneInfo("UTC"))
@@ -243,15 +251,25 @@ def test_a_name_that_is_not_a_zone_is_not_resolved(name: str) -> None:
         tz_module.resolve_zone(name)
 
 
-def _system_zone_lookup_fails() -> str:
-    raise OSError("no zone")
+def _raising(error: Exception) -> Callable[[], str]:
+    def lookup() -> str:
+        raise error
+
+    return lookup
 
 
+# One row per class ``tzlocal`` can fail with (PGD-16 AC-4, G6 O1): dropping a class from the
+# ``except`` in ``system_zone_name`` fails its row.
 @pytest.mark.parametrize(
     "lookup",
     [
         pytest.param(lambda: "", id="empty-name"),
-        pytest.param(_system_zone_lookup_fails, id="os-error"),
+        pytest.param(_raising(LookupError("no zone key")), id="lookup-error"),
+        pytest.param(_raising(ZoneInfoNotFoundError("no zone")), id="zone-info-not-found"),
+        pytest.param(_raising(ValueError("bad zone")), id="value-error"),
+        pytest.param(_raising(OSError("no zone")), id="os-error"),
+        pytest.param(_raising(AttributeError("no encode")), id="attribute-error"),
+        pytest.param(_raising(TypeError("not a string")), id="type-error"),
     ],
 )
 def test_an_unresolvable_system_zone_has_no_name_and_cannot_be_resolved(
@@ -271,13 +289,14 @@ def test_the_system_zone_name_is_the_one_tzlocal_reports(monkeypatch: pytest.Mon
     assert tz_module.system_zone_name() == "Asia/Kolkata"
 
 
-def test_the_system_clock_reads_today_in_the_given_zone() -> None:
+@pytest.mark.parametrize("zone_name", ["Pacific/Kiritimati", "Pacific/Pago_Pago", "UTC"])
+def test_the_system_clock_reads_today_in_the_given_zone(zone_name: str) -> None:
+    zone = ZoneInfo(zone_name)
     clock = tz_module.SystemClock()
-    before = date.today()
+    lower = datetime.now(zone).date()  # the day before the call, in the same zone
 
-    far_east = clock.today(ZoneInfo("Pacific/Kiritimati"))  # UTC+14
-    far_west = clock.today(ZoneInfo("Pacific/Pago_Pago"))  # UTC-11
+    today = clock.today(zone)
 
-    assert type(far_east) is date
-    assert 1 <= (far_east - far_west).days <= 2  # 25 hours apart, whatever today is
-    assert abs((far_east - before).days) <= 2
+    upper = datetime.now(zone).date()  # the day after it; equal to ``lower`` except at midnight
+    assert type(today) is date
+    assert lower <= today <= upper

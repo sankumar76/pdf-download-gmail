@@ -9,16 +9,22 @@ operating system, Windows included. Whether a name is acceptable to the user is 
 from __future__ import annotations
 
 from datetime import date, datetime, tzinfo
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
 import tzlocal
 
 
 def system_zone_name() -> str | None:
-    """The IANA name of the system zone, or ``None`` when it cannot be determined."""
+    """The IANA name of the system zone, or ``None`` when it cannot be determined.
+
+    ``tzlocal`` has no single failure type. ``LookupError`` covers a registry without a zone
+    key (and ``ZoneInfoNotFoundError``, which is a ``KeyError``); ``ValueError`` and ``OSError``
+    cover an unreadable or malformed source; ``AttributeError`` and ``TypeError`` cover a registry
+    value of the wrong type (PGD-16 AC-4). A listed class includes its subclasses.
+    """
     try:
         name = tzlocal.get_localzone_name()
-    except (ZoneInfoNotFoundError, ValueError, OSError):
+    except (LookupError, ValueError, OSError, AttributeError, TypeError):
         return None
     return name or None
 

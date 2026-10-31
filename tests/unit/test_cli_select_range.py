@@ -12,7 +12,8 @@ import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from zoneinfo import available_timezones
+from typing import NoReturn
+from zoneinfo import ZoneInfoNotFoundError, available_timezones
 
 import pytest
 
@@ -20,6 +21,7 @@ from gmail_pdf.bootstrap import ENV_FAKE_MAILBOX, ENV_TESTING
 from gmail_pdf.cli import main as cli_main
 from gmail_pdf.domain import messages
 from gmail_pdf.domain.models import RunResult, RunSummary
+from gmail_pdf.infra import tz as tz_module
 from tests.fakes.fake_time import FixedInstantClock
 from tests.support import sentinels
 from tests.support.mailboxes import MESSAGES_IN_RANGE_LINE, RANGE_ARGS, write_edge_mailbox
@@ -74,8 +76,6 @@ def test_a_range_prints_the_interim_count_and_returns_zero(
 def test_without_tz_the_system_zone_is_used(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from gmail_pdf.infra import tz as tz_module
-
     monkeypatch.setattr(tz_module.tzlocal, "get_localzone_name", lambda: "Asia/Kolkata")
     use_hook(monkeypatch, write_edge_mailbox(tmp_path / "mailbox.json"))
 
@@ -85,6 +85,11 @@ def test_without_tz_the_system_zone_is_used(
 
 
 # ----------------------------------------------------------------------------------- AC-6
+def _must_not_be_called(*_args: object) -> NoReturn:
+    """A stub that fails the test when reached: ``build_deps``, the run or a zone lookup."""
+    raise AssertionError("this call must not be reached in this test")
+
+
 BUILD_FAILURES = [
     pytest.param(None, None, messages.SIGN_IN_UNAVAILABLE_LINE, 3, id="real-mode"),
     pytest.param("good", None, messages.FAKE_MAILBOX_HOOK_REFUSED_LINE, 1, id="hook-refused"),
@@ -166,7 +171,7 @@ def test_a_hook_failure_is_final_the_run_never_starts_and_real_mode_is_not_tried
     builds: list[int] = []
     real_build = cli_main.build_deps
     monkeypatch.setattr(cli_main, "build_deps", lambda: builds.append(1) or real_build())
-    monkeypatch.setattr(cli_main.runner, "run", _must_not_run)
+    monkeypatch.setattr(cli_main.runner, "run", _must_not_be_called)
     use_hook(
         monkeypatch,
         tmp_path / "absent.json" if case == "unusable" else write_edge_mailbox(tmp_path / "m.json"),
@@ -176,10 +181,6 @@ def test_a_hook_failure_is_final_the_run_never_starts_and_real_mode_is_not_tried
     code = cli_main.main(RANGE_ARGS)
 
     assert (code, len(builds)) == (1, 1)
-
-
-def _must_not_run(*_args: object) -> object:
-    raise AssertionError("the run must not start after a hook failure")
 
 
 @pytest.mark.req("AC-5", "FR-043")
@@ -196,10 +197,6 @@ def test_a_cancelled_run_prints_the_notice_and_exits_one(
 
 
 # ------------------------------------------------------------------------- usage errors
-def _must_not_be_called(*_args: object) -> object:
-    raise AssertionError("build_deps must not be reached for invalid input")
-
-
 @pytest.mark.req("AC-1", "AC-2", "AC-4", "AC-5", "AC-6", "AC-9")
 @pytest.mark.parametrize(
     ("argv", "lines"),
@@ -342,24 +339,33 @@ def _not_an_iana_name() -> str:
     return "Mars/Olympus"
 
 
-def _lookup_fails() -> str:
-    raise OSError("no zone")
+def _raising(error: Exception) -> Callable[[], str]:
+    def lookup() -> str:
+        raise error
+
+    return lookup
+
+
+# Every class ``tzlocal`` can fail with when the system zone is unresolved (PGD-16 AC-4, G6 O1):
+# a registry without a zone key, an unknown name, an unreadable source and a registry value of
+# the wrong type. Each class has its own row, so dropping one from the ``except`` fails a row.
+SYSTEM_ZONE_FAILURES = [
+    pytest.param(_empty_name, id="empty-name"),
+    pytest.param(_not_an_iana_name, id="not-an-iana-name"),
+    pytest.param(_raising(LookupError("no zone key")), id="lookup-error"),
+    pytest.param(_raising(ZoneInfoNotFoundError("no zone")), id="zone-info-not-found"),
+    pytest.param(_raising(ValueError("bad zone")), id="value-error"),
+    pytest.param(_raising(OSError("no zone")), id="os-error"),
+    pytest.param(_raising(AttributeError("no encode")), id="attribute-error"),
+    pytest.param(_raising(TypeError("not a string")), id="type-error"),
+]
 
 
 @pytest.mark.req("AC-4")
-@pytest.mark.parametrize(
-    "lookup",
-    [
-        pytest.param(_empty_name, id="empty-name"),
-        pytest.param(_not_an_iana_name, id="not-an-iana-name"),
-        pytest.param(_lookup_fails, id="lookup-fails"),
-    ],
-)
+@pytest.mark.parametrize("lookup", SYSTEM_ZONE_FAILURES)
 def test_an_unusable_system_zone_without_tz_gets_the_zone_sentence(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, lookup: Callable[[], str]
 ) -> None:
-    from gmail_pdf.infra import tz as tz_module
-
     monkeypatch.setattr(tz_module.tzlocal, "get_localzone_name", lookup)
     monkeypatch.setattr(cli_main, "build_deps", _must_not_be_called)
 
@@ -369,16 +375,24 @@ def test_an_unusable_system_zone_without_tz_gets_the_zone_sentence(
     assert (code, captured.err, captured.out) == (2, ZONE_ERROR + "\n", "")
 
 
+@pytest.mark.req("AC-4", "AC-5")
+def test_an_unresolved_system_zone_comes_after_the_date_line(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tz_module.tzlocal, "get_localzone_name", _raising(LookupError("no key")))
+    monkeypatch.setattr(cli_main, "build_deps", _must_not_be_called)
+
+    code = cli_main.main(["--start", "x", "--end", "2026-01-31"])
+
+    captured = capsys.readouterr()
+    assert (code, captured.err, captured.out) == (2, f"{START_FORMAT}\n{ZONE_ERROR}\n", "")
+
+
 @pytest.mark.req("AC-4")
 def test_the_system_zone_is_not_looked_up_when_tz_is_given(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from gmail_pdf.infra import tz as tz_module
-
-    def must_not_look_up() -> str:
-        raise AssertionError("the system zone must not be read when --tz is given")
-
-    monkeypatch.setattr(tz_module.tzlocal, "get_localzone_name", must_not_look_up)
+    monkeypatch.setattr(tz_module.tzlocal, "get_localzone_name", _must_not_be_called)
     use_hook(monkeypatch, write_edge_mailbox(tmp_path / "mailbox.json"))
 
     assert cli_main.main(RANGE_ARGS) == 0
@@ -408,6 +422,21 @@ def test_a_future_end_date_warns_and_the_run_goes_on(
     captured = capsys.readouterr()
     assert (code, captured.out) == (0, "Messages in range: 3\n")
     assert captured.err == (FUTURE_END + "\n" if warned else "")
+
+
+@pytest.mark.req("AC-3")
+def test_today_is_the_day_in_the_chosen_zone_not_in_utc(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    use_hook(monkeypatch, write_edge_mailbox(tmp_path / "mailbox.json"))
+
+    # 12:00 UTC on 2026-02-15 is already 2026-02-16 in UTC+14, so that end date is today there.
+    code = cli_main.main(
+        ["--start", "2026-01-01", "--end", "2026-02-16", "--tz", "Pacific/Kiritimati"]
+    )
+
+    captured = capsys.readouterr()
+    assert (code, captured.err) == (0, "")
 
 
 @pytest.mark.req("AC-3")
