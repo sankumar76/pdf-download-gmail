@@ -24,13 +24,10 @@ def test_the_minimum_secret_length_is_eight() -> None:
 
 @pytest.mark.req("AC-1")
 def test_the_boundary_strings_are_seven_and_eight_characters_long() -> None:
-    assert (
-        len(redaction_pins.SEVEN_CHARACTER_VALUE),
-        len(redaction_pins.EIGHT_CHARACTER_VALUE),
-    ) == (
-        7,
-        8,
-    )
+    seven = redaction_pins.SEVEN_CHARACTER_VALUE
+    eight = redaction_pins.EIGHT_CHARACTER_VALUE
+
+    assert (len(seven), len(eight)) == (7, 8)
 
 
 @pytest.mark.req("AC-1")
