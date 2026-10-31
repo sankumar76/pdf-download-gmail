@@ -16,6 +16,18 @@ class AdapterUnavailableError(GmailPdfError):
     """The requested adapter is not wired into this build yet."""
 
 
+class FakeMailboxUnavailableError(AdapterUnavailableError):
+    """The test-only fake mailbox was requested correctly but its file cannot be used.
+
+    A missing, unreadable or malformed file. Never a fall-back to the real adapter: the CLI
+    treats it as final (PGD-15 AC-6 (iii)). The message never contains the path.
+    """
+
+
+class FakeMailboxNotImportableError(FakeMailboxUnavailableError):
+    """The fake mailbox lives in ``tests/``, which is not importable (installed wheel)."""
+
+
 class PrivateFileError(GmailPdfError):
     """A private (secret-bearing) folder or file could not be created or written.
 

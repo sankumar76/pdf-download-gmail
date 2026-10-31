@@ -177,6 +177,13 @@ def test_json_defaults_match_the_constructor_defaults() -> None:
     )
 
 
+def _listed(overrides: dict[str, object]) -> dict[str, object]:
+    """A message entry with a valid resource, with some resource keys replaced."""
+    resource: dict[str, object] = {"id": "m1", "internalDate": "1700000000000", "payload": {}}
+    resource.update(overrides)
+    return {"resource": resource, "attachments": {}}
+
+
 @pytest.mark.parametrize(
     "document",
     [
@@ -192,10 +199,42 @@ def test_json_defaults_match_the_constructor_defaults() -> None:
             {"format": 1, "messages": [{"resource": {"id": 7}, "attachments": {}}]},
             id="message-id-not-a-string",
         ),
+        pytest.param(
+            {"format": 1, "messages": [_listed({"payload": None})]},
+            id="payload-null",
+        ),
+        pytest.param(
+            {"format": 1, "messages": [_listed({"payload": "text"})]},
+            id="payload-not-an-object",
+        ),
+        pytest.param(
+            {"format": 1, "messages": [_listed({"internalDate": None})]},
+            id="internal-date-null",
+        ),
+        pytest.param(
+            {"format": 1, "messages": [_listed({"internalDate": 1700000000000})]},
+            id="internal-date-not-a-string",
+        ),
+        pytest.param(
+            {"format": 1, "messages": [_listed({"internalDate": "²"})]},
+            id="internal-date-superscript-digit",
+        ),
+        pytest.param(
+            {"format": 1, "messages": [_listed({"internalDate": ""})]},
+            id="internal-date-empty",
+        ),
     ],
 )
 def test_malformed_json_documents_are_rejected(document: dict[str, object]) -> None:
     with pytest.raises(ValueError):
+        from_json_dict(document)
+
+
+@pytest.mark.req("DEF-001", "issue-15")
+def test_a_resource_without_payload_or_internal_date_is_rejected_at_load_not_at_listing() -> None:
+    document = {"format": 1, "messages": [{"resource": {"id": "a"}, "attachments": {}}]}
+
+    with pytest.raises(ValueError, match="payload"):
         from_json_dict(document)
 
 

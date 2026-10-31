@@ -43,6 +43,19 @@ def to_json_dict(fake: FakeGmail) -> JsonObject:
     }
 
 
+def _require_listable(resource: Mapping[str, object]) -> None:
+    """Fail at load time when a resource would make a later listing raise a bare exception.
+
+    ``FakeGmail`` reads ``payload`` (search terms) and ``internalDate`` (ordering, ``after:`` and
+    ``before:``) of every message it lists; Gmail returns ``internalDate`` as a decimal string.
+    """
+    if not isinstance(resource.get("payload"), dict):
+        raise ValueError("each fake mailbox message resource needs an object 'payload'")
+    date = resource.get("internalDate")
+    if not (isinstance(date, str) and date.isascii() and date.isdecimal()):
+        raise ValueError("each fake mailbox message resource needs a decimal string 'internalDate'")
+
+
 def from_json_dict(data: Mapping[str, object]) -> FakeGmail:
     """Rebuild a fake from ``to_json_dict`` output."""
     if data.get("format") != JSON_FORMAT_VERSION:
@@ -58,6 +71,7 @@ def from_json_dict(data: Mapping[str, object]) -> FakeGmail:
             raise ValueError("each fake mailbox message needs 'resource' and 'attachments'")
         if not isinstance(resource.get("id"), str) or not resource["id"]:
             raise ValueError("each fake mailbox message resource needs a string 'id'")
+        _require_listable(resource)
         decoded = {str(k): b64url_decode(str(v)) for k, v in attachments.items()}
         messages.append(FakeMessage(resource, decoded))
     seed = data.get("shuffle_seed")

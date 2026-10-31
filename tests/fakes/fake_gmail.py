@@ -96,6 +96,15 @@ class FakeMessage:
         return int(self.resource["internalDate"]) // 1000
 
 
+@dataclass(frozen=True, slots=True)
+class _Cursor:
+    """One paged listing: the search it belongs to and the ids it returns, page by page."""
+
+    query: str
+    include_spam_trash: bool
+    ids: list[str]
+
+
 @dataclass(slots=True)
 class _ScriptedFault:
     method: str
@@ -176,7 +185,7 @@ class FakeGmail:
         self._sleep = sleep
         self._messages: dict[str, FakeMessage] = {}
         self._faults: list[_ScriptedFault] = []
-        self._cursors: dict[str, list[str]] = {}
+        self._cursors: dict[str, _Cursor] = {}
         for message in messages:
             self.add(message)
 
@@ -295,11 +304,14 @@ class FakeGmail:
         )
         if page_token is None:
             cursor = f"cursor-{len(self._cursors)}"
-            self._cursors[cursor] = self._matching_ids(query, include_spam_trash)
+            ids = self._matching_ids(query, include_spam_trash)
+            self._cursors[cursor] = _Cursor(query, include_spam_trash, ids)
             offset = 0
         else:
-            cursor, offset = self._parse_token(page_token)
-        ids = self._cursors[cursor]
+            # Gmail rejects a token used with another query or spam flag (QUA-03, #11), so a
+            # token mix-up between the two paged searches of ADR-007 fails here as well.
+            cursor, offset = self._parse_token(page_token, query, include_spam_trash)
+            ids = self._cursors[cursor].ids
         page = ids[offset : offset + self.page_size]
         end = offset + len(page)
         return MessageIdPage(tuple(page), f"{cursor}:{end}" if end < len(ids) else None)
@@ -323,9 +335,14 @@ class FakeGmail:
             raise FakeGmailHttpError(404, "notFound")
         return self._messages[message_id]
 
-    def _parse_token(self, token: str) -> tuple[str, int]:
+    def _parse_token(self, token: str, query: str, include_spam_trash: bool) -> tuple[str, int]:
         cursor, _, offset_text = token.rpartition(":")
-        if cursor not in self._cursors or not offset_text.isdigit():
+        # ``isdecimal`` alone accepts non-ASCII digits that ``int`` reads as numbers;
+        # ``isdigit`` alone accepts superscripts that ``int`` rejects (#15 b): need both.
+        if cursor not in self._cursors or not (offset_text.isascii() and offset_text.isdecimal()):
+            raise FakeGmailHttpError(400, "invalidPageToken")
+        issued = self._cursors[cursor]
+        if (issued.query, issued.include_spam_trash) != (query, include_spam_trash):
             raise FakeGmailHttpError(400, "invalidPageToken")
         return cursor, int(offset_text)
 
@@ -369,7 +386,7 @@ class FakeGmail:
             return _has_attachment
         if key == "filename" and value:
             return lambda message: _has_filename(message, value)
-        if key in ("after", "before") and value.isdigit():
+        if key in ("after", "before") and value.isascii() and value.isdecimal():
             return self._epoch_term(key, int(value))
         raise UnsupportedQueryError(f"unsupported search term {term!r}")
 
