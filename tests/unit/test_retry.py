@@ -100,7 +100,12 @@ NOT_RETRYABLE: list[tuple[str, GmailApiError]] = [
     ("403-other-reason", GmailApiError(403, "insufficientPermissions")),
     ("403-no-reason", GmailApiError(403)),
     ("404", GmailApiError(404)),
+    ("408", GmailApiError(408)),
+    ("409", GmailApiError(409)),
     ("501", GmailApiError(501)),
+    # The rate-limit reason counts only on a 403 (architecture 6.4).
+    ("400-rate-limit-reason", GmailApiError(400, "rateLimitExceeded")),
+    ("404-user-rate-limit-reason", GmailApiError(404, "userRateLimitExceeded")),
 ]
 
 
