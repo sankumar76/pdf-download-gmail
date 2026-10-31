@@ -2,10 +2,8 @@
 
 The library builds the requests and parses the errors; only the HTTP transport is scripted
 (``HttpMockSequence``, test-strategy section 3), so nothing leaves the process. The socket guard
-of ``tests/conftest.py`` is active for every test here.
-
-Over 400 lines on purpose (Coding Standards, files): every test drives the one gateway through
-the same scripted transport, and the PGD-16 zone sweep (AC-9) reuses that set-up.
+of ``tests/conftest.py`` is active for every test here. The gateway rig itself is in
+``tests/support/gateway_rig.py``, shared with the CLI tests of PGD-17 (AC-4).
 """
 
 from __future__ import annotations
@@ -23,7 +21,6 @@ from zoneinfo import available_timezones
 import httplib2
 import pytest
 from google.oauth2.credentials import Credentials
-from googleapiclient.http import HttpMockSequence
 
 from gmail_pdf.domain.daterange import DateRange
 from gmail_pdf.domain.errors import GmailApiError, RetryExhaustedError, RunCancelledError
@@ -33,51 +30,11 @@ from gmail_pdf.domain.validation import FieldNames, RawInput, validate
 from gmail_pdf.infra import gmail_gateway
 from gmail_pdf.infra.gmail_gateway import GmailGateway, build_service
 from gmail_pdf.infra.tz import resolve_zone
-from tests.fakes.fake_time import FakeCancelToken, FakeSleeper, FixedInstantClock
+from tests.fakes.fake_time import FakeSleeper, FixedInstantClock
 from tests.support import sentinels
+from tests.support.gateway_rig import OK_EMPTY, Response, Rig, error, ok
 
 pytestmark = pytest.mark.req("FR-009", "NFR-006", "NFR-011")
-
-Response = tuple[dict[str, str], str | bytes]
-OK_EMPTY: Response = ({"status": "200"}, '{"resultSizeEstimate": 0}')
-
-
-def ok(body: dict[str, Any]) -> Response:
-    return {"status": "200"}, json.dumps(body)
-
-
-def error(status: int, reason: str = "", **headers: str) -> Response:
-    body = {"error": {"code": status, "message": "scripted", "errors": [{"reason": reason}]}}
-    return {"status": str(status), **headers}, json.dumps(body)
-
-
-class Rig:
-    """A gateway over a scripted transport, with a fake sleeper behind its cancel token."""
-
-    def __init__(self, *script: Response | BaseException, cancel_during_sleep: int | None = None):
-        self.http = ScriptedHttp(list(script))
-        self.sleeper = FakeSleeper()
-        self.token = FakeCancelToken(self.sleeper, cancel_during_sleep)
-        self.gateway = GmailGateway(
-            build_service(http=self.http),
-            self.token,
-            now=self.sleeper.clock.now,
-            jitter=lambda low, high: high,
-        )
-
-    @property
-    def requests(self) -> list[tuple[str, str]]:
-        return [(method, uri) for uri, method, _body, _headers in self.http.request_sequence]
-
-
-class ScriptedHttp(HttpMockSequence):
-    """``HttpMockSequence`` that can also raise a scripted transport error."""
-
-    def request(self, uri: str, method: str = "GET", *args: Any, **kwargs: Any) -> Any:
-        if self._iterable and isinstance(self._iterable[0], BaseException):
-            self.request_sequence.append((uri, method, None, None))
-            raise self._iterable.pop(0)
-        return super().request(uri, method, *args, **kwargs)
 
 
 def query_of(uri: str) -> dict[str, list[str]]:
