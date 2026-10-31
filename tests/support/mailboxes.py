@@ -32,3 +32,33 @@ def write_edge_mailbox(path: Path) -> Path:
     """Write the edge mailbox to ``path`` and return it."""
     dump_fake_gmail_to_json_file(edge_mailbox(), path)
     return path
+
+
+def empty_mailbox() -> FakeGmail:
+    """A mailbox with no message at all: the search for any range returns nothing (PGD-17 AC-1)."""
+    return FakeGmail([])
+
+
+def outside_mailbox() -> FakeGmail:
+    """The two edge messages one second outside the January range (PGD-17 AC-2).
+
+    The search is widened by one second on each side, so it returns both; the local re-check
+    drops them.
+    """
+    builders = [
+        MessageBuilder("next-midnight").received("2026-02-01T00:00:00", KOLKATA),
+        MessageBuilder("second-before").received("2025-12-31T23:59:59", KOLKATA),
+    ]
+    return FakeGmail(build_messages(builder.pdf("Edge.pdf") for builder in builders))
+
+
+def write_empty_mailbox(path: Path) -> Path:
+    """Write the empty mailbox to ``path`` and return it."""
+    dump_fake_gmail_to_json_file(empty_mailbox(), path)
+    return path
+
+
+def write_outside_mailbox(path: Path) -> Path:
+    """Write the all-outside mailbox to ``path`` and return it."""
+    dump_fake_gmail_to_json_file(outside_mailbox(), path)
+    return path

@@ -543,7 +543,8 @@ def test_every_zone_runs_the_floor_and_the_ceiling_date_to_a_normal_result(
             code = cli_main.main(["--start", day, "--end", day, "--tz", zone])
             captured = capsys.readouterr()
             expected_err = FUTURE_END + "\n" if warned else ""
-            if (code, captured.out, captured.err) != (0, "Messages in range: 0\n", expected_err):
+            expected_out = "No PDFs found\n0 PDFs found.\n"
+            if (code, captured.out, captured.err) != (0, expected_out, expected_err):
                 problems.append(f"{zone} {day}: {code} {captured.out!r} {captured.err!r}")
 
     assert len(zones) > 400

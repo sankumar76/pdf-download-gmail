@@ -84,7 +84,7 @@ def test_a_range_without_matches_prints_a_zero_count(workspace: Workspace) -> No
 
     assert (result.returncode, result.stdout, result.stderr) == (
         0,
-        "Messages in range: 0\n",
+        "No PDFs found\n0 PDFs found.\n",
         "",
     )
 

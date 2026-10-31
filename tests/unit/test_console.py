@@ -28,6 +28,25 @@ def test_the_count_line_goes_to_stdout(capsys: pytest.CaptureFixture[str]) -> No
     assert (captured.out, captured.err) == ("Messages in range: 3\n", "")
 
 
+@pytest.mark.req("AC-1", "AC-2")
+def test_an_empty_run_prints_the_two_lines_to_stdout_and_nothing_to_stderr(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    console.print_summary(RunSummary(RunResult.COMPLETED, ()))
+
+    captured = capsys.readouterr()
+    assert (captured.out, captured.err) == ("No PDFs found\n0 PDFs found.\n", "")
+
+
+@pytest.mark.req("AC-1")
+def test_the_count_line_is_not_printed_for_an_empty_run(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    console.print_summary(RunSummary(RunResult.COMPLETED, ()))
+
+    assert "Messages in range" not in capsys.readouterr().out
+
+
 def test_a_cancelled_run_prints_the_cancel_notice_to_stderr(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

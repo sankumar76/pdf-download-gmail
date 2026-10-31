@@ -69,6 +69,15 @@ class RunSummary:
     messages: tuple[MessageRef, ...] = ()
 
     @property
+    def is_empty(self) -> bool:
+        """True for a run that finished and found nothing (EC-06).
+
+        Today that means no message in the range. A cancelled run is not empty: it did not
+        finish, so it must not be told as "No PDFs found".
+        """
+        return self.result is RunResult.COMPLETED and not self.messages
+
+    @property
     def exit_code(self) -> ExitCode:
         """The process exit code for this outcome."""
         return ExitCode.OK if self.result is RunResult.COMPLETED else ExitCode.FAILURE

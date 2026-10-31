@@ -343,7 +343,11 @@ ZONES_EAST = ["UTC", "Pacific/Kiritimati", "Pacific/Apia", "Etc/GMT-14"]
 def test_the_floor_day_alone_is_a_normal_empty_result(workspace: Workspace) -> None:
     result = run_cli(workspace, ["--start", "1970-01-02", "--end", "1970-01-02", "--tz", "UTC"])
 
-    assert (result.returncode, result.stdout, result.stderr) == (0, "Messages in range: 0\n", "")
+    assert (result.returncode, result.stdout, result.stderr) == (
+        0,
+        "No PDFs found\n0 PDFs found.\n",
+        "",
+    )
 
 
 @pytest.mark.req("AC-9", "DEF-007")
