@@ -114,10 +114,8 @@ def test_anything_but_a_real_ascii_iso_date_does_not_parse(text: str) -> None:
     assert parse_iso_date(text) is None
 
 
-@pytest.mark.req("AC-1")
-def test_the_pattern_alone_keeps_out_other_digit_scripts_and_trailing_text(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+@pytest.fixture
+def lenient_date(monkeypatch: pytest.MonkeyPatch) -> None:
     """``date.fromisoformat`` is not the guard: a lenient parser is, and the pattern must hold.
 
     CPython's C implementation refuses Arabic-Indic digits and trailing text, but the pure-Python
@@ -133,10 +131,27 @@ def test_the_pattern_alone_keeps_out_other_digit_scripts_and_trailing_text(
 
     monkeypatch.setattr(validation, "date", Lenient)
 
-    assert validation.parse_iso_date("٢٠٢٦-٠١-٠٥") is None
-    assert validation.parse_iso_date("２０２６-０１-０５") is None
-    assert validation.parse_iso_date("2026-01-05\n") is None
-    assert validation.parse_iso_date("2026-01-05T00:00:00") is None
+
+@pytest.mark.req("AC-1")
+@pytest.mark.parametrize(
+    "text",
+    [
+        pytest.param("٢٠٢٦-٠١-٠٥", id="arabic-indic-digits"),
+        pytest.param("２０２６-０１-０５", id="fullwidth-digits"),
+        pytest.param("2026-01-05\n", id="trailing-newline"),
+        pytest.param("2026-01-05T00:00:00", id="date-time"),
+    ],
+)
+def test_the_pattern_alone_keeps_out_other_digit_scripts_and_trailing_text(
+    lenient_date: None, text: str
+) -> None:
+    assert validation.parse_iso_date(text) is None
+
+
+@pytest.mark.req("AC-1")
+def test_the_pattern_lets_a_plain_iso_date_through_even_with_a_lenient_parser(
+    lenient_date: None,
+) -> None:
     assert validation.parse_iso_date("2026-01-05") == date(2026, 1, 5)
 
 
@@ -157,34 +172,49 @@ def test_the_pattern_alone_keeps_out_other_digit_scripts_and_trailing_text(
         pytest.param("9999-12-31", False, id="one-above-the-ceiling"),
     ],
 )
-def test_each_date_must_lie_from_1970_01_02_to_9999_12_30(day: str, accepted: bool) -> None:
+@pytest.mark.parametrize("role", ["start", "end"])
+def test_each_date_must_lie_from_1970_01_02_to_9999_12_30(
+    day: str, accepted: bool, role: str
+) -> None:
     # The other date is a day that is valid on its own and on the right side of this one.
-    as_start = check(start=day, end="9999-12-30")
-    as_end = check(start="1970-01-02", end=day)
+    result = check(start=day, end="9999-12-30") if role == "start" else check("1970-01-02", day)
 
-    assert (as_start.errors == (), as_end.errors == ()) == (accepted, accepted)
-    if not accepted:
-        assert as_start.errors == (START_BOUNDS,)
-        assert as_end.errors == (END_BOUNDS,)
+    rejection = (START_BOUNDS,) if role == "start" else (END_BOUNDS,)
+    assert result.errors == (() if accepted else rejection)
 
 
 @pytest.mark.req("AC-9", "AC-5")
-def test_both_dates_out_of_bounds_print_both_lines_and_skip_the_order_check() -> None:
-    # 1960 is after 1950, so a reversed-range line would be wrong; a skipped check is the point.
-    assert check("1960-01-01", "1950-01-01").errors == (START_BOUNDS, END_BOUNDS)
-    assert check("9999-12-31", "9999-12-31").errors == (START_BOUNDS, END_BOUNDS)
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        # 1960 is after 1950, so a reversed-range line would be wrong; a skipped check is the point.
+        pytest.param("1960-01-01", "1950-01-01", id="both-below-the-floor-in-reverse-order"),
+        pytest.param("9999-12-31", "9999-12-31", id="both-above-the-ceiling"),
+    ],
+)
+def test_both_dates_out_of_bounds_print_both_lines_and_skip_the_order_check(
+    start: str, end: str
+) -> None:
+    assert check(start, end).errors == (START_BOUNDS, END_BOUNDS)
 
 
 @pytest.mark.req("AC-9", "AC-5")
-def test_a_date_that_fails_a_check_skips_the_order_check_whatever_it_failed() -> None:
-    # Start 2027 is later than end 1960, but end is outside the bounds: one line, for end.
-    assert check("2027-01-01", "1960-01-01").errors == (END_BOUNDS,)
-    # Start is malformed: the end alone is judged.
-    assert check("2027-1-1", "2026-01-01").errors == (START_FORMAT,)
-    # End is malformed.
-    assert check("2027-01-01", "2026-1-1").errors == (END_FORMAT,)
-    # The bounds line is not the only way to skip: a missing date too.
-    assert check(None, "2026-01-01").errors == (START_FORMAT,)
+@pytest.mark.parametrize(
+    ("start", "end", "errors"),
+    [
+        # Start 2027 is later than end 1960, but end is outside the bounds: one line, for end.
+        pytest.param("2027-01-01", "1960-01-01", (END_BOUNDS,), id="end-out-of-bounds"),
+        # Start is malformed: the end alone is judged.
+        pytest.param("2027-1-1", "2026-01-01", (START_FORMAT,), id="start-malformed"),
+        pytest.param("2027-01-01", "2026-1-1", (END_FORMAT,), id="end-malformed"),
+        # The bounds line is not the only way to skip: a missing date too.
+        pytest.param(None, "2026-01-01", (START_FORMAT,), id="start-missing"),
+    ],
+)
+def test_a_date_that_fails_a_check_skips_the_order_check_whatever_it_failed(
+    start: str | None, end: str, errors: tuple[str, ...]
+) -> None:
+    assert check(start, end).errors == errors
 
 
 @pytest.mark.req("AC-9")

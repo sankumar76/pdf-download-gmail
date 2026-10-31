@@ -17,11 +17,7 @@ import pytest
 from gmail_pdf.cli import args
 from gmail_pdf.domain import messages
 from gmail_pdf.domain.models import RunRequest
-from gmail_pdf.domain.validation import (
-    FieldNames,
-    RawInput,
-    validate,
-)
+from gmail_pdf.domain.validation import FieldNames, RawInput, validate
 from tests.support import sentinels
 from tests.support.subprocess_env import REPO_ROOT
 from tests.support.validation_inputs import (
@@ -71,20 +67,46 @@ def test_a_name_outside_the_iana_set_is_rejected_as_written_with_no_echo(zone: s
 def test_a_name_in_the_iana_set_is_accepted(zone: str) -> None:
     result = check(zone=zone)
 
-    assert result.errors == ()
-    assert result.request == RunRequest(date(2026, 1, 1), date(2026, 1, 31), zone)
+    assert (result.errors, result.request) == (
+        (),
+        RunRequest(date(2026, 1, 1), date(2026, 1, 31), zone),
+    )
 
 
 # ----------------------------------------------------------------------------------- AC-5
+REVERSED = "Start date must be on or before the end date. (--start 2026-03-31 --end 2026-01-01)"
+
+
 @pytest.mark.req("AC-5")
-def test_every_error_is_reported_in_the_order_start_end_range_zone() -> None:
-    assert check("2026-1-5", "2026-01-31", "Mars/Olympus").errors == (START_FORMAT, ZONE_ERROR)
-    assert check("2026-1-5", "x", "Mars/Olympus").errors == (START_FORMAT, END_FORMAT, ZONE_ERROR)
-    assert check("1960-01-01", "2026-1-5", "").errors == (START_BOUNDS, END_FORMAT, ZONE_ERROR)
-    assert check("2026-03-31", "2026-01-01", "Mars/Olympus").errors == (
-        "Start date must be on or before the end date. (--start 2026-03-31 --end 2026-01-01)",
-        ZONE_ERROR,
-    )
+@pytest.mark.parametrize(
+    ("start", "end", "zone", "errors"),
+    [
+        pytest.param(
+            "2026-1-5", "2026-01-31", "Mars/Olympus", (START_FORMAT, ZONE_ERROR), id="start-zone"
+        ),
+        pytest.param(
+            "2026-1-5",
+            "x",
+            "Mars/Olympus",
+            (START_FORMAT, END_FORMAT, ZONE_ERROR),
+            id="start-end-zone",
+        ),
+        pytest.param(
+            "1960-01-01",
+            "2026-1-5",
+            "",
+            (START_BOUNDS, END_FORMAT, ZONE_ERROR),
+            id="start-bounds-end-zone",
+        ),
+        pytest.param(
+            "2026-03-31", "2026-01-01", "Mars/Olympus", (REVERSED, ZONE_ERROR), id="range-zone"
+        ),
+    ],
+)
+def test_every_error_is_reported_in_the_order_start_end_range_zone(
+    start: str, end: str, zone: str, errors: tuple[str, ...]
+) -> None:
+    assert check(start, end, zone).errors == errors
 
 
 @pytest.mark.req("AC-5", "AC-9")
@@ -142,13 +164,13 @@ def test_the_clock_is_asked_for_today_in_the_chosen_zone() -> None:
 def test_the_future_check_is_skipped_when_anything_is_invalid(
     start: str, end: str, zone: str
 ) -> None:
-    def today(zone: tzinfo) -> date:
+    def today(_in_zone: tzinfo) -> date:
         raise AssertionError("the clock must not be read for invalid input")
 
     result = validate(raw(start, end, zone), today)
 
-    assert result.errors != ()
-    assert result.warnings == ()
+    # Invalid (so the row is not vacuous) and not warned about, without the clock being read.
+    assert (result.errors != (), result.warnings) == (True, ())
 
 
 @pytest.mark.req("AC-3", "AC-9")

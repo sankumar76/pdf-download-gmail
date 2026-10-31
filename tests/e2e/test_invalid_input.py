@@ -125,14 +125,19 @@ def test_a_malformed_end_date_gets_the_format_line_and_nothing_runs(
 
 @pytest.mark.req("AC-1")
 @pytest.mark.parametrize("hook", MODES)
+@pytest.mark.parametrize(
+    ("argv", "line"),
+    [
+        pytest.param(["--start", "2026-01-01", "--tz", "UTC"], END_FORMAT, id="only-start"),
+        pytest.param(["--end", "2026-01-31", "--tz", "UTC"], START_FORMAT, id="only-end"),
+    ],
+)
 def test_only_one_date_reports_the_missing_one_with_the_date_sentence(
-    workspace: Workspace, hook: bool
+    workspace: Workspace, argv: list[str], line: str, hook: bool
 ) -> None:
-    only_start = run_cli(workspace, ["--start", "2026-01-01", "--tz", "UTC"], hook=hook)
-    assert_rejected(only_start, workspace, END_FORMAT)
+    result = run_cli(workspace, argv, hook=hook)
 
-    only_end = run_cli(workspace, ["--end", "2026-01-31", "--tz", "UTC"], hook=hook)
-    assert_rejected(only_end, workspace, START_FORMAT)
+    assert_rejected(result, workspace, line)
 
 
 @pytest.mark.req("AC-1")
@@ -209,37 +214,47 @@ def test_a_zone_outside_the_iana_set_exits_two_in_both_modes_never_three(
 
 @pytest.mark.req("AC-4")
 @pytest.mark.parametrize("zone", ["UTC", "Asia/Kolkata"])
+@pytest.mark.parametrize(
+    ("hook", "code", "stderr"),
+    [
+        pytest.param(True, 0, "", id="test-hook"),
+        pytest.param(False, 3, lines(SIGN_IN_LINE), id="real-mode"),
+    ],
+)
 def test_a_zone_in_the_iana_set_is_accepted_and_the_run_goes_on(
-    workspace: Workspace, zone: str
+    workspace: Workspace, zone: str, hook: bool, code: int, stderr: str
 ) -> None:
-    hooked = run_cli(workspace, ["--start", "2026-03-10", "--end", "2026-03-10", "--tz", zone])
-    real = run_cli(
-        workspace,
-        ["--start", "2026-03-10", "--end", "2026-03-10", "--tz", zone],
-        hook=False,
+    result = run_cli(
+        workspace, ["--start", "2026-03-10", "--end", "2026-03-10", "--tz", zone], hook=hook
     )
 
-    assert (hooked.returncode, hooked.stderr) == (0, "")
-    assert (real.returncode, real.stderr) == (3, lines(SIGN_IN_LINE))
+    assert (result.returncode, result.stderr) == (code, stderr)
 
 
 # ----------------------------------------------------------------------------------- AC-5
 @pytest.mark.req("AC-5")
 @pytest.mark.parametrize("hook", MODES)
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        pytest.param(
+            ["--start", "2026-1-5", "--end", "nope", "--tz", "Mars/Olympus"],
+            (START_FORMAT, END_FORMAT, ZONE_ERROR),
+            id="start-end-zone",
+        ),
+        pytest.param(
+            ["--start", "2026-03-31", "--end", "2026-01-01", "--tz", "Mars/Olympus"],
+            (REVERSED, ZONE_ERROR),
+            id="range-zone",
+        ),
+    ],
+)
 def test_several_errors_print_one_per_line_in_the_order_start_end_range_zone(
-    workspace: Workspace, hook: bool
+    workspace: Workspace, argv: list[str], expected: tuple[str, ...], hook: bool
 ) -> None:
-    both = run_cli(
-        workspace, ["--start", "2026-1-5", "--end", "nope", "--tz", "Mars/Olympus"], hook=hook
-    )
-    assert_rejected(both, workspace, START_FORMAT, END_FORMAT, ZONE_ERROR)
+    result = run_cli(workspace, argv, hook=hook)
 
-    range_and_zone = run_cli(
-        workspace,
-        ["--start", "2026-03-31", "--end", "2026-01-01", "--tz", "Mars/Olympus"],
-        hook=hook,
-    )
-    assert_rejected(range_and_zone, workspace, REVERSED, ZONE_ERROR)
+    assert_rejected(result, workspace, *expected)
 
 
 # ----------------------------------------------------------------------------------- AC-6
