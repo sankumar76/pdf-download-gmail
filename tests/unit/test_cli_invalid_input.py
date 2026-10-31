@@ -115,6 +115,52 @@ def test_invalid_input_exits_two_in_real_mode_before_build_deps_is_reached(
     assert (code, captured.err, captured.out) == (2, "".join(f"{line}\n" for line in lines), "")
 
 
+# The full matrix of malformed dates (PERF-17): the end-to-end file keeps two of these forms as
+# child processes; every form, for both dates and both modes, is checked here.
+MALFORMED_DATES = [
+    pytest.param("2026-1-5", id="no-zero-padding"),
+    pytest.param("2026/01/05", id="slashes"),
+    pytest.param("05-01-2026", id="day-first"),
+    pytest.param("2026-02-30", id="30-february"),
+    pytest.param("", id="empty"),
+    pytest.param("   ", id="spaces"),
+    pytest.param("20260105", id="basic-format"),
+    pytest.param("٢٠٢٦-٠١-٠٥", id="arabic-indic-digits"),
+]
+
+
+@pytest.mark.req("AC-1", "AC-6")
+@pytest.mark.parametrize("hook", [True, False], ids=["test-hook", "real-mode"])
+@pytest.mark.parametrize(
+    ("field", "line"),
+    [pytest.param("start", START_FORMAT, id="start"), pytest.param("end", END_FORMAT, id="end")],
+)
+@pytest.mark.parametrize("text", MALFORMED_DATES)
+def test_a_malformed_date_gets_the_format_line_and_nothing_runs(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    text: str,
+    field: str,
+    line: str,
+    hook: bool,
+) -> None:
+    workdir = tmp_path / "cwd"
+    workdir.mkdir()
+    monkeypatch.chdir(workdir)
+    if hook:
+        use_hook(monkeypatch, write_edge_mailbox(tmp_path / "mailbox.json"))
+    else:
+        monkeypatch.setattr(cli_main, "build_deps", must_not_be_called)
+    start, end = (text, "2026-01-31") if field == "start" else ("2026-01-01", text)
+
+    code = cli_main.main(["--start", start, "--end", end, "--tz", "UTC"])
+
+    captured = capsys.readouterr()
+    created = list(workdir.iterdir())
+    assert (code, captured.err, captured.out, created) == (2, line + "\n", "", [])
+
+
 @pytest.mark.req("AC-2", "AC-4")
 @pytest.mark.parametrize(
     ("argv", "line"),

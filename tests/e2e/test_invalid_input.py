@@ -51,14 +51,10 @@ def workspace(tmp_path: Path) -> Workspace:
 MODES = [pytest.param(True, id="test-hook"), pytest.param(False, id="real-mode")]
 
 # ----------------------------------------------------------------------------------- AC-1
+# Two forms run as children: a shape error and a non-ASCII digit script. All eight forms, for
+# both dates and both modes, run in this process (tests/unit/test_cli_invalid_input.py, PERF-17).
 MALFORMED = [
     pytest.param("2026-1-5", id="no-zero-padding"),
-    pytest.param("2026/01/05", id="slashes"),
-    pytest.param("05-01-2026", id="day-first"),
-    pytest.param("2026-02-30", id="30-february"),
-    pytest.param("", id="empty"),
-    pytest.param("   ", id="spaces"),
-    pytest.param("20260105", id="basic-format"),
     pytest.param("٢٠٢٦-٠١-٠٥", id="arabic-indic-digits"),
 ]
 
@@ -149,14 +145,12 @@ def test_a_past_end_date_gives_no_warning(workspace: Workspace) -> None:
 
 
 # ----------------------------------------------------------------------------------- AC-4
+# Two names run as children: one that is plainly unknown and one that differs only in case (a
+# case-insensitive file system could accept it). All seven names, in both modes, run in this
+# process (tests/unit/test_cli_invalid_input.py, PERF-17).
 UNKNOWN_ZONES = [
     pytest.param("Mars/Olympus", id="unknown"),
-    pytest.param("IST", id="abbreviation"),
-    pytest.param("", id="empty"),
-    pytest.param("Asia/Kolkata ", id="trailing-space"),
-    pytest.param("Asia\\Kolkata", id="backslash"),
     pytest.param("utc", id="lower-case-utc"),
-    pytest.param("asia/kolkata", id="lower-case-kolkata"),
 ]
 
 
