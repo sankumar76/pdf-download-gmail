@@ -1,4 +1,8 @@
-"""AC-7: canonical mailboxes (RD 4.4 table, boundary, DST) and JSON persistence."""
+"""AC-7: canonical mailboxes (RD 4.4 table, boundary, DST) and JSON persistence.
+
+Over 400 lines on purpose (Coding Standards, files): the canonical mailboxes and their JSON
+round trip are one table of cases over the same fake.
+"""
 
 from __future__ import annotations
 

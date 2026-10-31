@@ -4,6 +4,10 @@ The subprocess versions are in ``tests/e2e/test_select_range.py`` and
 ``tests/e2e/test_invalid_input.py``. Here the exit codes, the stderr lines, the log records, the
 order "validate, then ``build_deps``" and the "no fall-through" rule are checked with the real
 code and a monkeypatched environment. "Today" is a clock frozen at 2026-02-15 12:00 UTC.
+
+Over 400 lines on purpose (Coding Standards, files): the PGD-15 selection tests and the PGD-16
+rejection tests drive one entry point and share its fixtures. The split into a separate
+rejection file is deferred to issue #42.
 """
 
 from __future__ import annotations

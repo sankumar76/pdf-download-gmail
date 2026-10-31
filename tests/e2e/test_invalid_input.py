@@ -9,6 +9,10 @@ validation ran first.
 A child cannot be given a frozen clock, so rows that must not depend on the machine's date use
 dates that no sane date can reach (9999-12-30 is always in the future, 2026-01-31 is long past),
 or accept either outcome of the future-end warning where the story's row does not decide it.
+
+Over 400 lines on purpose (Coding Standards, files): the rows are one table of child-process
+cases with shared set-up. Trimming the matrices and moving the shared helpers to
+``tests/support`` are deferred to issue #42.
 """
 
 from __future__ import annotations
@@ -295,6 +299,23 @@ def test_a_rejection_comes_before_the_hook_file_is_read_and_creates_nothing(
     assert_rejected(result, workspace, START_FORMAT)
     assert messages.FAKE_MAILBOX_UNREADABLE_LINE not in result.stderr
     assert not missing.exists()
+
+
+@pytest.mark.req("AC-6")
+def test_a_rejection_comes_before_the_refused_hook_line(workspace: Workspace) -> None:
+    # The hook variable is set without ``GMAIL_PDF_TESTING=1``. Reached, ``build_deps`` would
+    # refuse it with exit 1; invalid input must be reported first, with exit 2.
+    mailbox = four_message_mailbox(workspace.mailbox_path())
+
+    result = run_guarded(
+        [sys.executable, "-m", "gmail_pdf", "--start", "2026-1-1", "--end", "2026-01-31"]
+        + ["--tz", "UTC"],
+        workspace.cwd,
+        hook_env(mailbox, testing=None),
+    )
+
+    assert_rejected(result, workspace, START_FORMAT)
+    assert messages.FAKE_MAILBOX_HOOK_REFUSED_LINE not in result.stderr
 
 
 # ----------------------------------------------------------------------------------- AC-8

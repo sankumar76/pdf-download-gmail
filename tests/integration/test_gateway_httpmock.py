@@ -3,6 +3,9 @@
 The library builds the requests and parses the errors; only the HTTP transport is scripted
 (``HttpMockSequence``, test-strategy section 3), so nothing leaves the process. The socket guard
 of ``tests/conftest.py`` is active for every test here.
+
+Over 400 lines on purpose (Coding Standards, files): every test drives the one gateway through
+the same scripted transport, and the PGD-16 zone sweep (AC-9) reuses that set-up.
 """
 
 from __future__ import annotations
