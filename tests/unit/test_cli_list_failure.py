@@ -35,7 +35,7 @@ from gmail_pdf.infra import tz as tz_module
 from tests.fakes.fake_gmail import FakeGmail
 from tests.fakes.fake_time import FixedInstantClock
 from tests.support import sentinels
-from tests.support.gateway_rig import Rig, error
+from tests.support.gateway_rig import Response, Rig, error, ok
 from tests.support.mailboxes import RANGE_ARGS, edge_mailbox
 
 pytestmark = pytest.mark.req("FR-016", "EC-06", "AC-4")
@@ -198,6 +198,44 @@ def test_leg_b_after_a_future_end_warning_stderr_is_the_warning_then_the_error_l
     run = Run(monkeypatch, capsys, six_503s().gateway, FUTURE_END_ARGS)
 
     assert run.outcome == Outcome(1, "", FUTURE_END_WARNING + "\n" + FAILURE_LINE + "\n")
+
+
+def test_leg_b_a_rate_limit_403_on_every_attempt_leaves_only_the_error_line(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The library logs each 403 at WARNING; its own ``NullHandler`` keeps that off stderr."""
+    rig = Rig(*[error(403, "rateLimitExceeded")] * 6)
+
+    run = Run(monkeypatch, capsys, rig.gateway, RANGE_ARGS)
+
+    assert (len(rig.requests), run.outcome) == (6, Outcome(1, "", FAILURE_LINE + "\n"))
+
+
+# A failed read must never look like an empty mailbox ("No PDFs found", exit 0). These two
+# failures are not retried (a 404, a 403 that is not a rate limit), and a message read can fail
+# after a good list; leg (a) and (b) above only cover a failing list call that is retried.
+@pytest.mark.parametrize(
+    ("script", "requests"),
+    [
+        pytest.param([error(404, "notFound")], 1, id="list-404"),
+        pytest.param([error(403, "insufficientPermissions")], 1, id="list-403"),
+        pytest.param(
+            [ok({"messages": [{"id": "m1"}]}), *[error(503)] * 6], 7, id="get-message-503"
+        ),
+    ],
+)
+def test_every_failed_read_is_a_failed_run(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    script: list[Response],
+    requests: int,
+) -> None:
+    rig = Rig(*script)
+
+    run = Run(monkeypatch, capsys, rig.gateway, RANGE_ARGS)
+
+    assert run.outcome == Outcome(1, "", FAILURE_LINE + "\n")
+    assert len(rig.requests) == requests
 
 
 # ----------------------------------------------- what the rule does not touch (PGD-13, PGD-15)

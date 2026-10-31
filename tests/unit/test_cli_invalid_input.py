@@ -205,6 +205,9 @@ def test_a_zone_outside_the_iana_set_is_rejected_as_written_in_both_modes(
     zone: str,
     hook: bool,
 ) -> None:
+    workdir = tmp_path / "cwd"
+    workdir.mkdir()
+    monkeypatch.chdir(workdir)
     if hook:
         use_hook(monkeypatch, write_edge_mailbox(tmp_path / "mailbox.json"))
     else:
@@ -213,7 +216,8 @@ def test_a_zone_outside_the_iana_set_is_rejected_as_written_in_both_modes(
     code = cli_main.main(["--start", "2026-01-01", "--end", "2026-01-31", "--tz", zone])
 
     captured = capsys.readouterr()
-    assert (code, captured.err, captured.out) == (2, ZONE_ERROR + "\n", "")
+    created = list(workdir.iterdir())
+    assert (code, captured.err, captured.out, created) == (2, ZONE_ERROR + "\n", "", [])
 
 
 def _empty_name() -> str:
