@@ -52,10 +52,11 @@ _TRANSPORT_ERROR_NAMES = frozenset(
 )
 # Jitter needs no secrecy; the system source keeps the standard library's seeded generator (and
 # the security linters' warning about it) out of production code. Tests pass a seeded callable.
-_SYSTEM_RANDOM = random.SystemRandom()
+SYSTEM_JITTER: Callable[[float, float], float] = random.SystemRandom().uniform
 
 
-def _utc_now() -> datetime:
+def utc_now() -> datetime:
+    """The current time, timezone-aware (UTC)."""
     return datetime.now(timezone.utc)
 
 
@@ -108,8 +109,8 @@ def call_with_retry(
     *,
     method: str,
     cancel: CancelToken,
-    now: Callable[[], datetime] = _utc_now,
-    jitter: Callable[[float, float], float] = _SYSTEM_RANDOM.uniform,
+    now: Callable[[], datetime] = utc_now,
+    jitter: Callable[[float, float], float] = SYSTEM_JITTER,
 ) -> T:
     """Call ``operation`` until it succeeds, fails for good, or the attempts run out.
 
