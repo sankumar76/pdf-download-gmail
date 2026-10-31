@@ -1348,3 +1348,81 @@ Earlier conditions: C34, C38 (a), C39 (a), (b), (c), (d) closed. C41 (c) stays d
 - The story is close: AC-9, the hard point, held. The exit rule keeps a verified fix from spending a further loop.
 
 **Posted:** PR #41 comment 6541541697; Jira PGD-16 c.10309; risks PGD-1 c.10310; new issues #42, #43.
+
+---
+
+## G6 – Peer Review — STORY-02.03 (PGD-16), attempt 2 — 2026-10-31
+
+- **Decision:** GO, under exit rule D-78, no further fix (D-83)
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no; D-75 and D-76 stay named to the delivery lead, who may overrule them
+- **Attempt:** 2, loop 2 of 3. Head `c8b76ae`, base `main` `9a1ffe5`; the head is frozen for G7
+- **Artefacts evaluated:**
+  - Reviews 5722358281 (quality) and 5722291466 (standards) on `c8b76ae`, bodies read with `gh api`; 43 reviews on the PR, all `COMMENTED`. Review 5722048956 (performance, attempt 1) carries. SA confirmation PR #41 comment 6542039822, read in full.
+  - PR #41 body at `c8b76ae`, Fix loop table and Corrections 1..6. Jira PGD-16 description, PO amendment 2, c.10312, c.10313, c.10315..10318. PGD-69 and #39, #38, read directly.
+  - Source at `c8b76ae`: `infra/tz.py`, `bootstrap.py`, `cli/main.py` in part, `tests/unit/test_import_boundaries.py`, the package delta and the `tests/e2e/test_invalid_input.py` delta; `docs/07-qa/test-plan.md` read for OQ-3, R-10, NT-01, NT-09, DEF-007.
+  - Check runs on `c8b76ae`: 10/10 `success`, read by master, run 41190187409. `main` `9a1ffe5` read from GitHub; `mergeable_state` clean.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Quality and standards APPROVE on `c8b76ae`; performance carries, D-78's rule not met (row 6) |
+| 2 | Zero open Blocker/Critical | ✱ | ✅ | QUA-57, STD-64 = QUA-58 fixed and verified. 0 new findings from both reviews |
+| 3 | Majors fixed or accepted | | ✅ | None |
+| 4 | F1, O1 | | ✅ | Quality 72 of 72 registry rows, 42 of 42 subclass rows; master's table below |
+| 5 | F2, O2 | | ✅ | Standards by reading; the stated gap is filled by master's run (D-84), table below |
+| 6 | Performance trigger | | ✅ | Quality: `validate` AST equal; 218 to 219 children, F8's row only. Master read the e2e delta: one new test, one child |
+| 7 | Nine mutants, F4, F6, F7, F8 | | ✅ | Quality: each fails a named test on the whole suite, V5 control survives with the row deselected. Master reran T5, T6 |
+| 8 | F3, F5, F9..F13, T-05 | | ✅ | Standards. Master read the package delta and raises nothing |
+| 9 | SA one comment | | ✅ | c.6542039822: ruling carries, R1 as widened accepted, D-44 condition met |
+| 10 | Orchestrator items | | ✅ | c.10314: 16 files, all on the list, no manifest. Rerun 1447 passed, 12 skipped, 99.89 %; ruff, mypy --strict, bandit clean. Quality's 13th skip is the export ("not a git work tree") |
+| 11 | F14, PR text | | ✅ | Read below (D-85) |
+| 12 | #38 rows on this head | | ✅ | QUA-53 `test_fake_gmail_canonical.py:294`; QUA-54 `:340`; QUA-55 `test_select_range.py:326`; no `type: ignore` in that file; STD-62 no `STD-53` or "decision 4"; STD-63 `test_exit_statements.py:23` |
+| 13 | Findings cite file:line | | ✅ | No new finding; replies are in the original threads |
+
+**Master's probes** (fresh `git archive` of `c8b76ae` in the scratchpad, folder `g6m16b`; Windows, CPython 3.12.10, tzlocal 5.4.5; scripts `reg_child.py`, `reg_run.py`, `f2_mut.py`, `rows.py`). Nothing was deleted; the folders remain.
+
+| O1, real child, real mode and hook | Lookups | Builds | Result |
+|---|---|---|---|
+| `no-key`, `no-values`, `unknown-name`, `open-fails`, `denied`, `dword`, `binary`, `none`, `dst-off-fraction`, valid dates | 1 | 0 | exit 2, AC-4 sentence only |
+| `no-key`, `dword`, `binary`, `none`, `--start x` | 1 | 0 | exit 2, date line, then zone line |
+| `no-key`, `open-fails`, `dword`, `--tz UTC` | 0 | 1 | exit 3 real, exit 0 hook |
+| Control `good` | 1 | 1 | exit 3 real, exit 0 hook |
+
+34 children, 17 rows each mode; `gmail_pdf.__file__` asserted inside the export; working directory empty.
+
+| F2 mutant, one fresh copy each, `test_import_boundaries.py` | Result |
+|---|---|
+| M0 control, a comment | 38 passed |
+| A0 attempt 1 import restored | `test_the_real_package_obeys_the_layering_rules` fails |
+| A1 `from ..infra import tz` in `cli/main.py` | same test fails |
+| A2 `import gmail_pdf.infra.tz` in `cli/console.py` | same test fails |
+| A3 `from gmail_pdf import infra` in `cli/args.py` | same test fails |
+| A4 function-local import in `cli/main.py` | same test fails |
+| A5 new `gmail_pdf/gui/app.py` importing `infra.tz` | same test fails |
+| R1 whole rule removed | 5 synthetic rows fail |
+| R2 `gui` half removed | 2 rows fail |
+| R3 `cli` half removed | 3 rows fail |
+| T5 drop `AttributeError`; T6 drop `TypeError` (zone test files) | 2 rows each, named |
+
+Also: `cli/main.py` AST equal between `93fb918` and `c8b76ae` apart from imports and docstrings, so O2's "no behaviour changes" holds for that file. AC-9 sample rows from attempt 1 rerun, results as recorded on `93fb918`, plus `from_days(1970-01-01, UTC)` gives "at or before the epoch".
+
+Limits: 3.12.10 only. The registry is faked. Master's mutants ran on test subsets; the whole-suite mutant runs are quality's, the whole-suite pass is the orchestrator's and quality's. An AST walk does not see `importlib`; `gmail_pdf/cli/` has no such call. `gmail_pdf/gui/` does not exist yet, so A5 added it. No real Gmail call.
+
+**Rulings** (D-83, D-84, D-85). Attempt 1 ratings are not reopened. No new finding, no new tech-debt issue, #42 and #43 unchanged.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C41 (a), remainder | qa-engineer | Jira PGD-69 | Summary still reads "or in a zone east of UTC"; the condition required it gone, and c.10288 reported (a) done. #39's title is right | Before the PGD-16 G7 report |
+| C41 (c) | qa-engineer | `docs/07-qa/test-plan.md` | Unchanged: the plan has no DEF-007 row yet | Before the PGD-16 G7 |
+| C42 | qa-engineer | `docs/07-qa/test-plan.md` | Unchanged: OQ-3 and R-10 still open in the plan. QUA-63 now has the PO's answer (c.10312). O1 rows use the five classes | Before the PGD-16 G7 report |
+| C43, remainder | product-owner | Jira PGD-16 | Listed items read done (c.10312). The SA's three lines join it (c.10315). Not a blocker: no AC changes | Before G7 PGD-16; open at the decision it is ⚠️, not ❌ |
+
+**G7 PGD-16:** QA tests `c8b76ae` only, and `git diff c8b76ae <head> -- gmail_pdf tests` stays empty to the merge. DEF-005 M13, M22, M20, M23 fail at 17, 5, 3, 3; another figure is reported, not explained away. Report read against the plan by row. QA posts Verified on PGD-69 and #39 (Jira has no Verified status) and sets PGD-16 Done on G7 GO.
+
+**After the merge** (order per D-85; the PGD-15 closure is the precedent): qa-engineer closes #39 and PGD-69; orchestrator closes #38; master closes RISK-026 once PGD-69 closes; STORY-01.04's hard stop lifts then. **Name in the merge request:** #38, #39, PGD-69 and their closers; the New_York change (D-81); the two-line output of QUA-63; the faked-registry limit; #42, #43.
+
+**Risks registered:** no new risk. RISK-021 and RISK-026 notes added, scores unchanged. RISK-005, 010, 011, 020, 023, 025 unchanged.
+
+**Rationale:** D-78's list is met and the one stated gap was closed by a run, not waived. A named verifier's check that could not be run is either run by someone else or stays open, and here it ran. The reviewers found nothing new, and master's own rows found nothing either. The story ends G6 within the loops allowed, with AC-9 still holding.
+
+**Posted:** PR #41 comment 6542299100 (edited once after posting, to drop an `@` mention that was not a GitHub login; the content is unchanged); Jira PGD-16 c.10320.
