@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from datetime import date
+from zoneinfo import ZoneInfoNotFoundError
 
 import pytest
 
 from gmail_pdf.app.ports import Deps
 from gmail_pdf.app.runner import run
 from gmail_pdf.domain import events
-from gmail_pdf.domain.errors import InputValidationError
 from gmail_pdf.domain.events import CancelToken
 from gmail_pdf.domain.models import ExitCode, RunRequest, RunResult
 from gmail_pdf.infra import tz as tz_module
@@ -89,17 +89,30 @@ def test_only_the_two_read_methods_are_called() -> None:
     assert {call.method for call in fake.calls} == {"list_message_ids", "get_message"}
 
 
+@pytest.mark.req("AC-9")
 @pytest.mark.parametrize(
-    "request_",
+    ("request_", "error"),
     [
-        pytest.param(january_request("Mars/Olympus_Mons"), id="unknown-zone"),
-        pytest.param(RunRequest(date(2026, 2, 1), date(2026, 1, 31), "UTC"), id="end-before-start"),
+        pytest.param(january_request("Mars/Olympus"), ZoneInfoNotFoundError, id="unknown-zone"),
+        pytest.param(
+            RunRequest(date(2026, 2, 1), date(2026, 1, 31), "UTC"),
+            ValueError,
+            id="end-before-start",
+        ),
+        pytest.param(
+            RunRequest(date(1970, 1, 1), date(2026, 1, 31), "UTC"),
+            ValueError,
+            id="before-the-floor",
+        ),
     ],
 )
-def test_bad_input_is_rejected_before_any_gmail_call(request_: RunRequest) -> None:
+def test_a_request_that_was_not_validated_is_refused_before_any_gmail_call(
+    request_: RunRequest, error: type[Exception]
+) -> None:
+    # ``domain.validation`` turns these into sentences first; the runner is the second line.
     fake = mailbox()
 
-    with pytest.raises(InputValidationError):
+    with pytest.raises(error):
         run(request_, deps_for(fake), RecordingSink(), CancelToken())
 
     assert fake.calls == []

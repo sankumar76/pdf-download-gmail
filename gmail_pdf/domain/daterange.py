@@ -7,42 +7,17 @@ still exactly one day. ``contains`` is the exact local check that backs the wide
 (FR-012).
 
 This module is pure: the zone object is handed in (``infra.tz`` resolves names), and the only
-imports are the standard library and ``domain.messages`` / ``domain.errors``.
+imports are the standard library. It trusts its input: the rules for what a user may ask for
+(format, bounds, order, zone) are ``domain.validation``'s, and a range that reaches here has
+passed them.
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, tzinfo
 
-from gmail_pdf.domain import messages
-from gmail_pdf.domain.errors import InputValidationError
-
-# Strict ISO form (NFR-024): ASCII digits only. ``\d`` and ``date.fromisoformat`` alone accept
-# other digit scripts and, on newer Pythons, other ISO forms such as ``20260101``.
-_ISO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 _MS_PER_SECOND = 1000
-
-
-def parse_iso_date(text: str, flag: str) -> date:
-    """Parse ``YYYY-MM-DD`` strictly.
-
-    Args:
-        text: The value as typed.
-        flag: The option name used in the rejection sentence (for example ``--start``). It
-            comes from the program, never from the user.
-
-    Raises:
-        InputValidationError: ``text`` is not a real calendar date in that exact form. The
-            message does not echo ``text``.
-    """
-    if _ISO_DATE.fullmatch(text) is not None:
-        try:
-            return date.fromisoformat(text)
-        except ValueError:
-            pass  # right shape, not a real date (month 13, 30 February, year 0000)
-    raise InputValidationError(messages.DATE_FORMAT_TEMPLATE.format(flag=flag))
 
 
 def _midnight_epoch(day: date, zone: tzinfo) -> int:
@@ -67,16 +42,16 @@ class DateRange:
         """Build the range covering ``first_day`` to ``last_day`` inclusive in ``zone``.
 
         Raises:
-            InputValidationError: ``last_day`` is before ``first_day``, or a day is outside the
-                dates the platform can represent.
+            ValueError: ``last_day`` is before ``first_day``, or the first day starts before
+                1970-01-01T00:00:01Z, so ``after:<S-1>`` would be negative. A programming
+                error: ``domain.validation`` rejects such input with a sentence first.
         """
         if last_day < first_day:
-            raise InputValidationError(messages.END_BEFORE_START)
-        try:
-            day_after = last_day + timedelta(days=1)
-            return cls(_midnight_epoch(first_day, zone), _midnight_epoch(day_after, zone))
-        except (OverflowError, OSError, ValueError) as exc:
-            raise InputValidationError(messages.DATE_OUT_OF_RANGE) from exc
+            raise ValueError("last_day is before first_day")
+        start = _midnight_epoch(first_day, zone)
+        if start < 1:
+            raise ValueError("first_day starts before the epoch")
+        return cls(start, _midnight_epoch(last_day + timedelta(days=1), zone))
 
     def contains(self, internal_date_ms: int) -> bool:
         """Whether a message received at ``internal_date_ms`` (epoch ms) is in the range."""

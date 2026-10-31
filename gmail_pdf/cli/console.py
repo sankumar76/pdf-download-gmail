@@ -34,6 +34,11 @@ def print_error_line(line: str) -> None:
     _write(sys.stderr, line)
 
 
+def print_warning_line(text: str) -> None:
+    """Print ``warning: <text>`` to stderr; the run goes on."""
+    _write(sys.stderr, f"warning: {text}")
+
+
 def print_summary(summary: RunSummary) -> None:
     """Print the interim outcome of a run: the message count, or the cancel notice."""
     if summary.result is RunResult.COMPLETED:
@@ -47,4 +52,4 @@ class ConsoleSink:
 
     def emit(self, event: events.Warning) -> None:
         """Print a warning as ``warning: <text>`` (the code name while no text is set)."""
-        _write(sys.stderr, f"warning: {event.text or event.code.name.lower()}")
+        print_warning_line(event.text or event.code.name.lower())

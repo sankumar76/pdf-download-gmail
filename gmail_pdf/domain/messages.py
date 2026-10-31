@@ -43,14 +43,18 @@ FAKE_MAILBOX_NOT_IMPORTABLE_LINE = (
     "error: The fake mailbox is only available from a source checkout (tests/ not importable)."
 )
 
-# Interim input rejections (PGD-15). The wording of the rejections is STORY-02.03's; these keep
-# a bad date or zone from being reported as an unexpected failure. They never echo the input.
-DATE_FORMAT_TEMPLATE = "{flag} must be a date written as YYYY-MM-DD."
-DATES_REQUIRED_TOGETHER = "--start and --end must be given together."
-END_BEFORE_START = "The end date must not be before the start date."
-DATE_OUT_OF_RANGE = "The dates are outside the range this program can handle."
-ZONE_UNKNOWN = "The time zone is not a known IANA zone name, for example Asia/Kolkata."
-SYSTEM_ZONE_UNAVAILABLE = "The system time zone could not be determined; give one with --tz."
+# Input validation (STORY-02.03, FR-015, FR-064): the one table the command line and the window
+# share. The sentences never echo what the user typed. ``{field}`` and the ``*_field`` places take
+# the name the front end gives the input (the CLI passes its ``FLAG_*`` constants from
+# ``cli/args.py``), so no flag name is written in this module (STD-55). The bounds in
+# ``DATE_OUT_OF_BOUNDS_TEMPLATE`` come from ``domain/validation.py``.
+DATE_NOT_ISO_TEMPLATE = "{field}: Enter the date as YYYY-MM-DD, for example 2026-01-31."
+DATE_OUT_OF_BOUNDS_TEMPLATE = "{field}: Enter a date from {earliest} to {latest}."
+RANGE_REVERSED_TEMPLATE = (
+    "Start date must be on or before the end date. ({start_field} {start} {end_field} {end})"
+)
+ZONE_NOT_IANA_TEMPLATE = "{field}: Unknown time zone. Use an IANA name such as Asia/Kolkata."
+END_IN_FUTURE_WARNING = "End date is in the future. Only mail received so far is included."
 
 # Gateway and retry (PGD-15 AC-7): fixed sentences, no URL, query or response text.
 GMAIL_HTTP_ERROR_TEMPLATE = "Gmail answered the request with HTTP {status}."

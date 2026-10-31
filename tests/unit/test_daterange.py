@@ -9,13 +9,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pytest
 
-from gmail_pdf.domain import messages
-from gmail_pdf.domain.daterange import DateRange, parse_iso_date
-from gmail_pdf.domain.errors import InputValidationError
+from gmail_pdf.domain.daterange import DateRange
 from gmail_pdf.infra import tz as tz_module
 
 pytestmark = pytest.mark.req("FR-008", "FR-012")
@@ -155,46 +153,37 @@ def test_contains_is_half_open_at_millisecond_precision() -> None:
     ]
 
 
-# ------------------------------------------------------------------------- invalid ranges
-def test_an_end_day_before_the_start_day_is_rejected() -> None:
-    with pytest.raises(InputValidationError):
+# --------------------------------------------------------- the guards behind the validation
+# The rules a user is held to (order, bounds 1970-01-02..9999-12-30) are ``domain.validation``'s.
+# ``from_days`` only refuses what would build a wrong query, whoever calls it (PGD-16 AC-9).
+def test_an_end_day_before_the_start_day_is_refused() -> None:
+    with pytest.raises(ValueError):
         days("2026-02-01", "2026-01-31", KOLKATA)
 
 
-def test_the_last_representable_day_is_rejected_not_crashed() -> None:
-    with pytest.raises(InputValidationError):
-        DateRange.from_days(date.max, date.max, ZoneInfo("UTC"))
-
-
-# ------------------------------------------------------------------------ strict parsing
-@pytest.mark.parametrize("text", ["2026-01-01", "2028-02-29", "0001-01-01", "9999-12-31"])
-def test_strict_iso_dates_are_accepted(text: str) -> None:
-    assert parse_iso_date(text, "--start") == date.fromisoformat(text)
-
-
+@pytest.mark.req("AC-9")
 @pytest.mark.parametrize(
-    "text",
+    ("day", "zone"),
     [
-        pytest.param("", id="empty"),
-        pytest.param("2026-1-1", id="no-zero-padding"),
-        pytest.param("20260101", id="basic-format"),
-        pytest.param("2026-01-01\n", id="trailing-newline"),
-        pytest.param(" 2026-01-01", id="leading-space"),
-        pytest.param("2026/01/01", id="slashes"),
-        pytest.param("2026-13-01", id="month-13"),
-        pytest.param("2026-02-30", id="30-february"),
-        pytest.param("2026-02-29", id="29-february-in-a-common-year"),
-        pytest.param("0000-01-01", id="year-zero"),
-        pytest.param("２０２６-01-01", id="fullwidth-digits"),
-        pytest.param("٢٠٢٦-01-01", id="arabic-indic-digits"),
-        pytest.param("2026-01-01T00:00:00", id="date-time"),
+        pytest.param("1970-01-01", "UTC", id="epoch-day-utc"),
+        pytest.param("1970-01-01", "Asia/Kolkata", id="epoch-day-east-of-utc"),
+        pytest.param("1969-12-31", "America/New_York", id="before-the-epoch-west-of-utc"),
+        pytest.param("0001-01-01", "UTC", id="year-one"),
     ],
 )
-def test_anything_but_a_real_ascii_iso_date_is_rejected_without_echoing_it(text: str) -> None:
-    with pytest.raises(InputValidationError) as exc_info:
-        parse_iso_date(text, "--start")
+def test_a_first_day_that_starts_before_the_epoch_is_refused(day: str, zone: str) -> None:
+    with pytest.raises(ValueError):
+        days(day, "2026-12-31", ZoneInfo(zone))
 
-    assert str(exc_info.value) == "--start must be a date written as YYYY-MM-DD."
+
+@pytest.mark.req("AC-9")
+def test_the_first_second_the_guard_accepts_gives_a_zero_after_bound() -> None:
+    # 1970-01-02 00:00 in Etc/GMT-14 is 1970-01-01T10:00:00Z = 36000 s; in UTC it is 86400 s.
+    far_east = days("1970-01-02", "1970-01-02", ZoneInfo("Etc/GMT-14"))
+    utc = days("1970-01-02", "1970-01-02", ZoneInfo("UTC"))
+
+    assert (far_east.start_epoch_s, far_east.end_epoch_s) == (36000, 122400)
+    assert (utc.start_epoch_s, utc.end_epoch_s) == (86400, 172800)
 
 
 # ----------------------------------------------------------------------------------- AC-10
@@ -235,11 +224,10 @@ def test_an_explicit_zone_wins_over_the_system_zone(monkeypatch: pytest.MonkeyPa
         pytest.param("Asia/Kolkata\x00", id="nul-byte"),
     ],
 )
-def test_an_unknown_zone_name_is_an_input_error_that_does_not_echo_the_name(name: str) -> None:
-    with pytest.raises(InputValidationError) as exc_info:
+def test_a_name_that_is_not_a_zone_is_not_resolved(name: str) -> None:
+    # Whether a name is acceptable is ``domain.validation``'s call; the lookup just refuses it.
+    with pytest.raises((ZoneInfoNotFoundError, ValueError, OSError)):
         tz_module.resolve_zone(name)
-
-    assert str(exc_info.value) == messages.ZONE_UNKNOWN
 
 
 def _system_zone_lookup_fails() -> str:
@@ -253,15 +241,30 @@ def _system_zone_lookup_fails() -> str:
         pytest.param(_system_zone_lookup_fails, id="os-error"),
     ],
 )
-def test_an_unresolvable_system_zone_is_an_input_error(
+def test_an_unresolvable_system_zone_has_no_name_and_cannot_be_resolved(
     monkeypatch: pytest.MonkeyPatch, lookup: Callable[[], str]
 ) -> None:
     monkeypatch.setattr(tz_module.tzlocal, "get_localzone_name", lookup)
 
-    with pytest.raises(InputValidationError) as exc_info:
+    assert tz_module.system_zone_name() is None
+    # An empty name must not fall through to ``ZoneInfo("")``.
+    with pytest.raises(ValueError, match="system time zone"):
         tz_module.resolve_zone(None)
 
-    # An empty name must not fall through to ``ZoneInfo("")`` and its "unknown zone" sentence.
-    assert str(exc_info.value) == (
-        "The system time zone could not be determined; give one with --tz."
-    )
+
+def test_the_system_zone_name_is_the_one_tzlocal_reports(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tz_module.tzlocal, "get_localzone_name", lambda: "Asia/Kolkata")
+
+    assert tz_module.system_zone_name() == "Asia/Kolkata"
+
+
+def test_the_system_clock_reads_today_in_the_given_zone() -> None:
+    clock = tz_module.SystemClock()
+    before = date.today()
+
+    far_east = clock.today(ZoneInfo("Pacific/Kiritimati"))  # UTC+14
+    far_west = clock.today(ZoneInfo("Pacific/Pago_Pago"))  # UTC-11
+
+    assert type(far_east) is date
+    assert 1 <= (far_east - far_west).days <= 2  # 25 hours apart, whatever today is
+    assert abs((far_east - before).days) <= 2

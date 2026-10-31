@@ -1,15 +1,17 @@
 """Ports: the interfaces the application layer needs from the outside world.
 
-``GmailPort`` is the Gmail seam; ``EventSink`` and the zone resolver are the two other seams the
-run needs so far. The remaining ports (token provider, file store, manifest, audit) are added
-by the stories that need them. ``Deps`` bundles the implementations ``bootstrap.build_deps``
-wires; it lives here so ``app`` can name it without importing ``bootstrap``.
+``GmailPort`` is the Gmail seam; ``EventSink``, ``Clock`` and the zone resolver are the other
+seams the run needs so far. The remaining ports (token provider, file store, manifest, audit)
+are added by the stories that need them. ``Deps`` bundles the implementations
+``bootstrap.build_deps`` wires; it lives here so ``app`` can name it without importing
+``bootstrap``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date, tzinfo
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
@@ -65,8 +67,18 @@ class EventSink(Protocol):
         """Handle one event."""
 
 
-# Resolves an IANA zone name (``None`` = the system zone) to a zone, or raises
-# ``InputValidationError``. The implementation is ``infra.tz.resolve_zone``.
+class Clock(Protocol):
+    """Today's date, read from an injected clock so tests never depend on the machine's date.
+
+    Implementations: ``infra.tz.SystemClock`` (real) and a fixed fake in the tests.
+    """
+
+    def today(self, zone: tzinfo) -> date:
+        """The current calendar date in ``zone``."""
+
+
+# Resolves an IANA zone name (``None`` = the system zone) to a zone. The name has passed
+# ``domain.validation`` already. The implementation is ``infra.tz.resolve_zone``.
 ZoneResolver = Callable[[str | None], ZoneInfo]
 
 
