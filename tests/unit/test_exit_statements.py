@@ -159,6 +159,7 @@ ACCEPTED_FORMS = {
     "imported-exit-integer": "from sys import exit as bye\nbye(1)",
     "builtin-exit-integer": "exit(0)",
     "alias-integer": "import sys\ne = sys.exit\ne(3)",
+    "negative-integer": "import sys\nsys.exit(-1)",
     "unrelated-class": "class X(Exception):\n    pass\nraise X('boom')",
     "unrelated-exit-method": "parser = object()\nparser.exit(0)",
 }
