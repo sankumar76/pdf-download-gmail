@@ -1649,3 +1649,118 @@ Earlier conditions: C40, C43 (remainder), C45 (extended) closed (D-96). C11–C1
 - The delta is two test files by design, so C47 can end the gate with no further decision.
 
 **Posted:** PR #44 comment 6545642477; Jira PGD-17 c.10342 (edited once, to link the comment; the content is unchanged); PGD-1 c.10343 (risks, PGD-18, c.10292). Issue #45; notes on #36 (6545544168), #40 (6545544701), #42 (6545545232).
+
+---
+
+## G7 – QA Acceptance — STORY-02.06 (PGD-17) — 2026-10-31
+
+- **Decision:** GO (ACCEPT) (D-99). DEF-008 is Sev-3 and accepted for this exit (D-101). No merge in this run: `MERGE_POLICY` code-human
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no for this gate; the merge is human
+- **Attempt:** 1. Code head `48fea17`, PR head `aee5f56`, base `main` `19f1157`
+- **Artefacts evaluated:**
+  - `docs/07-qa/PGD-17-test-report.md` at `aee5f56`, read in full against `docs/07-qa/test-plan.md` v0.4 at `2dde0ef`, sections 2 to 16 and Annex A, by row.
+  - QA summary PR #44 c.6546818154; PGD-17 c.10348..10353; PGD-82; #46; #42; #45.
+  - G6 decision c.6545642477; quality review 5723760900 (body and the QUA-73 inline); standards review 5723696124; SA comment 6545847040; PR #44 body read against F4.
+  - Source at `48fea17`: `app/planner.py`, `app/runner.py`, `cli/console.py`, `cli/main.py`, `domain/models.py`, `domain/validation.py`, `infra/gmail_gateway.py`, `tests/fakes/fake_gmail.py`, `fake_gmail_json.py`, `tests/support/`.
+  - `sprint-01-plan.md` at `2dde0ef`, rows 113..116; PRD FR-011, FR-016, FR-043, NFR-014; EPIC-02 story list; D-49, D-51, D-55, D-57, D-65, D-67, D-68, D-85, D-87, D-88, D-89..D-98.
+  - Check runs on `aee5f56`: 10/10 `SUCCESS`, run 41225166460, read by master after the one job still running had finished. `refs/pull/44/merge` `b09a1ed`, parents `19f1157` and `aee5f56`, tree equal to `aee5f56` (QA's `30e679a` is stale because GitHub rebuilt the ref, the same tree apart from the report). `mergeStateStatus` CLEAN; every review `COMMENTED`, no `REQUEST_CHANGES`. `git diff 48fea17 aee5f56 -- gmail_pdf tests` empty; one commit, the report only. PR labels and Jira status not changed by master.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 0 | C47, F4 | | ✅ | Orchestrator, quality, standards and SA rows read. F4 read in the body: deviation 2 reworded, "every removed child" sentence states the F3 row, Evidence and Follow-ups at H. C47 closed (D-99) |
+| 0 | C49 | | ✅ | Plan v0.4 at `f048000`: NT-08 two legs and the pitfall, PGD-17 row at 5 points. Closed. Its version cell still reads 0.3: C32 extended already covers it |
+| 0 | QUA-73 | | ✅ | Info, row on #45 (D-100) |
+| 1 | Every AC has a result with evidence | ✱ | ✅ | Report AC matrix; master's runs below |
+| 2 | No open Sev-1 or Sev-2 | ✱ | ✅ | DEF-008 tested and stays Sev-3 (D-101). No other defect |
+| 3 | Regression recorded and green | ✱ | ✅ | QA 1542 passed, 12 skipped x4, reversed, each of 43 files alone; CI 10/10 on `48fea17` (41217084383) and `aee5f56` (41225166460), POSIX legs 1551 and 3 read by QA. Master's fresh export, control row: 1495 passed, 12 skipped without `test_gitignore_matching.py` (47 tests, scratch path limit) |
+| 4 | DEF-005 mutants (C30) | | ✅ | M13 17, M22 5, M20 3, M23 3 on master's fresh copies |
+| 5 | Exploratory notes | | ✅ | EC-1, EC-6, EC-9 recorded; EC-6 found DEF-008 |
+| 6 | Accessibility | | ✅ | n/a: no UI in this story |
+| 7 | Report against the plan, by row | | ⚠️ | Four rows short (below), all closed by master's runs; NT-06's worker row is the known limit, C32 and RISK-024 |
+| 8 | C48 (a, b, c) | | ✅ | Rows 115, 116 and the third `RunResult` row read against the condition text at `2dde0ef`. Closed. (d) stays due at the sprint-02 G4 |
+| 9 | Traceability sample | | ✅ | GOAL-01 → FR-016 (PRD line 94) → PGD-17 AC-5 → `test_runner_empty.py::test_completed_with_no_messages_maps_to_exit_code_zero`, in QA's 14 of 14 and master's run. Reverse: `test_every_failed_read_is_a_failed_run` `req("FR-016", "EC-06", "AC-4")` → AC-4 → FR-016 → GOAL-01 |
+
+**Master's probes** (fresh `git archive` of `48fea17` and `19f1157` in the scratchpad, folder `g7m17`, scripts `lib.py`, `c_gw.py`, `p_ac.py`, `p_nt.py`, `p_reg.py`; Windows, CPython 3.12.10; module path asserted in each export). The environment is built in Python. Before any child starts, a proof in the same environment, making no socket call, stops the driver unless `sitecustomize`, `socket_guard` and `guarded_connect` come from that export; each gateway child repeats the check first and exits 97 if it fails. Nothing was deleted.
+
+| Row | Result |
+|---|---|
+| AC-1, AC-2, AC-3, controls: `-m` and shim x `PYTHONUTF8` set and unset; empty mailbox in Kolkata, UTC, Kiritimati; all-outside mailbox in Kolkata; future end; non-empty; real mode; exe | **29 of 29.** My first run read 12 BAD: the rows were mine. The "outside" mailbox is outside in Kolkata only, and inside a range to 2099, so `Messages in range: 1` was right. Expectations corrected, not the rule |
+| AC-1 domain, AC-5 | `RunResult.COMPLETED`, `()`, exit 0, `is_empty` true; cancelled exit 1, not empty |
+| `main` contrast | `Messages in range: 0` for the same empty file |
+| AC-4: real `entry()`, real streams, real `GmailGateway` over `HttpMockSequence`, no pytest, 0 root handlers. 503, 429, 500, `rateLimitExceeded`, `userRateLimitExceeded` x6; 404, 403 denied, 401, 400; `get_message` 503 x6, 404; past and future end; two encodings | **44 of 44:** exit 1, empty stdout, exactly the one line after any warning, the right request count, nothing created, `NullHandler` on the retry logger |
+| Controls: empty; two 503s then empty | The two lines, exit 0, empty stderr |
+| `main`'s call removed | The five `Retrying` lines, then the error line |
+| #42 removed values as real children | 34 of 34 |
+
+**The report read against the plan.** Short rows, each run by master:
+| Plan row | Short by | Master |
+|---|---|---|
+| NT-03 | QA's 14 shapes lack `parts` of `[5]`, `[null]`, `["x"]` and `labelIds` of `5`, `null`, `[[]]`, all named in the row | 12 of 12, two entry points: exit 1, the fixed line |
+| NT-02 | Unreadable file not run on Windows (stated) | A locked file, `PermissionError` shown first: 2 of 2 |
+| NT-04 | Cap, named depths and sweep not run (stated) | 248 children: 13 success, 235 fixed line, 0 unexpected-failure lines. 196 levels under a resource key pass, 197 give the line. Parts 247, 1000, 1400, resource 500, 2900, unread key 2900: the fixed line |
+| NT-05 | A `git archive` copy, not a built wheel (stated) | Wheel built, 30 files, none under `tests`, `find_spec('tests')` None: exit 1, exactly the line; invalid input exits 2 |
+
+NT-04 and NT-05 are the rows expected short until C32. NT-03's gap is the same class, so it joins C51. The report's other rows hold on reading. Its "header 0.4" is loose: the row reads "0.3 (... 0.4 closes C49 ...)".
+
+**Rating and rulings** (D-100..D-104)
+| Item | QA or reviewer | Master | Disposition |
+|---|---|---|---|
+| QUA-73 | Info | Info | Row on #45, no commit |
+| DEF-008 | Sev-3 | Sev-3, wider than filed, accepted, armed | STORY-02.04, C50, C33 addition, RISK-027 |
+| QA's socket lapse | Disclosed | No defect, no risk, no Bug | Plan section 4 sentence, C51 |
+| #42 evidence | Pass | Holds on H | Closes with the merge (T-14) |
+
+**DEF-008 rows** (`c_gw.py` and the hook; head / `main` `19f1157`):
+| Form | Head | `main` |
+|---|---|---|
+| Page 1 `{"nextPageToken": "T2"}`, page 2 a message | `No PDFs found`, `0 PDFs found.`, exit 0, 1 request | `Messages in range: 0`, exit 0, 1 request |
+| Page 1 `{"messages": [], "nextPageToken": "T2"}` | Same | Same |
+| Page 1 token only, page 2 six 503s | Same; the failure is never seen | Same |
+| Page 1 only an out-of-range id, with a token; page 2 a message | Same, 2 requests | `Messages in range: 0` |
+| Page 1 an in-range id, with a token; page 2 a message | `Messages in range: 1`, the accepted under-count (D-68) | Same |
+| **Hook,** `page_size` 1, one message past the range, one in range | `No PDFs found`, exit 0, `-m` and shim | `Messages in range: 0` |
+| **Hook,** `page_size` 1, one past the range, three in range | Same | Same |
+| Hook, same files, `page_size` 500 | `Messages in range: 1` | Same |
+| `FakeGmail` walked, 0 to 8 messages, page sizes 1 to 10 | 147 pages, 0 empty pages with a token | n/a |
+
+Limits: Windows, 3.12.10; scripted transport; no real Gmail, no real credentials. 3.10, 3.11, Ubuntu and macOS are CI's. The exe row ran the editable install, at the same `48fea17`.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C50 | scrum-master | `sprint-01-plan.md` | (a) STORY-02.04 row: the DEF-008 AC and rows of D-102. (b) STORY-01.04 row: Ready needs STORY-02.04 in Jira with both ACs; it does not start while PGD-82 is open. (c) A tech-debt table row for PGD-82 and #46: closer qa-engineer after STORY-02.04 merges. (d) STORY-07.02 row: "Closes #40 at its G6" becomes "with the merge" (D-85, D-94) | Before the PGD-17 merge request; ⚠️ at G7, not a blocker |
+| C51 | qa-engineer | PGD-82, #46; `test-plan.md` | PGD-82 and #46 take the wider reach of D-101, and "linked AC" reads FR-011, none failed. Plan v0.5: the five C47 rows; DEF-008 in section 14; the section 4 sentence (D-103); R-06 notes that `FakeGmail` cannot give an empty page with a token; NT-03 rows run as written | Sprint-02 G4, with C32 |
+| C33 (added) | scrum-master | Jira STORY-02.04 | Created with the DEF-008 AC as well as the pacer AC, PGD-82 linked to it | Sprint-02 G4, as C33 |
+
+Earlier conditions: C47, C48 (a, b, c), C49 closed. C11–C14, C20, C23, C25, C26, C29, C31, C32 (extended), C33 (Jira part, added to above), C36, C37 (b, c, d), C38 (b, c), C44, C46, C48 (d) stay open, due as recorded.
+
+**Merge precondition.** Read by the orchestrator at the moment of the request, each from the live source:
+1. The PR head is `aee5f56`, or any later head with `git diff 48fea17 <head> -- gmail_pdf tests` empty.
+2. All 10 check runs `success` on that head (`aee5f56`: run 41225166460).
+3. The `main` SHA that run tested equals current `main`, `19f1157` when read here (RISK-023). If `main` moved, update the branch so CI runs on a fresh merge ref.
+4. No `REQUEST_CHANGES` review; `mergeStateStatus` CLEAN.
+5. PGD-17 Done, set by qa-engineer on this GO, read back; label `gate:g7-pass`.
+6. C50 (a..d) committed on the status branch and read back. The status branch is not merged before PR #44.
+
+**Name in the merge request, each by itself:**
+- **DEF-008, Sev-3, accepted, wider than filed (D-101).** In plain words: until paging lands, the tool reads the first result page only, and can say "No PDFs found" when later pages hold mail. No real run reaches it, because real mode still stops at sign-in. Fix in STORY-02.04; STORY-01.04 does not start while PGD-82 is open (D-102); RISK-027.
+- **The first-page-only under-count stays** until STORY-02.04 (D-68).
+- **#42** closes with this merge, by the orchestrator (T-14). **#40** stays open for STORY-07.02.
+- **The removed child cases (#42):** the suite no longer runs those 28 cases as real children, what that loses is in D-104; his call only if he disagrees with #42's trade.
+- **Merge method, his choice.** All five merges so far were merge commits, while CLAUDE.md section 1 says squash. **STD-85:** commit `ab78828`'s message says "41 + 25"; the real split is 23 + 43. If squashed, the message must not carry that figure; if merged, the PR body is the record (D-93).
+- **PGD-18 needs a ruling from the product-owner and him (D-97):** (A) keep it as stretch, starting after this merge, sprint closes at 37 if it lands; (B) move it to sprint 02, sprint closes at 34. Master recommends (A). Until answered it does not start. The answer must say who gave it.
+- **PGD-1 c.10292:** who posted it stays unanswered (D-98).
+- **D-75, D-76 and the severity scale wording stay open to him.** They are not accepted.
+- **Failed dry run:** "see the run log" with no log exists: ux-expert and product-owner, before STORY-07.02 is Ready (D-95).
+- **For information:** one QA scratch probe ran without the socket guard and made three outbound attempts, carrying no credential or data (D-103).
+
+**After the merge:** the orchestrator closes #42 (T-14). PGD-82 and #46 stay open. RISK-027 stays open.
+
+**Risks registered:** RISK-027 new, score 4, closes with PGD-82. RISK-010 note, score unchanged. RISK-005, 011, 020, 021, 023, 024, 025 unchanged.
+
+**Rationale:**
+- All three mandatory items have evidence, and master reproduced AC-1 and AC-4 in real children. GO, not CONDITIONAL GO: the one ⚠️ row is non-mandatory and held when run, and C50 and C51 are follow-ups, as C39..C41 were at the PGD-15 G7.
+- The hard question was DEF-008's rating. It stays Sev-3 by reach alone, and the record says so plainly: two of D-67's reasons against Sev-2 do not carry over, so the rating is armed against the one change that would make it false.
+- The brief's premise, "only once the real gateway is wired", was true of the form filed and not of the class. Changing the input found that, as it did at D-67.
+
+**Posted:** PR #44 comment 6546989378; Jira PGD-17 c.10354 (edited once, to link the comment; the content is unchanged); PGD-82 c.10355; PGD-1 c.10356 (risks). Notes on #46 (6546999023), #45 (6546999670), #42 (6547000047).
