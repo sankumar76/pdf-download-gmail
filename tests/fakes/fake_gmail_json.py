@@ -8,7 +8,8 @@ Everything the fake later reads from a document is checked here, at load (PGD-15
 QUA-39): for any file content the command line ends in success or in the one fixed
 "mailbox file could not be read" line, never in a bare exception from a later listing or
 read. A depth cap over the whole document, unread keys included, keeps ``copy.deepcopy`` and
-the recursive part walk inside the interpreter's stack at any Python version.
+the recursive part walk well inside the interpreter's recursion limit. Not covered: a
+``MemoryError`` on a huge file, and reads that later stories add (they keep the rule).
 """
 
 from __future__ import annotations

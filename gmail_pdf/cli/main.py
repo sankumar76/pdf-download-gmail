@@ -22,8 +22,8 @@ by exception type and never built from ``str(exc)`` or the exception chain (PGD-
 * real mode, where no Gmail adapter is wired yet, exits 3 (interim, until STORY-01.04/01.06);
 * a date that is not ``YYYY-MM-DD`` or a lone ``--start``/``--end`` exits 2 before anything
   else; an unknown zone or an end day before the start day exits 2 on the test hook, but in
-  real mode ``build_deps`` fails first and they exit 3 (interim, decision 4; PGD-16 moves
-  these checks ahead of ``build_deps``).
+  real mode ``build_deps`` fails first and they exit 3 (interim, decision 4; PGD-16 is asked
+  to move these checks ahead of ``build_deps``).
 """
 
 from __future__ import annotations
@@ -165,7 +165,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         0 on success (including ``--help``), 1 for an unexpected failure, Ctrl+C or a refused
         or unusable test hook, 2 for a usage error, a bad date format, or (on the test hook
         only) an unknown zone or a reversed range, 3 when Gmail sign-in is not available (in
-        real mode this includes an unknown zone and a reversed range, until PGD-16).
+        real mode this includes an unknown zone and a reversed range, for now).
     """
     redaction.install_logging_redaction()
     redaction.install_excepthooks()
