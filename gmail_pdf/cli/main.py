@@ -37,7 +37,7 @@ from collections.abc import Sequence
 from gmail_pdf import __version__, redaction
 from gmail_pdf.app import runner
 from gmail_pdf.app.ports import Deps
-from gmail_pdf.bootstrap import build_deps
+from gmail_pdf.bootstrap import SystemClock, build_deps, system_zone_name
 from gmail_pdf.cli import args, console
 from gmail_pdf.domain import messages, validation
 from gmail_pdf.domain.errors import (
@@ -49,7 +49,6 @@ from gmail_pdf.domain.errors import (
 )
 from gmail_pdf.domain.events import CancelToken
 from gmail_pdf.domain.models import ExitCode, RunRequest
-from gmail_pdf.infra.tz import SystemClock, system_zone_name
 
 logger = logging.getLogger(__name__)
 
