@@ -8,7 +8,7 @@ fixed in every test; nothing depends on the machine's zone.
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pytest
@@ -174,6 +174,19 @@ def test_an_end_day_before_the_start_day_is_refused() -> None:
 def test_a_first_day_that_starts_before_the_epoch_is_refused(day: str, zone: str) -> None:
     with pytest.raises(ValueError):
         days(day, "2026-12-31", ZoneInfo(zone))
+
+
+@pytest.mark.req("AC-9")
+def test_the_guard_sits_between_a_start_of_zero_and_a_start_of_one_second() -> None:
+    # Fixed offsets of a second make the start fall exactly on either side of the guard.
+    zero = timezone(timedelta(0))  # 1970-01-01T00:00:00Z: S = 0, after:-1
+    one = timezone(timedelta(seconds=-1))  # 1970-01-01T00:00:00-00:00:01: S = 1, after:0
+
+    with pytest.raises(ValueError):
+        DateRange.from_days(date(1970, 1, 1), date(1970, 1, 1), zero)
+    accepted = DateRange.from_days(date(1970, 1, 1), date(1970, 1, 1), one)
+
+    assert (accepted.start_epoch_s, accepted.end_epoch_s) == (1, 86401)
 
 
 @pytest.mark.req("AC-9")

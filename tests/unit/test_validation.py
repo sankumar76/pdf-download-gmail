@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo, available_timezones
 import pytest
 
 from gmail_pdf.cli import args
-from gmail_pdf.domain import messages
+from gmail_pdf.domain import messages, validation
 from gmail_pdf.domain.daterange import DateRange
 from gmail_pdf.domain.models import RunRequest
 from gmail_pdf.domain.query import baseline_query
@@ -134,6 +134,32 @@ def test_strict_iso_dates_parse(text: str) -> None:
 @pytest.mark.parametrize("text", [case.values[0] for case in BAD_DATES])
 def test_anything_but_a_real_ascii_iso_date_does_not_parse(text: str) -> None:
     assert parse_iso_date(text) is None
+
+
+@pytest.mark.req("AC-1")
+def test_the_pattern_alone_keeps_out_other_digit_scripts_and_trailing_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``date.fromisoformat`` is not the guard: a lenient parser is, and the pattern must hold.
+
+    CPython's C implementation refuses Arabic-Indic digits and trailing text, but the pure-Python
+    one (PyPy, or a build without ``_datetime``) reads digits with ``int()``. This stand-in reads
+    the first ten characters the same way, so the regular expression is what has to refuse them.
+    """
+
+    class Lenient:
+        @staticmethod
+        def fromisoformat(text: str) -> date:
+            year, month, day = text[:10].split("-")
+            return date(int(year), int(month), int(day))
+
+    monkeypatch.setattr(validation, "date", Lenient)
+
+    assert validation.parse_iso_date("٢٠٢٦-٠١-٠٥") is None
+    assert validation.parse_iso_date("２０２６-０１-０５") is None
+    assert validation.parse_iso_date("2026-01-05\n") is None
+    assert validation.parse_iso_date("2026-01-05T00:00:00") is None
+    assert validation.parse_iso_date("2026-01-05") == date(2026, 1, 5)
 
 
 # ----------------------------------------------------------------------------------- AC-9
