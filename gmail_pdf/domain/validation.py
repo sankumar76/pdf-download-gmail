@@ -1,9 +1,11 @@
 """Input validation shared by every front end (FR-015, architecture 4.1 and 6.3).
 
-``validate`` is pure: it reads no file, opens no connection and prints nothing. It takes the
-three inputs as the user typed them and returns every problem at once, with wording taken only
-from ``domain/messages.py`` (one table for the command line and the window, FR-064). Nothing
-here echoes what the user typed.
+``validate`` has no I/O of its own: it opens no connection and prints nothing. Its only read is
+the time-zone database, which the zone check needs (AC-4): ``available_timezones()`` once, cached,
+and the file of the chosen zone. It takes the three inputs as the user typed them and returns
+every problem at once, with wording taken only from ``domain/messages.py`` (one table for the
+command line and the window, FR-064). No sentence echoes raw input; the reversed-range sentence
+prints the two parsed dates (AC-2).
 
 Date rules (NFR-024, AC-9): the form is ``YYYY-MM-DD`` in ASCII digits and a real calendar
 date; each date must also lie from ``EARLIEST_DATE`` to ``LATEST_DATE``, the same in every zone.

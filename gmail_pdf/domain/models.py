@@ -29,7 +29,7 @@ class RunResult(Enum):
 
 @dataclass(frozen=True, slots=True)
 class RunRequest:
-    """What the user asked for, as typed (validated when the run starts).
+    """A range that passed ``domain.validation``; only ``validate`` builds one.
 
     Attributes:
         start: First day of the range, inclusive.

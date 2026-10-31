@@ -31,8 +31,8 @@ def run(request: RunRequest, deps: Deps, sink: EventSink, cancel: CancelToken) -
         A ``COMPLETED`` summary with the messages in range, or a ``CANCELLED`` one.
 
     Raises:
-        ValueError: the request was not validated (the end day is before the start day, or the
-            range starts before 1970-01-02): a programming error, not user input.
+        ValueError, OverflowError, ZoneInfoNotFoundError: the request did not come from
+            ``domain.validation``: a programming error, not user input.
         GmailApiError: Gmail answered a call with a non-retryable HTTP error.
         RetryExhaustedError: a retryable call failed on every attempt.
         KeyError: a message resource has no ``internalDate`` (with ``ValueError`` and

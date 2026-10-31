@@ -97,7 +97,10 @@ def _exit_code(exc: SystemExit) -> int:
 
 
 def _report_invalid_input(errors: tuple[str, ...]) -> int:
-    """Print each rejection (a fixed sentence that never echoes the input) and exit 2."""
+    """Print each rejection and exit 2.
+
+    No sentence echoes raw input; the reversed-range sentence prints the two parsed dates (AC-2).
+    """
     for sentence in errors:
         line = f"error: {sentence}"
         # INFO, not ERROR: no log handler exists yet and an ERROR record would reach stderr a

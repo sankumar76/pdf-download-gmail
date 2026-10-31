@@ -44,10 +44,11 @@ FAKE_MAILBOX_NOT_IMPORTABLE_LINE = (
 )
 
 # Input validation (STORY-02.03, FR-015, FR-064): the one table the command line and the window
-# share. The sentences never echo what the user typed. ``{field}`` and the ``*_field`` places take
-# the name the front end gives the input (the CLI passes its ``FLAG_*`` constants from
-# ``cli/args.py``), so no flag name is written in this module (STD-55). The bounds in
-# ``DATE_OUT_OF_BOUNDS_TEMPLATE`` come from ``domain/validation.py``.
+# share. No sentence echoes raw input; ``RANGE_REVERSED_TEMPLATE`` prints the two parsed dates
+# (AC-2). ``{field}`` and the ``*_field`` places take the name the front end gives the input (the
+# CLI passes its ``FLAG_*`` constants from ``cli/args.py``), so no flag name is written in this
+# module (STD-55). The bounds in ``DATE_OUT_OF_BOUNDS_TEMPLATE`` come from
+# ``domain/validation.py``.
 DATE_NOT_ISO_TEMPLATE = "{field}: Enter the date as YYYY-MM-DD, for example 2026-01-31."
 DATE_OUT_OF_BOUNDS_TEMPLATE = "{field}: Enter a date from {earliest} to {latest}."
 RANGE_REVERSED_TEMPLATE = (
