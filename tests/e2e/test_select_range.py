@@ -11,6 +11,7 @@ must appear on no surface.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -21,8 +22,14 @@ import pytest
 
 from gmail_pdf.bootstrap import ENV_FAKE_MAILBOX, ENV_TESTING
 from gmail_pdf.domain import messages
+from tests.fakes.fake_gmail_json import to_json_dict
 from tests.support import sentinels
-from tests.support.mailboxes import MESSAGES_IN_RANGE_LINE, RANGE_ARGS, write_edge_mailbox
+from tests.support.mailboxes import (
+    MESSAGES_IN_RANGE_LINE,
+    RANGE_ARGS,
+    edge_mailbox,
+    write_edge_mailbox,
+)
 from tests.support.subprocess_env import SUPPORT_DIR, run_guarded
 
 pytestmark = pytest.mark.req("FR-008", "FR-012")
@@ -225,6 +232,107 @@ def test_an_unusable_fake_mailbox_file_exits_one_and_never_falls_through_to_real
     assert_only_this_line_on_stderr(result, UNREADABLE_LINE, workspace)
     assert messages.SIGN_IN_UNAVAILABLE_LINE not in result.stderr
     assert messages.FAKE_MAILBOX_UNREADABLE_LINE == UNREADABLE_LINE
+
+
+# QUA-39: a file that parses must end in success or in the same fixed line, whatever it holds.
+# Deep values are spliced in as raw text: ``json.dumps`` cannot write them past ~1000 levels.
+DEEP = "@@DEEP@@"
+Edit = Callable[[dict[str, object]], None]
+
+
+def _resource(doc: dict[str, object]) -> dict[str, object]:
+    first: dict[str, object] = doc["messages"][0]  # type: ignore[index]
+    return first["resource"]  # type: ignore[return-value]
+
+
+def _payload(doc: dict[str, object]) -> dict[str, object]:
+    return _resource(doc)["payload"]  # type: ignore[return-value]
+
+
+def _nested(levels: int) -> str:
+    return "[" * levels + "]" * levels
+
+
+def _part_chain(depth: int) -> str:
+    return '{"parts": [' * depth + "{}" + "]}" * depth
+
+
+def _spliced(edit: Edit, raw: str = "") -> Callable[[Workspace], Path]:
+    """The edge mailbox with ``edit`` applied, then ``"@@DEEP@@"`` replaced by raw JSON text."""
+
+    def make(workspace: Workspace) -> Path:
+        doc = to_json_dict(edge_mailbox())
+        edit(doc)
+        path = workspace.mailbox_path()
+        path.write_text(json.dumps(doc).replace(f'"{DEEP}"', raw), encoding="utf-8")
+        return path
+
+    return make
+
+
+def _set(place: Callable[[dict[str, object]], dict[str, object]], key: str, value: object) -> Edit:
+    def edit(doc: dict[str, object]) -> None:
+        place(doc)[key] = value
+
+    return edit
+
+
+def _top(doc: dict[str, object]) -> dict[str, object]:
+    return doc
+
+
+def _add_deep_part(doc: dict[str, object]) -> None:
+    """Keep the real PDF part and add one more child part, to be spliced."""
+    _payload(doc)["parts"].append(DEEP)  # type: ignore[attr-defined]
+
+
+CONTENT_FILES = [
+    pytest.param(_spliced(_set(_top, "unread", DEEP), _nested(200)), id="unread-key-200-levels"),
+    pytest.param(_spliced(_set(_top, "unread", DEEP), _nested(2900)), id="unread-key-2900-levels"),
+    pytest.param(_spliced(_set(_payload, "parts", [DEEP]), _part_chain(247)), id="parts-247"),
+    pytest.param(_spliced(_set(_payload, "parts", [DEEP]), _part_chain(1000)), id="parts-1000"),
+    pytest.param(_spliced(_set(_payload, "parts", [DEEP]), _part_chain(1400)), id="parts-1400"),
+    pytest.param(_spliced(_set(_resource, "unread", DEEP), _nested(500)), id="resource-500"),
+    pytest.param(_spliced(_set(_resource, "unread", DEEP), _nested(2900)), id="resource-2900"),
+    pytest.param(_spliced(_set(_payload, "parts", [5])), id="parts-of-numbers"),
+    pytest.param(_spliced(_set(_payload, "parts", [None])), id="parts-of-null"),
+    pytest.param(_spliced(_set(_payload, "parts", ["x"])), id="parts-of-strings"),
+    pytest.param(_spliced(_set(_resource, "labelIds", 5)), id="label-ids-number"),
+    pytest.param(_spliced(_set(_resource, "labelIds", None)), id="label-ids-null"),
+    pytest.param(_spliced(_set(_resource, "labelIds", [[]])), id="label-ids-unhashable"),
+    pytest.param(_spliced(_set(_resource, "internalDate", "1" * 5000)), id="internal-date-5000"),
+    pytest.param(_spliced(_set(_top, "latency_s", "inf")), id="latency-inf-text"),
+    pytest.param(_spliced(_set(_top, "latency_s", float("inf"))), id="latency-infinity"),
+    pytest.param(_spliced(_set(_top, "latency_s", 1e300)), id="latency-1e300"),
+]
+
+
+@pytest.mark.req("AC-6", "QUA-39")
+@pytest.mark.parametrize("make_file", CONTENT_FILES)
+def test_content_that_parses_but_cannot_be_read_still_ends_in_the_fixed_line(
+    workspace: Workspace, make_file: Callable[[Workspace], Path]
+) -> None:
+    result = workspace.run(hook_env(make_file(workspace)))
+
+    assert result.returncode == 1
+    assert_only_this_line_on_stderr(result, UNREADABLE_LINE, workspace)
+
+
+READABLE_FILES = [
+    pytest.param(_spliced(_set(_top, "unread", DEEP), _nested(199)), id="unread-key-199-levels"),
+    pytest.param(_spliced(_add_deep_part, _part_chain(20)), id="parts-20"),
+    pytest.param(_spliced(_set(_resource, "labelIds", [])), id="label-ids-empty"),
+]
+
+
+@pytest.mark.req("AC-6", "QUA-39")
+@pytest.mark.parametrize("make_file", READABLE_FILES)
+def test_content_inside_the_limits_still_succeeds(
+    workspace: Workspace, make_file: Callable[[Workspace], Path]
+) -> None:
+    result = workspace.run(hook_env(make_file(workspace)))
+
+    assert (result.returncode, result.stdout, result.stderr) == (0, MESSAGES_IN_RANGE_LINE, "")
 
 
 @pytest.mark.req("AC-6")
