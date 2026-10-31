@@ -339,8 +339,7 @@ def test_the_accepted_edges_of_the_limits_load_and_read() -> None:
     slept: list[float] = []
     document = _doc({"internalDate": "9" * 20}, latency_s=3600)
 
-    fake = from_json_dict(document)
-    fake._sleep = slept.append  # the accepted latency is a real sleep otherwise
+    fake = from_json_dict(document, sleep=slept.append)  # a real hour-long sleep otherwise
     _read_everything(fake)
 
     assert fake.latency_s == 3600.0
