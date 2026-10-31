@@ -40,13 +40,6 @@ class PrivateFileError(GmailPdfError):
     """
 
 
-class InputValidationError(GmailPdfError):
-    """A value the user gave (date, zone) is not usable. The CLI reports it with exit code 2.
-
-    The message is a fixed sentence and never echoes the rejected input.
-    """
-
-
 class RunCancelledError(GmailPdfError):
     """The run was cancelled (``CancelToken`` set) before or between Gmail calls."""
 
