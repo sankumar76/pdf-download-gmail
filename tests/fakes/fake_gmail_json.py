@@ -15,7 +15,6 @@ the recursive part walk well inside the interpreter's recursion limit. Not cover
 from __future__ import annotations
 
 import json
-import math
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -120,9 +119,12 @@ def _require_listable(resource: Mapping[str, object]) -> None:
 
 
 def _latency_s(value: object) -> float:
-    """Parse ``latency_s``; finite and within ``[0, MAX_LATENCY_S]`` so a sleep cannot raise."""
+    """Parse ``latency_s``; within ``[0, MAX_LATENCY_S]`` so a sleep cannot raise.
+
+    The range test also refuses ``inf`` and ``nan``, which no comparison with a number accepts.
+    """
     latency = float(str(value))
-    if not (math.isfinite(latency) and 0.0 <= latency <= MAX_LATENCY_S):
+    if not 0.0 <= latency <= MAX_LATENCY_S:
         raise ValueError("fake mailbox 'latency_s' must be a finite number of seconds")
     return latency
 
