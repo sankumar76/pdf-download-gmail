@@ -1533,3 +1533,119 @@ Follow-ups (not conditions): qa-engineer sets Done. Orchestrator sets the label 
 - PGD-17 is a question of fact, and the fact is on `main`: the warning its Testing Notes need is not there.
 
 **Posted:** PR #41 comment 6543091879; Jira PGD-16 c.10325 (edited once, to link the comment; the content is unchanged).
+
+---
+
+## G6 – Peer Review — STORY-02.06 (PGD-17) — 2026-10-31
+
+- **Decision:** CONDITIONAL GO (D-90). C47 is a scoped pre-G7 condition under D-47, with the exit rule below (D-92). Orchestrator: PGD-17 to Changes Requested, label `gate:g6-changes`, until C47 is verified; then In QA and `gate:g6-pass`, with no further G6 decision
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no
+- **Attempt:** 1, loop 1 of 3. Head `8a000e4`, base `main` `19f1157`
+- **Artefacts evaluated:**
+  - Consolidated findings PR #44 comment 6545244329; reviews 5723479229 (quality), 5723063837 (standards), 5723123007 (performance), bodies and all 14 inline comments read with `gh api`; SA ruling 6544413346; G5 comment 6544277371. 3 reviews, all `COMMENTED`.
+  - Jira PGD-17 description, AC-1..5 as amended, c.10331, c.10332, c.10334..10341, issue links, remote links 10010, 10011; PGD-16 AC-6; PGD-72; #38, #40, #42.
+  - Source at `8a000e4`: the whole `gmail_pdf/` diff, `tests/unit/test_cli_list_failure.py`, `tests/unit/test_cli_invalid_input.py` lines 150..216, `tests/support/gateway_rig.py`, `tests/conftest.py` restore. PR body at the same head.
+  - `sprint-01-plan.md` at `cf6716c`, `test-plan.md` v0.3 (sections 11, 15), `git log --merges`, repository merge settings, PGD-1 c.10292, c.10293, c.10327..10333.
+  - Check runs on `8a000e4`: 10/10 `success`, run 41207307634, read by master. `main` `19f1157`, `feat/PGD-17-empty-range` `8a000e4`, read with `git ls-remote`. `mergeable_state` clean. PR #44 labels unchanged by master.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 0 | Prerequisites C40, C43 remainder, C45 extended | | ✅ | PGD-17 AC-4 and Dev Context; PGD-72 summary; link 10028; remote links; plan rows 117, 135, 136. Closed (D-96) |
+| 1 | Three reports present | ✱ | ✅ | Reviews above: quality and standards APPROVE WITH COMMENTS, performance APPROVE |
+| 2 | Zero open Blocker/Critical | ✱ | ✅ | None raised. QUA-67, QUA-68 tested for more than Minor: they stay Minor (D-91) |
+| 3 | Majors fixed or accepted | | ✅ | None raised, none re-rated |
+| 4 | Findings cite file:line | | ✅ | All inline but STD-85, a commit message, which has no code location |
+| 5 | Architecture acknowledgement (D-44) | | ⚠️ | All five acknowledged, conditional on R1, which is not on the branch; fix-now (D-90, D-95) |
+| 6 | ACs, CI | | ✅ | Quality AC table: AC-1..5 met, AC-4 with a test gap. Orchestrator: 1538 passed, 12 skipped, 99.89 %; ruff, mypy --strict (25 files), bandit clean. CI 10/10 |
+| 7 | T-05 interim control | | ✅ | Reviewer-standards pass; master's grep over the added lines: no hit |
+| 8 | Issues tied to this story | | ⚠️ | #42: four rows read done, PERF-17 reads done only on the C47 head (D-94). #40: stderr rule delivered, stays open for STORY-07.02 |
+| 9 | Traceability sample | | ✅ | GOAL-01 → FR-016 (PRD line 94) → PGD-17 AC-1 → `tests/e2e/test_empty_range.py` line 60 `req("AC-1", "AC-2")`, module `req("FR-016", "EC-06")`. Reverse: `test_cli_list_failure.py` `req("FR-016", "EC-06", "AC-4")` → AC-4 → FR-016 → GOAL-01 |
+
+**Master's probes** (fresh `git archive` of `8a000e4` in the scratchpad, folder `g6m17`, one fresh copy per row; Windows, CPython 3.12.10; `gmail_pdf.__file__` asserted inside each copy; whole suite minus perf; scripts `fixapply.py`, `drive.py`, `child.py`). Nothing was deleted; the folders remain. "With the fixes" means R1 as the SA wrote it, QUA-67's snippet with annotations added, and QUA-68's three lines.
+
+| Row | Head as reviewed | With the fixes |
+|---|---|---|
+| Control | 1537 passed, 13 skipped | 1541 passed, 13 skipped, 99.89 % |
+| F7 `runner.run` catches `GmailApiError` and returns an empty `COMPLETED` | **Survives** | Fails `list-404`, `list-403` |
+| F9 the same catch in `cli._execute` | **Survives** | Fails `list-404`, `list-403` |
+| F11 the planner skips a message whose `get_message` fails | **Survives** | Fails `get-message-503` |
+| Z1 a file created for the rejected zone `IST` | **Survives** | Fails `[test-hook-IST]`, `[real-mode-IST]` |
+| Z2 a file created for any rejected zone | Fails 9, all child rows | Fails 23 |
+| L1 the library's `NullHandler` removed in `conftest` | **Survives** | Fails R1, `list-403` |
+| L2 `main`'s call removed | Not rerun here; the PR, quality and the SA report it failing | Fails 6: three leg (b), R1, `get-message-503`, handler-once |
+
+| AC-4 and empty rows, real child, no pytest, 0 root handlers, real `main` and `GmailGateway` over `HttpMockSequence` | Result |
+|---|---|
+| 503 x 6; 429 x 6; 403 `rateLimitExceeded` x 6; 403 `insufficientPermissions`; 404; 400 | exit 1, stdout empty, stderr exactly the one line, nothing created |
+| Empty answer; two 503s then an empty answer | exit 0, `No PDFs found`, `0 PDFs found.`, stderr empty, nothing created |
+| Harness control: 503 x 6 on a copy with `main`'s call removed | The five `Retrying` lines, then the error line, exit 1. The harness sees the failure |
+| QUA-71, `test_cli_list_failure.py` alone: handler added late, with the restore / without it; call removed, with the restore / without it | 3 failed / 0 failed; 4 failed / 4 failed. The restore matters for a late handler, not for a removed call, as QUA-71 says |
+
+Also: with the fixes the two files stand alone (24 and 75 passed), ruff and format clean, 292 and 340 lines, coverage 99.89 % unchanged. A work tree adds the one test an export skips, so H should show **1542 passed, 12 skipped**.
+
+Limits: Windows, 3.12.10 only. The fixes ran on copies, not on the branch. No real Gmail, no real credentials. Scripted transport. Master's runs add nothing for 3.10, 3.11, Ubuntu or macOS; CI does.
+
+**Ratings and dispositions** (D-91, D-93, D-94)
+| Finding | Reviewer | Master | Disposition |
+|---|---|---|---|
+| QUA-67 `test_cli_list_failure.py:200` | Minor | Minor | F2 |
+| QUA-68 `test_cli_invalid_input.py:213-216` | Minor | Minor | F3 |
+| QUA-69 | Info | Info | #36, STORY-01.04 |
+| QUA-70 | Info | Info | Closed by F2's `get-message-503` row |
+| QUA-71 | Info | Info | F4, PR text |
+| QUA-72 | Info | Info | No action |
+| STD-77 | Minor | Minor | No code; #36, SA's move trigger |
+| STD-78, STD-79, STD-80, STD-81 | Minor | Minor | #45 |
+| STD-82, STD-83 | Info | Info | #45 |
+| STD-84 | Info | Info | No action |
+| STD-85 | Info | Info | No rewrite; PR body stands; one line in the merge request |
+
+**Fix list.** All owned by developer, one commit series, then H is frozen.
+| # | Item | Files | Severity | Verified by |
+|---|---|---|---|---|
+| F1 | SA's R1: `test_leg_b_a_rate_limit_403_on_every_attempt_leaves_only_the_error_line`, name and body as in the ruling, its own test | `tests/unit/test_cli_list_failure.py` | SA condition (D-44) | quality |
+| F2 | QUA-67, QUA-70: `test_every_failed_read_is_a_failed_run`, parametrized, rows `list-404`, `list-403`, `get-message-503`, asserting the outcome and the request count; annotated, `ok` and `Response` imported | `tests/unit/test_cli_list_failure.py` | Minor | quality |
+| F3 | QUA-68: `test_a_zone_outside_the_iana_set_is_rejected_as_written_in_both_modes` runs in an empty working directory and asserts nothing was created, in both modes, in the form of its neighbour at line 161 | `tests/unit/test_cli_invalid_input.py` | Minor | quality |
+| F4 | QUA-71: reword deviation 2 ("without it, a handler left by an earlier test hides a `main` that adds it too late"). "Every removed child has an in-process row" gains that the zone rows gained the created-files check at F3. Evidence and Follow-ups (`#45`) brought to H. Does not move the head | PR #44 body | none | master |
+
+**Exit rule, C47 (D-92).** Scope: the two test files above and no others, no new file, nothing under `gmail_pdf/`, no manifest. Master makes no further G6 decision if it passes.
+| Verifier | Must show on H |
+|---|---|
+| orchestrator | Diff `8a000e4..H` is those two files; `gmail_pdf/` diff empty; local rerun **1542 passed, 12 skipped**, ruff, format, mypy --strict, bandit; CI 10/10 from check runs on H; `main` compared (RISK-023) |
+| reviewer-quality | Delta plus a fresh export: F1's text equals the ruling; L1 and L2 fail it; F7 and F9 fail `list-404` and `list-403`; F11 fails `get-message-503`; Z1 fails 2 rows of F3 |
+| reviewer-standards | Delta: no suppression marker, the two files under 400 lines, T-05 on the delta |
+| solution-architect | One PR comment on H: R1 landed as ruled and the ruling carries, because the delta is wider than its carry test. Not a review, not a loop |
+| reviewer-performance | Not needed: no package change and no child process in the delta |
+| master | F4; confirms C47 as G7 check 0 |
+
+- All listed items verified, no new Major or higher: **C47 closes, no further G6 decision.** PGD-17 goes to In QA. The attempt stays 1 and no loop is spent.
+- New Minor or Info in the delta: master rates it, a tech-debt issue follows, no commit. Rating is not a new attempt. A reviewer's added mutant is a finding, not a listed check. A delta finding is measured against `main`. Items ruled here are not reopened.
+- A miss on F1, F2 or F3 alone: one correction in the same file under D-47, no new attempt.
+- A second miss, a file outside the scope, any change under `gmail_pdf/`, or a new Major or higher: G6 attempt 2, loop 2 of 3, decided by master.
+- A CI rerun of the same head after an infrastructure failure is not a failure (D-50).
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C47 | developer | The two test files; PR #44 body | F1..F4, exit rule above | Before G7 PGD-17 starts |
+| C48 | scrum-master | `sprint-01-plan.md`; #45 | (a) STORY-07.02 row (line 115): the `NullHandler` stays and the "replaced" wording goes. The run-log handler goes on a parent of the retry logger, root recommended, never on the retry logger, no `propagate = False`. Tests through the real gateway: a normal run has five records in the file and one stderr line; a dry run has the same stderr and writes nothing. The comment at `cli/main.py:61` and AC-4's "until the run log exists" are updated then. The question below goes on the row. (b) STORY-01.04 row (line 116): extend the handler to `google_auth_httplib2` and `google.oauth2.credentials`; move it to `bootstrap`; test stderr with real `Credentials` over a scripted transport; `paths._discard` becomes a designed `warning:` line; revisit `test_a_warning_from_another_gmail_pdf_logger_still_reaches_stderr` (QUA-69). (c) A row on STORY-01.04/01.06 for the first story that adds a third `RunResult`: `print_summary`'s `else` and `exit_code` become explicit. (d) Name a story that exists in Jira for #45 | (a), (b), (c) before the PGD-17 merge request; ⚠️ at G7, not a blocker. (d) sprint-02 G4 |
+| C49 | qa-engineer | `docs/07-qa/test-plan.md` | Section 11 NT-08 follows AC-4: stderr exactly the one line after any `warning:`, no retry notice, and it runs in-process, not as a child, because the hook cannot carry a fault (c.10331; #40 item 3). Section 15 PGD-17 row: 5 points, AC-4's rule and the two legs | Before the PGD-17 G7 report |
+
+Question for ux-expert and product-owner, before STORY-07.02 is Ready: a failed dry run says "see the run log" and no log exists (SA; D-95). Not master's to decide.
+
+Earlier conditions: C40, C43 (remainder), C45 (extended) closed (D-96). C11–C14, C20, C23, C25, C26, C29, C31, C32 (extended), C33 (Jira part), C36, C37 (b, c, d), C38 (b, c), C44, C46 stay open, due as recorded.
+
+**G7 PGD-17:** C47 is check 0. C49 first. QA tests H only, and `git diff H <head> -- gmail_pdf tests` stays empty to the merge. Leg (b) fails with the `main.py` change removed (Testing Notes). DEF-005 M13, M22, M20, M23 fail at 17, 5, 3, 3. Report read against the plan by row; NT-04 and NT-05 come in short until C32.
+
+**After the merge:** the orchestrator closes #42 (D-94, T-14). #40 stays open for STORY-07.02. **Name in the merge request:** #42's closer; #40 open; the PGD-18 question (D-97); STD-85's line (D-93); D-75, D-76 and the scale wording, still his; the failed-dry-run wording question.
+
+**Logged today:** D-96 (C40, A-1, C43, C45, 5 points, 34 against 30, T-13 reused). **Rulings beyond the gate:** PGD-18 (D-97), c.10292 (D-98).
+
+**Risks registered:** no new risk. RISK-010 and RISK-005 notes added, scores unchanged. RISK-011, 020, 021, 023, 024, 025 unchanged.
+
+**Rationale:**
+- Every mandatory item passes, so the label comes from the checklist: CONDITIONAL GO, not NO-GO, and not GO, because the SA's acknowledgement carries a condition that is not on the branch.
+- The two ratings were the real question, and both stay Minor by the words of D-40, D-51 and D-65 (1). They are still fixed now, under D-79, because each pins an AC and sits in a file R1 or #42 already opens. "Rating" and "fix now" are separate questions.
+- The delta is two test files by design, so C47 can end the gate with no further decision.
+
+**Posted:** PR #44 comment 6545642477; Jira PGD-17 c.10342 (edited once, to link the comment; the content is unchanged); PGD-1 c.10343 (risks, PGD-18, c.10292). Issue #45; notes on #36 (6545544168), #40 (6545544701), #42 (6545545232).
