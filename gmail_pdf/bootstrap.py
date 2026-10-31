@@ -10,17 +10,19 @@ from __future__ import annotations
 import importlib
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from gmail_pdf.app.ports import GmailPort
+from gmail_pdf.app.ports import Deps, GmailPort
 from gmail_pdf.domain.errors import (
     AdapterUnavailableError,
     FakeMailboxHookRefusedError,
     FakeMailboxNotImportableError,
     FakeMailboxUnavailableError,
 )
+from gmail_pdf.infra.tz import resolve_zone
+
+__all__ = ["ENV_FAKE_MAILBOX", "ENV_TESTING", "Deps", "build_deps"]
 
 ENV_TESTING = "GMAIL_PDF_TESTING"
 ENV_FAKE_MAILBOX = "GMAIL_PDF_TEST_FAKE_MAILBOX"
@@ -32,13 +34,6 @@ _FAKE_LOADER = "load_fake_gmail_from_json_file"
 # Only these names mean "the tests package is not importable"; any other missing module is a
 # real defect inside the fake and must surface unchanged.
 _ABSENT_TEST_PACKAGES = frozenset({"tests", "tests.fakes"})
-
-
-@dataclass(frozen=True, slots=True)
-class Deps:
-    """Port implementations handed to the application layer."""
-
-    gmail: GmailPort
 
 
 def _load_fake_mailbox(path: Path) -> GmailPort:
@@ -89,5 +84,5 @@ def build_deps(env: Mapping[str, str] | None = None) -> Deps:
             raise FakeMailboxHookRefusedError(
                 f"{ENV_FAKE_MAILBOX} is a test-only setting and needs {ENV_TESTING}=1."
             )
-        return Deps(gmail=_load_fake_mailbox(Path(mailbox_file)))
+        return Deps(gmail=_load_fake_mailbox(Path(mailbox_file)), resolve_zone=resolve_zone)
     raise AdapterUnavailableError("The Gmail adapter is not available in this build yet.")
