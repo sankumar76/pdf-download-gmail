@@ -193,6 +193,12 @@ def test_seeded_jitter_gives_the_same_delays_every_time_and_stays_in_bounds() ->
     assert first != delays(2027)
 
 
+def test_the_default_clock_is_timezone_aware_utc() -> None:
+    moment = retry.utc_now()
+
+    assert moment.utcoffset() == timedelta(0)
+
+
 def test_the_backoff_cap_is_sixty_four_seconds() -> None:
     assert retry.backoff_delay(9, None, FakeClock().now, lambda low, high: high) == 64.0
     assert retry.backoff_delay(30, None, FakeClock().now, lambda low, high: high) == 64.0

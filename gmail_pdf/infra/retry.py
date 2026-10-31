@@ -126,8 +126,8 @@ def call_with_retry(
         RetryExhaustedError: every one of the attempts failed with a retryable error.
         GmailApiError: a non-retryable HTTP error, raised at once.
     """
-    last_error: Exception | None = None
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+    attempt = 1
+    while True:
         if cancel.is_set():
             raise RunCancelledError
         try:
@@ -135,14 +135,13 @@ def call_with_retry(
         except Exception as error:
             if not is_retryable(error):
                 raise
-            last_error = error
-        if attempt == MAX_ATTEMPTS:
-            break
-        retry_after = last_error.retry_after if isinstance(last_error, GmailApiError) else None
-        delay = backoff_delay(attempt + 1, retry_after, now, jitter)
+            if attempt == MAX_ATTEMPTS:
+                raise RetryExhaustedError(MAX_ATTEMPTS) from error
+            retry_after = error.retry_after if isinstance(error, GmailApiError) else None
+        attempt += 1
+        delay = backoff_delay(attempt, retry_after, now, jitter)
         logger.warning(
-            "Retrying %s: attempt %d of %d after %.1f s", method, attempt + 1, MAX_ATTEMPTS, delay
+            "Retrying %s: attempt %d of %d after %.1f s", method, attempt, MAX_ATTEMPTS, delay
         )
         if cancel.wait(delay):
             raise RunCancelledError
-    raise RetryExhaustedError(MAX_ATTEMPTS) from last_error
