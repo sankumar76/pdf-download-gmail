@@ -69,6 +69,13 @@ python_version = "3.10"
 strict = true
 files = ["gmail_pdf"]
 
+# The Google client libraries ship no type information and no stub package is on the ADR-002
+# dev allow-list. Only ``infra/gmail_gateway.py`` imports them (architecture 4.1); everything it
+# hands on is typed by our own code. Strict mode stays on for our code.
+[[tool.mypy.overrides]]
+module = ["googleapiclient.*", "httplib2"]
+ignore_missing_imports = true
+
 # ---------------------------------------------------------------- pytest (test-strategy §1, §2)
 [tool.pytest.ini_options]
 minversion = "8.0"

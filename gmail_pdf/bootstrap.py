@@ -10,12 +10,19 @@ from __future__ import annotations
 import importlib
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from gmail_pdf.app.ports import GmailPort
-from gmail_pdf.domain.errors import AdapterUnavailableError, FakeMailboxHookRefusedError
+from gmail_pdf.app.ports import Deps, GmailPort
+from gmail_pdf.domain.errors import (
+    AdapterUnavailableError,
+    FakeMailboxHookRefusedError,
+    FakeMailboxNotImportableError,
+    FakeMailboxUnavailableError,
+)
+from gmail_pdf.infra.tz import resolve_zone
+
+__all__ = ["ENV_FAKE_MAILBOX", "ENV_TESTING", "Deps", "build_deps"]
 
 ENV_TESTING = "GMAIL_PDF_TESTING"
 ENV_FAKE_MAILBOX = "GMAIL_PDF_TEST_FAKE_MAILBOX"
@@ -29,33 +36,27 @@ _FAKE_LOADER = "load_fake_gmail_from_json_file"
 _ABSENT_TEST_PACKAGES = frozenset({"tests", "tests.fakes"})
 
 
-@dataclass(frozen=True, slots=True)
-class Deps:
-    """Port implementations handed to the application layer."""
-
-    gmail: GmailPort
-
-
 def _load_fake_mailbox(path: Path) -> GmailPort:
     """Load ``FakeGmail`` from a JSON file (test-only).
 
     Raises:
-        AdapterUnavailableError: ``tests/`` is not importable, or the file cannot be read or
-            parsed. The message never contains the path.
+        FakeMailboxNotImportableError: ``tests/`` is not importable.
+        FakeMailboxUnavailableError: the file cannot be read or parsed. The message never
+            contains the path. Both are ``AdapterUnavailableError`` subclasses.
     """
     try:
         module = importlib.import_module(_FAKE_MODULE)
     except ModuleNotFoundError as exc:
         if exc.name not in _ABSENT_TEST_PACKAGES | {_FAKE_MODULE}:
             raise
-        raise AdapterUnavailableError(
+        raise FakeMailboxNotImportableError(
             "The fake mailbox is only available from a source checkout (tests/ not importable)."
         ) from exc
     loader = getattr(module, _FAKE_LOADER)
     try:
         return cast(GmailPort, loader(path))
-    except (OSError, ValueError) as exc:  # JSONDecodeError is a ValueError
-        raise AdapterUnavailableError(
+    except (OSError, ValueError, RecursionError) as exc:  # JSONDecodeError is a ValueError
+        raise FakeMailboxUnavailableError(
             f"The fake mailbox file could not be read; check {ENV_FAKE_MAILBOX}."
         ) from exc
 
@@ -72,8 +73,9 @@ def build_deps(env: Mapping[str, str] | None = None) -> Deps:
     Raises:
         FakeMailboxHookRefusedError: ``GMAIL_PDF_TEST_FAKE_MAILBOX`` is set but
             ``GMAIL_PDF_TESTING`` is not ``1``.
-        AdapterUnavailableError: no Gmail adapter is wired yet (real gateway: later story), or
-            the fake mailbox file is unreadable or malformed.
+        AdapterUnavailableError: no Gmail adapter is wired yet (real gateway: later story).
+        FakeMailboxUnavailableError: the fake mailbox file is unreadable or malformed.
+        FakeMailboxNotImportableError: ``tests/`` is not importable.
     """
     environment = os.environ if env is None else env
     mailbox_file = environment.get(ENV_FAKE_MAILBOX)
@@ -82,5 +84,5 @@ def build_deps(env: Mapping[str, str] | None = None) -> Deps:
             raise FakeMailboxHookRefusedError(
                 f"{ENV_FAKE_MAILBOX} is a test-only setting and needs {ENV_TESTING}=1."
             )
-        return Deps(gmail=_load_fake_mailbox(Path(mailbox_file)))
+        return Deps(gmail=_load_fake_mailbox(Path(mailbox_file)), resolve_zone=resolve_zone)
     raise AdapterUnavailableError("The Gmail adapter is not available in this build yet.")

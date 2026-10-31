@@ -66,6 +66,98 @@ def test_unknown_page_token_is_http_400() -> None:
     assert exc_info.value.status == 400
 
 
+SWEEP_QUERY = "has:attachment -filename:pdf"
+
+
+@pytest.mark.req("QUA-03", "issue-11")
+def test_a_baseline_token_sent_with_the_sweep_query_is_http_400() -> None:
+    fake = numbered_mailbox(5, page_size=2)
+    token = fake.list_message_ids(BASELINE_QUERY).next_page_token
+
+    with pytest.raises(FakeGmailHttpError) as exc_info:
+        fake.list_message_ids(SWEEP_QUERY, page_token=token)
+
+    assert (exc_info.value.status, exc_info.value.reason) == (400, "invalidPageToken")
+
+
+@pytest.mark.req("QUA-03", "issue-11")
+def test_a_token_sent_with_another_spam_trash_flag_is_http_400() -> None:
+    fake = numbered_mailbox(5, page_size=2)
+    token = fake.list_message_ids(BASELINE_QUERY, include_spam_trash=False).next_page_token
+
+    with pytest.raises(FakeGmailHttpError) as exc_info:
+        fake.list_message_ids(BASELINE_QUERY, page_token=token, include_spam_trash=True)
+
+    assert (exc_info.value.status, exc_info.value.reason) == (400, "invalidPageToken")
+
+
+@pytest.mark.req("QUA-03", "issue-11")
+def test_two_searches_page_independently_with_their_own_tokens() -> None:
+    fake = FakeGmail(
+        build_messages(
+            [
+                MessageBuilder("pdf-1").pdf("a.pdf"),
+                MessageBuilder("pdf-2").pdf("b.pdf"),
+                MessageBuilder("pdf-3").pdf("c.pdf"),
+                MessageBuilder("png-1").attachment("a.png", "image/png", b"x"),
+                MessageBuilder("png-2").attachment("b.png", "image/png", b"x"),
+                MessageBuilder("png-3").attachment("c.png", "image/png", b"x"),
+            ]
+        ),
+        page_size=2,
+    )
+
+    baseline_first = fake.list_message_ids(BASELINE_QUERY)
+    sweep_first = fake.list_message_ids(SWEEP_QUERY)
+    assert baseline_first.next_page_token and sweep_first.next_page_token
+    baseline_rest = fake.list_message_ids(BASELINE_QUERY, page_token=baseline_first.next_page_token)
+    sweep_rest = fake.list_message_ids(SWEEP_QUERY, page_token=sweep_first.next_page_token)
+
+    assert sorted([*baseline_first.message_ids, *baseline_rest.message_ids]) == [
+        "pdf-1",
+        "pdf-2",
+        "pdf-3",
+    ]
+    assert sorted([*sweep_first.message_ids, *sweep_rest.message_ids]) == [
+        "png-1",
+        "png-2",
+        "png-3",
+    ]
+
+
+@pytest.mark.req("DEF-001", "issue-15")
+@pytest.mark.parametrize(
+    "offset",
+    [
+        pytest.param("²", id="superscript-two"),
+        pytest.param("٣", id="arabic-indic-three"),
+        pytest.param("１", id="fullwidth-one"),
+        pytest.param("", id="empty"),
+        pytest.param("-1", id="negative"),
+    ],
+)
+def test_a_page_token_offset_that_is_not_an_ascii_number_is_http_400(offset: str) -> None:
+    fake = numbered_mailbox(5, page_size=2)
+    token = fake.list_message_ids(BASELINE_QUERY).next_page_token
+    assert token is not None
+    forged = f"{token.rpartition(':')[0]}:{offset}"
+
+    with pytest.raises(FakeGmailHttpError) as exc_info:
+        fake.list_message_ids(BASELINE_QUERY, page_token=forged)
+
+    assert (exc_info.value.status, exc_info.value.reason) == (400, "invalidPageToken")
+
+
+@pytest.mark.req("DEF-001", "issue-15")
+@pytest.mark.parametrize("digits", ["²", "٣", "１"])
+@pytest.mark.parametrize("term", ["after", "before"])
+def test_an_epoch_term_that_is_not_an_ascii_number_is_an_unsupported_query(
+    term: str, digits: str
+) -> None:
+    with pytest.raises(UnsupportedQueryError):
+        numbered_mailbox(1).list_message_ids(f"{term}:{digits}")
+
+
 def test_page_size_must_be_positive() -> None:
     with pytest.raises(ValueError, match="page_size"):
         FakeGmail(page_size=0)

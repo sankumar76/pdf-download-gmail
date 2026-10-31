@@ -12,6 +12,8 @@ from gmail_pdf.bootstrap import ENV_FAKE_MAILBOX, ENV_TESTING, Deps, build_deps
 from gmail_pdf.domain.errors import (
     AdapterUnavailableError,
     FakeMailboxHookRefusedError,
+    FakeMailboxNotImportableError,
+    FakeMailboxUnavailableError,
     GmailPdfError,
 )
 from tests.fakes.fake_gmail import FakeGmail
@@ -101,6 +103,17 @@ def test_unparsable_mailbox_file_is_reported_without_echoing_the_path(
     assert str(path) not in str(exc_info.value)
 
 
+@pytest.mark.req("DEF-001", "issue-15")
+def test_deeply_nested_mailbox_file_is_reported_as_unusable_not_as_a_crash(tmp_path: Path) -> None:
+    path = tmp_path / "deep.json"
+    path.write_text("[" * 200_000, encoding="utf-8")
+
+    with pytest.raises(FakeMailboxUnavailableError, match="could not be read") as exc_info:
+        build_deps({ENV_FAKE_MAILBOX: str(path), ENV_TESTING: "1"})
+
+    assert str(path) not in str(exc_info.value)
+
+
 def test_unusable_fake_module_is_reported_as_unavailable(
     monkeypatch: pytest.MonkeyPatch, mailbox_file: Path
 ) -> None:
@@ -108,6 +121,21 @@ def test_unusable_fake_module_is_reported_as_unavailable(
 
     with pytest.raises(AdapterUnavailableError, match="source checkout"):
         build_deps({ENV_FAKE_MAILBOX: str(mailbox_file), ENV_TESTING: "1"})
+
+
+@pytest.mark.req("AC-6")
+def test_unusable_file_and_missing_tests_package_raise_distinct_subtypes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mailbox_file: Path
+) -> None:
+    with pytest.raises(FakeMailboxUnavailableError) as unreadable:
+        build_deps({ENV_FAKE_MAILBOX: str(tmp_path / "absent.json"), ENV_TESTING: "1"})
+    monkeypatch.setattr(bootstrap, "_FAKE_MODULE", "tests.fakes.does_not_exist")
+    with pytest.raises(FakeMailboxNotImportableError) as not_importable:
+        build_deps({ENV_FAKE_MAILBOX: str(mailbox_file), ENV_TESTING: "1"})
+
+    assert not isinstance(unreadable.value, FakeMailboxNotImportableError)
+    assert isinstance(not_importable.value, FakeMailboxUnavailableError)
+    assert isinstance(not_importable.value, AdapterUnavailableError)
 
 
 def test_a_missing_dependency_inside_the_fake_is_not_reported_as_a_missing_checkout(

@@ -19,12 +19,16 @@ ignored by the interpreter, a library warning) or that end the process (an uncau
 whose hook meets a failure) run in a child interpreter, whose output is appended to the same
 surfaces. The CLI is exercised in-process;
 ``tests/e2e/test_redaction_subprocess.py`` repeats the hook paths in a child interpreter.
+
+Over 400 lines on purpose (STD-56): ``ERROR_PATHS`` and the paths it lists are one registry, and
+the rule above is to append to it; a split would separate the list from its entries.
 """
 
 from __future__ import annotations
 
 import contextlib
 import io
+import json
 import logging
 import sys
 import threading
@@ -34,12 +38,18 @@ from pathlib import Path
 import httplib2
 import pytest
 from googleapiclient.errors import HttpError
+from googleapiclient.http import HttpMockSequence
 
-from gmail_pdf import redaction
+from gmail_pdf import bootstrap, redaction
 from gmail_pdf.cli import main as cli_main
-from gmail_pdf.domain.errors import GmailPdfError
+from gmail_pdf.domain import messages
+from gmail_pdf.domain.errors import GmailApiError, GmailPdfError, RetryExhaustedError
+from gmail_pdf.infra.gmail_gateway import GmailGateway, build_service
 from gmail_pdf.redaction import install_excepthooks, install_logging_redaction, safe_message
+from tests.fakes.fake_time import FakeCancelToken, FakeSleeper
 from tests.support import sentinels
+from tests.support.mailboxes import RANGE_ARGS, write_edge_mailbox
+from tests.support.redaction_pins import THIRD_PARTY_LOGGERS
 from tests.support.subprocess_env import REPO_ROOT, run_guarded
 
 pytestmark = pytest.mark.req("FR-005", "NFR-012", "AC-6")
@@ -181,7 +191,7 @@ def uncaught_exception(h: Harness) -> None:
 
 
 def third_party_debug_log(h: Harness) -> None:
-    for name in redaction.THIRD_PARTY_LOGGERS:
+    for name in THIRD_PARTY_LOGGERS:
         logger = logging.getLogger(name)
         for level in (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR):
             logger.log(level, "request failed: %s", SECRET_TEXT)
@@ -270,6 +280,173 @@ def hook_failure(h: Harness) -> None:
     assert HOOK_FAILURE_REACHED in h.stdout.getvalue()
 
 
+# ---------------------------------------------------------------- PGD-15 (date-range slice)
+# New text surfaces: the CLI result and error lines (cli/console.py), the retry log line and
+# the gateway's domain errors. Every path below provokes them with sentinels in the places a
+# secret could travel: the mailbox file name and content, the typed arguments, the HTTP
+# response body, reason and headers, and the search query.
+# Paths share one monkeypatch in the every-surface test, so each CLI path puts back what an
+# earlier path (``keyboard_interrupt``, the not-importable row) replaced.
+REAL_BUILD_PARSER = cli_main.build_parser
+REAL_FAKE_MODULE = bootstrap._FAKE_MODULE
+
+
+def _restore_cli(h: Harness, fake_module: str = REAL_FAKE_MODULE) -> None:
+    h.monkeypatch.setattr(cli_main, "build_parser", REAL_BUILD_PARSER)
+    h.monkeypatch.setattr(bootstrap, "_FAKE_MODULE", fake_module)
+
+
+def _cli_in_mode(
+    h: Harness,
+    *,
+    mailbox: Path | None = None,
+    testing: str | None = None,
+    fake_module: str = REAL_FAKE_MODULE,
+) -> int:
+    """Run the CLI in this process with the hook variables set as given."""
+    _restore_cli(h, fake_module)
+    h.monkeypatch.delenv(bootstrap.ENV_FAKE_MAILBOX, raising=False)
+    h.monkeypatch.delenv(bootstrap.ENV_TESTING, raising=False)
+    if mailbox is not None:
+        h.monkeypatch.setenv(bootstrap.ENV_FAKE_MAILBOX, str(mailbox))
+    if testing is not None:
+        h.monkeypatch.setenv(bootstrap.ENV_TESTING, testing)
+    return cli_main.main(RANGE_ARGS)
+
+
+def _sentinel_named_file(h: Harness, content: str | None) -> Path:
+    path = h.log_path.parent / f"mailbox-{sentinels.CLIENT_SECRET}.json"
+    if content is None:
+        write_edge_mailbox(path)
+    else:
+        path.write_text(content, encoding="utf-8")
+    return path
+
+
+def cli_real_mode(h: Harness) -> None:
+    assert _cli_in_mode(h) == 3
+    assert h.stderr.getvalue().endswith(messages.SIGN_IN_UNAVAILABLE_LINE + "\n")
+
+
+def cli_hook_refused(h: Harness) -> None:
+    path = _sentinel_named_file(h, None)
+
+    assert _cli_in_mode(h, mailbox=path) == 1
+    assert h.stderr.getvalue().endswith(messages.FAKE_MAILBOX_HOOK_REFUSED_LINE + "\n")
+
+
+def cli_fake_file_unusable(h: Harness) -> None:
+    path = _sentinel_named_file(h, f'{{"format": 99, "note": "{SECRET_TEXT}"')
+
+    assert _cli_in_mode(h, mailbox=path, testing="1") == 1
+    assert h.stderr.getvalue().endswith(messages.FAKE_MAILBOX_UNREADABLE_LINE + "\n")
+
+
+def cli_fake_mailbox_not_importable(h: Harness) -> None:
+    path = _sentinel_named_file(h, None)
+
+    assert _cli_in_mode(h, mailbox=path, testing="1", fake_module="tests.fakes.nope") == 1
+    assert h.stderr.getvalue().endswith(messages.FAKE_MAILBOX_NOT_IMPORTABLE_LINE + "\n")
+
+
+def cli_bad_input_echoing_secrets(h: Harness) -> None:
+    _restore_cli(h)
+    assert cli_main.main(["--start", SECRET_TEXT, "--end", "2026-01-31"]) == 2
+    path = _sentinel_named_file(h, None)
+    h.monkeypatch.setenv(bootstrap.ENV_FAKE_MAILBOX, str(path))
+    h.monkeypatch.setenv(bootstrap.ENV_TESTING, "1")
+    zone = f"Zone/{sentinels.CLIENT_SECRET}"
+    assert cli_main.main(["--start", "2026-01-01", "--end", "2026-01-31", "--tz", zone]) == 2
+    assert h.stderr.getvalue().splitlines()[-2:] == [
+        "error: --start must be a date written as YYYY-MM-DD.",
+        "error: " + messages.ZONE_UNKNOWN,
+    ]
+
+
+def gateway_error_with_secrets_in_the_response(h: Harness) -> None:
+    """Gmail errors whose body, reason, URI query and headers echo the sentinels."""
+    body = {"error": {"code": 429, "message": SECRET_TEXT, "errors": [{"reason": SECRET_TEXT}]}}
+    script = [
+        ({"status": "429", "retry-after": "0", "x-echo": SECRET_TEXT}, json.dumps(body)),
+        ({"status": "401", "x-echo": SECRET_TEXT}, json.dumps(body)),
+    ]
+    sleeper = FakeSleeper()
+    gateway = GmailGateway(
+        build_service(http=HttpMockSequence(script)),
+        FakeCancelToken(sleeper),
+        now=sleeper.clock.now,
+        jitter=lambda low, high: high,
+    )
+    logger = logging.getLogger("gmail_pdf.test.gateway")
+    try:
+        gateway.list_message_ids(f"has:attachment {SECRET_TEXT}")
+    except GmailApiError as error:
+        line = f"error: {safe_message(error)}"
+        print(line, file=sys.stderr)
+        print(line, file=sys.stdout)
+        logger.error("%s", line)
+        logger.error("failed: %r %r", error.reason, error.retry_after)
+        h.through_excepthook(error)
+    assert sleeper.delays == [0.0]
+
+
+def gateway_forbidden_and_server_errors(h: Harness) -> None:
+    """403 (JSON and non-JSON body) and 500 answers whose bodies echo the sentinels (QUA-49).
+
+    On a 403 the Google library itself logs the reason, or the raw body when it is not JSON, at
+    WARNING on ``googleapiclient.http``. The gateway keeps no body; that library record must pass
+    the logging filter, so it is part of what this row observes.
+    """
+    body = {"error": {"code": 403, "message": SECRET_TEXT, "errors": [{"reason": SECRET_TEXT}]}}
+    echo = {"x-echo": SECRET_TEXT}
+    scripts = [
+        [({"status": "403", **echo}, json.dumps(body))],
+        [({"status": "403"}, SECRET_TEXT)],
+        [({"status": "500", **echo}, json.dumps(body))] * 6,
+    ]
+    sleeper = FakeSleeper()
+    for script in scripts:
+        gateway = GmailGateway(
+            build_service(http=HttpMockSequence(script)),
+            FakeCancelToken(sleeper),
+            now=sleeper.clock.now,
+            jitter=lambda low, high: high,
+        )
+        try:
+            gateway.get_message(sentinels.CLIENT_SECRET)
+        except (GmailApiError, RetryExhaustedError) as error:
+            line = f"error: {safe_message(error)}"
+            print(line, file=sys.stderr)
+            logging.getLogger("gmail_pdf.test.gateway").error("%s", line)
+            h.through_excepthook(error)
+    assert len(sleeper.delays) == 5
+    assert "googleapiclient.http" in h.text("log_file")
+
+
+def retry_exhaustion_after_transport_errors(h: Harness) -> None:
+    """Six transport failures whose text carries a secret end in the fixed exhaustion line."""
+    from gmail_pdf.infra.retry import call_with_retry
+
+    def operation() -> str:
+        raise TimeoutError(SECRET_TEXT)
+
+    sleeper = FakeSleeper()
+    try:
+        call_with_retry(
+            operation,
+            method="get_message",
+            cancel=FakeCancelToken(sleeper),
+            now=sleeper.clock.now,
+            jitter=lambda low, high: high,
+        )
+    except RetryExhaustedError as error:
+        line = f"error: {safe_message(error)}"
+        print(line, file=sys.stderr)
+        logging.getLogger("gmail_pdf.test.retry").error("%s", line, exc_info=error)
+        h.through_excepthook(error)
+    assert len(sleeper.delays) == 5
+
+
 # Append later stories' paths here (see the module docstring).
 ERROR_PATHS = [
     pytest.param(uncaught_exception, id="uncaught-exception"),
@@ -279,6 +456,14 @@ ERROR_PATHS = [
     pytest.param(unraisable_exception, id="unraisable-exception"),
     pytest.param(library_warning, id="library-warning"),
     pytest.param(hook_failure, id="hook-failure"),
+    pytest.param(cli_real_mode, id="cli-real-mode"),
+    pytest.param(cli_hook_refused, id="cli-hook-refused"),
+    pytest.param(cli_fake_file_unusable, id="cli-fake-file-unusable"),
+    pytest.param(cli_fake_mailbox_not_importable, id="cli-fake-mailbox-not-importable"),
+    pytest.param(cli_bad_input_echoing_secrets, id="cli-bad-input-echoing-secrets"),
+    pytest.param(gateway_error_with_secrets_in_the_response, id="gateway-error-with-secrets"),
+    pytest.param(gateway_forbidden_and_server_errors, id="gateway-403-and-500"),
+    pytest.param(retry_exhaustion_after_transport_errors, id="retry-exhaustion"),
 ]
 
 

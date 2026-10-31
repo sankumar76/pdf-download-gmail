@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import random
 from pathlib import Path
 
 import pytest
@@ -177,6 +179,13 @@ def test_json_defaults_match_the_constructor_defaults() -> None:
     )
 
 
+def _listed(overrides: dict[str, object]) -> dict[str, object]:
+    """A message entry with a valid resource, with some resource keys replaced."""
+    resource: dict[str, object] = {"id": "m1", "internalDate": "1700000000000", "payload": {}}
+    resource.update(overrides)
+    return {"resource": resource, "attachments": {}}
+
+
 @pytest.mark.parametrize(
     "document",
     [
@@ -192,10 +201,42 @@ def test_json_defaults_match_the_constructor_defaults() -> None:
             {"format": 1, "messages": [{"resource": {"id": 7}, "attachments": {}}]},
             id="message-id-not-a-string",
         ),
+        pytest.param(
+            {"format": 1, "messages": [_listed({"payload": None})]},
+            id="payload-null",
+        ),
+        pytest.param(
+            {"format": 1, "messages": [_listed({"payload": "text"})]},
+            id="payload-not-an-object",
+        ),
+        pytest.param(
+            {"format": 1, "messages": [_listed({"internalDate": None})]},
+            id="internal-date-null",
+        ),
+        pytest.param(
+            {"format": 1, "messages": [_listed({"internalDate": 1700000000000})]},
+            id="internal-date-not-a-string",
+        ),
+        pytest.param(
+            {"format": 1, "messages": [_listed({"internalDate": "²"})]},
+            id="internal-date-superscript-digit",
+        ),
+        pytest.param(
+            {"format": 1, "messages": [_listed({"internalDate": ""})]},
+            id="internal-date-empty",
+        ),
     ],
 )
 def test_malformed_json_documents_are_rejected(document: dict[str, object]) -> None:
     with pytest.raises(ValueError):
+        from_json_dict(document)
+
+
+@pytest.mark.req("DEF-001", "issue-15")
+def test_a_resource_without_payload_or_internal_date_is_rejected_at_load_not_at_listing() -> None:
+    document = {"format": 1, "messages": [{"resource": {"id": "a"}, "attachments": {}}]}
+
+    with pytest.raises(ValueError, match="payload"):
         from_json_dict(document)
 
 
@@ -205,3 +246,144 @@ def test_json_file_must_hold_an_object(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="object"):
         load_fake_gmail_from_json_file(path)
+
+
+# ------------------------------------------------------------ QUA-39: the load does the checking
+def _nested_lists(levels: int) -> object:
+    """``levels`` arrays inside one another, innermost empty."""
+    value: object = []
+    for _ in range(levels - 1):
+        value = [value]
+    return value
+
+
+def _part_chain(depth: int) -> dict[str, object]:
+    """A ``payload`` whose ``parts`` nest ``depth`` levels deep."""
+    node: dict[str, object] = {}
+    for _ in range(depth):
+        node = {"parts": [node]}
+    return node
+
+
+def _doc(overrides: dict[str, object], **settings: object) -> dict[str, object]:
+    return {"format": 1, "messages": [_listed(overrides)], **settings}
+
+
+def _read_everything(fake: FakeGmail) -> None:
+    """Every read the run makes: the baseline listing and one ``get_message`` per message."""
+    list_all(fake, BASELINE_QUERY)
+    for message_id in fake.message_ids:
+        fake.get_message(message_id)
+
+
+def _payload(**keys: object) -> dict[str, object]:
+    return {"payload": keys}
+
+
+REJECTED_AT_LOAD: dict[str, dict[str, object]] = {
+    "parts-of-numbers": _doc(_payload(parts=[5])),
+    "parts-of-null": _doc(_payload(parts=[None])),
+    "parts-of-strings": _doc(_payload(parts=["x"])),
+    "parts-not-a-list": _doc(_payload(parts=5)),
+    "nested-parts-of-numbers": _doc(_payload(parts=[{"parts": [5]}])),
+    "label-ids-number": _doc({"labelIds": 5}),
+    "label-ids-null": _doc({"labelIds": None}),
+    "label-ids-unhashable": _doc({"labelIds": [[]]}),
+    "label-ids-numbers": _doc({"labelIds": [5]}),
+    "label-ids-string": _doc({"labelIds": "SPAM"}),
+    "headers-number": _doc(_payload(headers=5)),
+    "headers-null": _doc(_payload(headers=None)),
+    "headers-of-strings": _doc(_payload(headers=["x"])),
+    "internal-date-5000-digits": _doc({"internalDate": "1" * 5000}),
+    "internal-date-21-digits": _doc({"internalDate": "1" * 21}),
+    "latency-inf-text": _doc({}, latency_s="inf"),
+    "latency-1e300": _doc({}, latency_s=1e300),
+    "latency-nan": _doc({}, latency_s="nan"),
+    "latency-negative": _doc({}, latency_s=-1),
+    "latency-over-an-hour": _doc({}, latency_s=3601),
+    "parts-depth-247": _doc({"payload": _part_chain(247)}),
+    "parts-depth-1400": _doc({"payload": _part_chain(1400)}),
+    "resource-depth-500": _doc({"unread": _nested_lists(500)}),
+    "resource-depth-2900": _doc({"unread": _nested_lists(2900)}),
+    "unread-key-depth-2900": {"format": 1, "messages": [], "unread": _nested_lists(2900)},
+}
+
+
+@pytest.mark.req("AC-6", "QUA-39")
+@pytest.mark.parametrize("document", REJECTED_AT_LOAD.values(), ids=REJECTED_AT_LOAD.keys())
+def test_content_a_later_read_would_choke_on_is_rejected_at_load(
+    document: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError):
+        from_json_dict(document)
+
+
+@pytest.mark.req("AC-6", "QUA-39")
+def test_the_depth_cap_is_199_levels_under_a_top_level_key_and_200_is_refused() -> None:
+    # Literals, not the module constant: the test must not follow a change of the cap.
+    from_json_dict({"format": 1, "messages": [], "unread": _nested_lists(199)})
+
+    with pytest.raises(ValueError, match="nested"):
+        from_json_dict({"format": 1, "messages": [], "unread": _nested_lists(200)})
+
+
+@pytest.mark.req("AC-6", "QUA-39")
+def test_ordinary_variants_still_load_and_read() -> None:
+    chain = _part_chain(90)  # well under the cap
+    chain["headers"] = [{"name": "Subject", "value": "x"}]
+    document = _doc(
+        {"labelIds": [], "payload": chain, "unknownKey": {"anything": [1, None, "text", 1.5]}},
+        latency_s=0.0,
+        unknown_top_level_key=[{"a": 1}],
+    )
+
+    _read_everything(from_json_dict(document))
+
+
+# Hostile values and places; the property below mixes them at random with a fixed seed.
+HOSTILE_VALUES: list[object] = [None, 5, -1, 1.5, "x", "", "inf", "9" * 30, True, [], {}, [None]]
+HOSTILE_VALUES += [[5], ["x"], [[]], [{}], {"a": []}, _nested_lists(150), _nested_lists(250)]
+HOSTILE_PLACES = [("labelIds",), ("internalDate",), ("payload",), ("payload", "parts"), ("id",)]
+HOSTILE_PLACES += [("payload", "headers"), ("payload", "filename"), ("payload", "body")]
+HOSTILE_SETTINGS = ["latency_s", "page_size", "shuffle_seed", "epoch_bounds"]
+
+
+def _hostile_document(rng: random.Random) -> dict[str, object]:
+    """A valid one-message document with one to three hostile values put in random places."""
+    resource: dict[str, object] = {
+        "id": "m1",
+        "internalDate": "1700000000000",
+        "payload": {"parts": [{"filename": "a.pdf"}], "headers": []},
+    }
+    for _ in range(rng.randint(1, 3)):
+        *path, leaf = rng.choice(HOSTILE_PLACES)
+        target: object = resource
+        for key in path:
+            target = target.get(key) if isinstance(target, dict) else None
+        if isinstance(target, dict):
+            target[leaf] = copy.deepcopy(rng.choice(HOSTILE_VALUES))
+    document: dict[str, object] = {
+        "format": 1,
+        "messages": [{"resource": resource, "attachments": {}}],
+    }
+    if rng.random() < 0.3:
+        document[rng.choice(HOSTILE_SETTINGS)] = copy.deepcopy(rng.choice(HOSTILE_VALUES))
+    return document
+
+
+@pytest.mark.req("AC-6", "QUA-39")
+def test_any_content_is_rejected_at_load_or_read_without_an_exception() -> None:
+    """The property behind AC-6 (iii): a loaded document never fails in a later read."""
+    rng = random.Random(39)
+    accepted = rejected = 0
+    for _ in range(600):
+        try:
+            fake = from_json_dict(_hostile_document(rng))
+        except ValueError:
+            rejected += 1
+            continue
+        fake.latency_s = 0.0  # an accepted latency is a real sleep; the reads are the point
+        _read_everything(fake)
+        accepted += 1
+    assert accepted > 20
+    assert rejected > 20

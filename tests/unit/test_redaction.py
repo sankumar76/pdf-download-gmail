@@ -9,8 +9,13 @@ from __future__ import annotations
 
 import pytest
 
-from gmail_pdf.redaction import MIN_SECRET_LENGTH, REDACTED, clear_secrets, redact, register_secret
+from gmail_pdf.redaction import REDACTED, clear_secrets, redact, register_secret
 from tests.support import sentinels
+from tests.support.redaction_pins import (
+    EIGHT_CHARACTER_VALUE,
+    MIN_SECRET_LENGTH,
+    SEVEN_CHARACTER_VALUE,
+)
 
 pytestmark = pytest.mark.req("FR-005", "NFR-012")
 
@@ -59,7 +64,7 @@ def test_registered_secret_is_replaced_everywhere_it_occurs(text: str, expected:
     "value",
     [
         pytest.param("", id="empty"),
-        pytest.param("a" * (MIN_SECRET_LENGTH - 1), id="seven-characters"),
+        pytest.param(SEVEN_CHARACTER_VALUE, id="seven-characters"),
         pytest.param(" " * MIN_SECRET_LENGTH, id="eight-spaces"),
         pytest.param("\t\n" * MIN_SECRET_LENGTH, id="whitespace-only"),
     ],
@@ -74,7 +79,7 @@ def test_values_that_are_too_short_or_blank_are_ignored(value: str) -> None:
 
 @pytest.mark.req("AC-1")
 def test_a_value_of_exactly_the_minimum_length_is_registered() -> None:
-    value = "x" * MIN_SECRET_LENGTH
+    value = EIGHT_CHARACTER_VALUE
     register_secret(value)
 
     assert redact(f"a {value} b") == f"a {REDACTED} b"
