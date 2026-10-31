@@ -32,6 +32,15 @@ def plan_range(
 
     Raises:
         RunCancelledError: ``cancel`` was set before a call.
+        GmailApiError: the port answered with a non-retryable HTTP error.
+        RetryExhaustedError: a retryable call failed on every attempt (the port retries).
+        KeyError: a message resource has no ``internalDate``.
+        ValueError: a message's ``internalDate`` is not a decimal number.
+        TypeError: a message resource is not an object (the last three are STD-53: no domain
+            error exists for a malformed Gmail answer yet).
+
+    The CLI turns every failure except ``RunCancelledError`` into its one fixed
+    unexpected-failure line; there is no per-message isolation before FR-036.
     """
     if cancel.is_set():
         raise RunCancelledError

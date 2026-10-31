@@ -30,6 +30,13 @@ def run(request: RunRequest, deps: Deps, sink: EventSink, cancel: CancelToken) -
 
     Raises:
         InputValidationError: the zone is unknown or the end day is before the start day.
+        GmailApiError: Gmail answered a call with a non-retryable HTTP error.
+        RetryExhaustedError: a retryable call failed on every attempt.
+        KeyError: a message resource has no ``internalDate`` (with ``ValueError`` and
+            ``TypeError`` for a malformed one: STD-53, no domain error for it yet).
+
+    ``RunCancelledError`` does not escape: it becomes the ``CANCELLED`` summary. The CLI turns
+    the other failures into its one fixed unexpected-failure line.
     """
     zone = deps.resolve_zone(request.tz)
     date_range = DateRange.from_days(request.start, request.end, zone)
