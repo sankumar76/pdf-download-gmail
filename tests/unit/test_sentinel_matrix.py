@@ -19,6 +19,9 @@ ignored by the interpreter, a library warning) or that end the process (an uncau
 whose hook meets a failure) run in a child interpreter, whose output is appended to the same
 surfaces. The CLI is exercised in-process;
 ``tests/e2e/test_redaction_subprocess.py`` repeats the hook paths in a child interpreter.
+
+Over 400 lines on purpose (STD-56): ``ERROR_PATHS`` and the paths it lists are one registry, and
+the rule above is to append to it; a split would separate the list from its entries.
 """
 
 from __future__ import annotations
@@ -387,6 +390,39 @@ def gateway_error_with_secrets_in_the_response(h: Harness) -> None:
     assert sleeper.delays == [0.0]
 
 
+def gateway_forbidden_and_server_errors(h: Harness) -> None:
+    """403 (JSON and non-JSON body) and 500 answers whose bodies echo the sentinels (QUA-49).
+
+    On a 403 the Google library itself logs the reason, or the raw body when it is not JSON, at
+    WARNING on ``googleapiclient.http``. The gateway keeps no body; that library record must pass
+    the logging filter, so it is part of what this row observes.
+    """
+    body = {"error": {"code": 403, "message": SECRET_TEXT, "errors": [{"reason": SECRET_TEXT}]}}
+    echo = {"x-echo": SECRET_TEXT}
+    scripts = [
+        [({"status": "403", **echo}, json.dumps(body))],
+        [({"status": "403"}, SECRET_TEXT)],
+        [({"status": "500", **echo}, json.dumps(body))] * 6,
+    ]
+    sleeper = FakeSleeper()
+    for script in scripts:
+        gateway = GmailGateway(
+            build_service(http=HttpMockSequence(script)),
+            FakeCancelToken(sleeper),
+            now=sleeper.clock.now,
+            jitter=lambda low, high: high,
+        )
+        try:
+            gateway.get_message(sentinels.CLIENT_SECRET)
+        except (GmailApiError, RetryExhaustedError) as error:
+            line = f"error: {safe_message(error)}"
+            print(line, file=sys.stderr)
+            logging.getLogger("gmail_pdf.test.gateway").error("%s", line)
+            h.through_excepthook(error)
+    assert len(sleeper.delays) == 5
+    assert "googleapiclient.http" in h.text("log_file")
+
+
 def retry_exhaustion_after_transport_errors(h: Harness) -> None:
     """Six transport failures whose text carries a secret end in the fixed exhaustion line."""
     from gmail_pdf.infra.retry import call_with_retry
@@ -426,6 +462,7 @@ ERROR_PATHS = [
     pytest.param(cli_fake_mailbox_not_importable, id="cli-fake-mailbox-not-importable"),
     pytest.param(cli_bad_input_echoing_secrets, id="cli-bad-input-echoing-secrets"),
     pytest.param(gateway_error_with_secrets_in_the_response, id="gateway-error-with-secrets"),
+    pytest.param(gateway_forbidden_and_server_errors, id="gateway-403-and-500"),
     pytest.param(retry_exhaustion_after_transport_errors, id="retry-exhaustion"),
 ]
 

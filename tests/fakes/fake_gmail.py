@@ -18,6 +18,8 @@ persistence lives in ``tests/fakes/fake_gmail_json.py``. All content is syntheti
 
 from __future__ import annotations
 
+# Over 400 lines on purpose (STD-56): the fake and its query terms are one unit, and the module
+# docstring above is the whole contract; a split would put the rules away from the class.
 import base64
 import copy
 import random
