@@ -104,6 +104,23 @@ def backoff_delay(
     return min(max(delay, 0.0), MAX_DELAY_S)
 
 
+def _back_off(
+    method: str,
+    attempt: int,
+    retry_after: str | None,
+    cancel: CancelToken,
+    now: Callable[[], datetime],
+    jitter: Callable[[float, float], float],
+) -> None:
+    """Log the retry, then wait out the delay before ``attempt``; cancelling ends the wait."""
+    delay = backoff_delay(attempt, retry_after, now, jitter)
+    logger.warning(
+        "Retrying %s: attempt %d of %d after %.1f s", method, attempt, MAX_ATTEMPTS, delay
+    )
+    if cancel.wait(delay):
+        raise RunCancelledError
+
+
 def call_with_retry(
     operation: Callable[[], T],
     *,
@@ -139,9 +156,4 @@ def call_with_retry(
                 raise RetryExhaustedError(MAX_ATTEMPTS) from error
             retry_after = error.retry_after if isinstance(error, GmailApiError) else None
         attempt += 1
-        delay = backoff_delay(attempt, retry_after, now, jitter)
-        logger.warning(
-            "Retrying %s: attempt %d of %d after %.1f s", method, attempt, MAX_ATTEMPTS, delay
-        )
-        if cancel.wait(delay):
-            raise RunCancelledError
+        _back_off(method, attempt, retry_after, cancel, now, jitter)
