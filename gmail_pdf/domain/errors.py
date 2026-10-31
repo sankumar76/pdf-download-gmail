@@ -1,5 +1,9 @@
 """Error types shared by every layer."""
 
+from __future__ import annotations
+
+from gmail_pdf.domain import messages
+
 
 class GmailPdfError(Exception):
     """Base class of every error this application raises on purpose.
@@ -34,3 +38,46 @@ class PrivateFileError(GmailPdfError):
     The message names the operation only: never the file content and never a path taken from
     the operating-system error text.
     """
+
+
+class InputValidationError(GmailPdfError):
+    """A value the user gave (date, zone) is not usable. The CLI reports it with exit code 2.
+
+    The message is a fixed sentence and never echoes the rejected input.
+    """
+
+
+class RunCancelledError(GmailPdfError):
+    """The run was cancelled (``CancelToken`` set) before or between Gmail calls."""
+
+    def __init__(self) -> None:
+        super().__init__(messages.RUN_CANCELLED_LINE)
+
+
+class GmailApiError(GmailPdfError):
+    """Gmail answered a request with an HTTP error status.
+
+    Built at the gateway boundary from the library's error, so nothing above it depends on
+    ``googleapiclient``. Only the status, the short reason token (for example
+    ``rateLimitExceeded``) and the raw ``Retry-After`` header value are kept; the response body,
+    the URL and the headers are dropped because they can carry a query or a secret.
+
+    Attributes:
+        status: HTTP status code.
+        reason: Gmail's error reason token, or an empty string.
+        retry_after: The ``Retry-After`` header value (seconds or an HTTP date), if any.
+    """
+
+    def __init__(self, status: int, reason: str = "", retry_after: str | None = None) -> None:
+        super().__init__(messages.GMAIL_HTTP_ERROR_TEMPLATE.format(status=status))
+        self.status = status
+        self.reason = reason
+        self.retry_after = retry_after
+
+
+class RetryExhaustedError(GmailPdfError):
+    """Every attempt of a retryable Gmail call failed. The last failure is the ``__cause__``."""
+
+    def __init__(self, attempts: int) -> None:
+        super().__init__(messages.RETRY_EXHAUSTED_TEMPLATE.format(attempts=attempts))
+        self.attempts = attempts
