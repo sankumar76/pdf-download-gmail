@@ -1090,3 +1090,114 @@ All opened by master. No commit in PR #33 (D-65).
 - The attempt 2 evidence table had no row for R16. Master read it. A fix item with no named verifier is a gap in the exit rule, and the next rule should name one.
 
 **Posted:** PR #33 comment 6539633088; Jira PGD-15 c.10279; new issue #38; #35 comment 6539632665.
+
+---
+
+## G7 – QA Acceptance — STORY-02.02 (PGD-15) — 2026-10-31
+
+- **Decision:** GO (ACCEPT). The story may move to Done after C41. **Merging PR #33 needs the delivery lead** (`MERGE_POLICY = docs-auto, code-human`); no merge in this run. The merge precondition and the items to name are below
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no for G7; the code merge is Santhosh's
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - `docs/07-qa/PGD-15-test-report.md` at `e98bc92`, read in full. The code under test is `7883f9c`.
+  - QA summary PR #33 comment 6540103534; Jira PGD-15 c.10282, c.10283, AC-1..10 and Dev Context; PGD-69 and #39; PGD-16 and PGD-17 ACs; PGD-63, PGD-64, PGD-67; #11, #15, #31.
+  - `docs/07-qa/test-plan.md` at `7945587`, all sections, against the report row by row; PRD FR-008, FR-012, FR-015; G6 conditions and D-54, D-61, D-62, D-64, D-65, D-66.
+  - Source read at `7883f9c`: `gmail_pdf/domain/daterange.py`, `domain/query.py`, `app/planner.py`, `app/runner.py`, `cli/args.py`, `cli/main.py`, `infra/tz.py`, `bootstrap.py`, `tests/support/mailboxes.py`, the query terms of `tests/fakes/fake_gmail.py`.
+  - Check runs on `e98bc92`: 10/10 `success`, run 41176853832, `pull_request`, attempt 1, read by master, per-leg totals from the job logs. `mergeable_state` clean. `main` `2743016`, merge ref `2e8ad40` (parents `2743016`, `e98bc92`). 30 reviews, all `COMMENTED`.
+  - `git reflog`: the main checkout sat on the branch at `7883f9c` from 01:42 to 02:31, which agrees with the report's Environment row.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 0 | C35 closed | | ✅ | Plan at `7945587`: NT-01 exit 1, NT-02..05 fixed lines, R1 rows in NT-03 and NT-04, NT-09, tie to AC-6, OQ-1 closed, Annex B 0.2 |
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | QA matrix AC-1..10 Pass. Master reproduced AC-5, AC-6, the AC-1 literals (`calendar.timegm`), M13..M23 |
+| 2 | No open Sev-1/Sev-2 defects | ✱ | ✅ | Open: DEF-007 only, re-rated Sev-3 (D-67) |
+| 3 | Regression recorded and green | ✱ | ✅ | QA 1164 passed, 12 skipped, four runs and per file; 99.88 %; merge ref as a work tree the same. CI 10/10 on the PR head. Master's control without the long-path file: 1117 passed, 12 skipped |
+| 4 | Exploratory notes present | | ✅ | EC-1, EC-3, EC-8, EC-9 |
+| 5 | Accessibility (UI stories) | | n/a | No UI |
+| 6 | Sev-3 fixed or accepted (test plan section 5) | | ✅ | DEF-007 accepted for this story's exit, with a target (D-67) |
+| 7 | Traceability sample | | ✅ | GOAL-01 → FR-008 (PRD line 86) → AC-2 → `tests/unit/test_planner.py` (`req("AC-2")`). Reverse: that test → AC-2 → FR-012, FR-008 → GOAL-01 |
+| 8 | G6 conditions 1-7 | | ✅ | 1 QA tested `7883f9c` only (`git diff 7883f9c e98bc92 -- gmail_pdf tests` empty, orchestrator). 2 C35 first. 3 mutants. 4 #15 confirmed. 5 below. 6 no such item logged as a defect. 7 below |
+| 9 | Report read against the plan, row by row | | ⚠️ | Four rows short, closed by master's runs; corrections below |
+
+**Master's probes** (fresh `git archive` of `7883f9c` in the scratchpad, folder `g7m`; Windows, CPython 3.12.10; real child interpreters; socket guard on; `gmail_pdf.__file__` inside the export for `-m` and the shim; scripts `p_child.py`, `p_gw.py`, `p_mut.py`):
+
+| Row | Result |
+|---|---|
+| AC-5: `-m`, shim, exe, `PYTHONUTF8` set and unset | 6 of 6: exit 0, `Messages in range: 2\n`, stderr empty, working directory empty |
+| AC-6 (i), (ii) x4 values, (iii) x9 (bad JSON, wrong version, no id, bad UTF-8, BOM, 100,000 levels, missing, directory, no-share lock), three entry points | 42 of 42: exact exit, exact single line, stdout empty, no path, trace or sentinel, nothing created |
+| NT-04 sweep, depth 1..3000 step 25, `parts` and resource value | 240 runs: parts 4 success (1..76), 116 fixed line (from 101); resource 8 success (1..176), 112 fixed line (from 201). **0 unexpected, 0 other** |
+| NT-05 on a built wheel (`python -m build --wheel --no-isolation`) | `gmail_pdf-0.9.0.dev0-py3-none-any.whl`, 29 entries, no `tests`. `-m` and exe: exit 1, the source-checkout line, nothing created; `find_spec("tests")` None |
+| M13, M22, M20, M23, one edit per fresh copy | 17, 5, 3, 3 failed, by the same tests QA names. Without the long-path file: 1117 tests |
+| A1, a dependency added to `pyproject.toml` | 2 failed in `test_dependency_allowlist.py` |
+| X1, `sys.exit("text")` added to `cli/console.py` | 1 failed, `test_no_exit_in_the_package_carries_a_non_integer` |
+| CI legs on `e98bc92` | Windows 3.10, 3.11, 3.12: 1164 passed, 12 skipped. Ubuntu, macOS: 1173 passed, 3 skipped. The 3 are the three `WINDOWS_ONLY` tests of `test_token_location_warning.py`, so the 12 Windows skips ran on the POSIX legs |
+| DEF-007 rows | Table in ruling 4 |
+| Real gateway, 1960..2026 UTC, on `HttpMockSequence` | `q` sent as `has:attachment filename:pdf after:-315619201 before:1798761601` |
+| Real gateway behind `main`, six 503 with `Retry-After: 0` | Five `Retrying list_message_ids: attempt N of 6 after 0.0 s` lines, then `error: unexpected failure, see the run log`, exit 1 |
+| `available_timezones()` | `Asia/Kolkata ` , `Asia\Kolkata`, `asia/kolkata`, `utc` not members; `Asia/Kolkata`, `UTC`, `EST`, `GMT`, `Factory` members |
+
+Limits: 3.12.10 only. The exe rows in the export may load the venv's editable install: the `PYTHONVERBOSE` row did not settle it, and it is the same commit, clean, so the result stands. The 47 tests of `test_gitignore_matching.py` were left out of master's runs because of the scratch path length; QA and CI ran them. No real Gmail call. My first mutant run was invalid: two regexes were written for a multi-line tuple, M13 cut code out of the file and M22 did not apply. Those copies are left in `g7m/mx` and `g7m/mz`; the results above are from `g7m/my`.
+
+**Report corrections** (the report stays as committed: a docs commit restarts CI on the head):
+- DEF-007: Sev-4, "no practical loss" and "the selection stays exact" do not stand (ruling 4). The defect's title also misses that the end date does not matter.
+- NT-04: QA ran the named depths but not the plan's sweep of 1 to 3000 in steps of 25. Master ran it. "Pass" holds with that run.
+- NT-05: the plan says a built wheel; QA used a source-only copy and said so under Residual Risks, while the row reads Pass. Master built one. "Pass" holds with that run.
+- Plan sections 3 and 7: `pyproject.toml` changed, so the allow-list mutant was due; QA ran the test without the mutant. `test_exit_statements.py` is a new enforcement-style test and was not in QA's list. Master ran both.
+- Plan section 7: QA read the POSIX legs' status, not their tests. Same miss as PGD-13. Master read them.
+- Plan section 14 says DEF-002 goes to "the next story that touches `tests/support/`, whichever is earlier". PGD-13 and PGD-15 both touched that folder, neither touched `socket_guard.py`. The intent is the guard; PGD-64 stays on sprint 02 (C20).
+- `e297c7c` is the merge ref QA tested; GitHub rebuilt it as `2e8ad40` after the report commit. The two differ by the report only.
+
+**Rulings and dispositions**
+| # | Item | Ruling |
+|---|---|---|
+| 1 | C35 | **Closed.** The header "Version 0.1", the date and the Status line are stale; the content is 0.2. Goes to C32, no commit needed now |
+| 2 | G7 | **GO.** Every mandatory item passes |
+| 3 | DEF-005 · PGD-67 · #31; DEF-001 · PGD-63 · #15; #11 | **Fixed and verified on this head. They close with the merge, not before** (D-68). The PR has no closing keywords, so nothing closes itself |
+| 4 | DEF-007 · PGD-69 · #39 | **Sev-3, type Product and Requirement. Accepted for this exit. Fix in PGD-16 with a new AC** (D-67, C39). Rows below |
+| 5a | Retry lines on stderr | Confirmed. **No defect on this head.** Unreachable, AC-7 met, NT-08's "one `error:` line" holds literally. **#40, C40** (D-68) |
+| 5b | First-page-only count | **No defect.** The Dev Context sets a single page. It undercounts with exit 0 by design until STORY-02.04. Named at merge; QA adds a row past 500 (C32) |
+| 5c | `--tz` forms | **No defect here, no new AC.** PGD-16 AC-4 already says valid names come from `available_timezones()`, and T3 says so too. Rows only (C39 d) |
+| 5d | `GMAIL_PDF_TEST_FAKE_MAILBOX=""` | **No action.** An empty value names no file; `test_empty_hook_variable_is_treated_as_unset` has pinned it since PGD-12 |
+| 6 | Risks | RISK-026 new, score 4. RISK-021 noted. RISK-005, 011, 020, 023, 025 unchanged. **C38 stays open:** (a) before PGD-16 starts, (b), (c) by the sprint-02 G4; `sprint-01-plan.md` has no #38 row yet |
+| - | `--sta` abbreviation (R-10, OQ-3) | Not a PGD-15 defect. OQ-3's needed-by is PGD-16 and it has no answer yet, so C39 (b) carries it before the date passes |
+| - | OQ-5 console encoding | Stays open, no new evidence of harm |
+
+**DEF-007 rows** (fake mailbox with 4 messages in range; real children, `-m`):
+| Range, zone | Result |
+|---|---|
+| `1970-01-02..1970-01-02` UTC | exit 0, `Messages in range: 0` |
+| `1970-01-02..2026-12-31` UTC, Kiritimati, Apia; `2000-01-01..2026-12-31` UTC | exit 0, `Messages in range: 4` |
+| `1970-01-01..2026-12-31` New_York | exit 0, `Messages in range: 4` |
+| `1970-01-01..1970-01-01` UTC; `1969-12-31..1969-12-31` UTC | exit 1, unexpected-failure line |
+| `1970-01-01..2026-12-31` UTC, Kolkata; `1960-01-01..2026-12-31` UTC; `1900-01-01..2026-12-31` Kolkata; `0001-01-01..2026-12-31` UTC | **exit 1, unexpected-failure line, with 4 messages in the range** |
+| Real mode, `1960-01-01..2026-12-31` UTC | exit 3, the sign-in line |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C32 (extended) | qa-engineer | `docs/07-qa/test-plan.md` | Added to C32: header version, date and Status line; section 14 DEF-002 wording names the guard file; a STORY-02.04 row with a count past 500 (QA's 1,203 mailbox); section 7 restated in the report template as a row each: POSIX legs read, allow-list mutant when `pyproject.toml` changes, every new enforcement test mutated, NT sweeps and wheel as written | Sprint-02 G4 |
+| C39 | product-owner, scrum-master | Jira PGD-16, PGD-69; `sprint-01-plan.md` | (a) New AC on PGD-16 (8 to 9, within the limit; scrum-master confirms the estimate). **Binding outcome:** for every date pair that passes the format and order checks, in every zone, the command ends in a normal result or in exit 2 with one fixed sentence, never in the unexpected-failure line for a date reason; and no `q` sent through the gateway carries a negative bound. Covers `--start`, `--end`, `--tz` on the hook and the `q` at the gateway. Rows: the table above plus a real-mode row; `9999-12-31` stays exit 2. The PO chooses reject or clamp, and notes how PGD-15 AC-4's "any range" reads after it. (b) OQ-3 answered on PGD-16. (c) PGD-69 linked to PGD-16; row in the plan: "fixed in the PGD-16 PR before G5"; fallback PGD-17; **STORY-01.04 is not Ready while PGD-69 is open**. (d) No AC change: `Asia/Kolkata `, `Asia\Kolkata`, `asia/kolkata`, `utc` as rows under PGD-16 AC-4, exit 2, with `UTC` as the positive row | Before PGD-16 starts, with C34 and C38 (a) |
+| C40 | product-owner, scrum-master | Jira PGD-17 AC-4; `sprint-01-plan.md` | Per #40: PO states on AC-4 whether retry notices may appear on stderr before the run log exists. Row on STORY-07.02: the handler carries these records, tested through the real gateway. Settled before STORY-01.04 is Ready | Before PGD-17 starts; row by the sprint-02 G4 |
+| C41 | qa-engineer | Jira PGD-69, PGD-63, PGD-67; #39, #15, #11, #31; test plan | (a) PGD-69 and #39: Sev-3, priority Medium, label `sev-3` for `sev-4`, title without "in a zone east of UTC", wide-range rows added. (b) Verified comments on PGD-63, PGD-67, #15, #11, #31: Jira has no Verified status and PGD-63 carries no QA note. (c) DEF-007 row in plan sections 14 and 15 before the PGD-16 G7. Then set PGD-15 Done | (a), (b) before the merge request; (c) before the PGD-16 G7 |
+
+**Closure after the merge.** On the orchestrator's relay of the merge SHA: qa-engineer closes #15 and #31 and moves PGD-63 and PGD-67 to Done, as the defect owner (test plan section 6). The orchestrator closes #11, a tech-debt issue with no Jira record (playbook 5.5). Master transitions nothing.
+
+**Merge precondition (orchestrator; re-read at the moment of the request):**
+1. PR head still `e98bc92`, and `git diff 7883f9c <head> -- gmail_pdf tests` empty.
+2. 10/10 `success` from check runs on that exact head. Read now: run 41176853832.
+3. RISK-023: the `main` that run tested equals current `main`, now both `2743016`. If not, update the branch and re-read CI. That merge is not a commit for D-62 as long as the code diff holds only what `main` brought; if `main` changed `gmail_pdf/` or `tests/`, return to master. The status branch is not merged to `main` before PR #33.
+4. No `REQUEST_CHANGES` review outstanding. Now 30 reviews, all `COMMENTED`.
+5. C41 (a), (b) done, and QA has set PGD-15 Done.
+
+**Items to name in the merge request:** PERF-11, PERF-12 (accepted deferred, armed; D-59); #35; #38; **DEF-007 Sev-3 accepted (#39, D-67) with RISK-026**; #40 retry lines; the first-page-only interim count, which undercounts past one page until STORY-02.04; the 3.10 and 3.11 depth arithmetic limit (D-64); #15, #11 and #31 closing with the merge, and who closes them; Q-14 and Q-15 still his. The merge unblocks PGD-16..18, with C34, C38 (a) and C39 before PGD-16 starts and C40 before PGD-17 starts. RISK-005 stays 10, RISK-011 8, RISK-025 9.
+
+Follow-ups (not conditions): orchestrator sets the label and requests the human merge.
+
+**Risks registered:** RISK-026 (new, score 4). RISK-021 note added. RISK-005, RISK-011, RISK-020, RISK-023 and RISK-025 unchanged.
+
+**Rationale:**
+- All three mandatory items have evidence, and master reproduced the ones that carry the most risk. GO, not CONDITIONAL GO: C39..C41 are project-level follow-ups, as C30..C32 were at the PGD-13 G7, and C41 is bookkeeping, not a gap in the evidence about this head.
+- The hard question was DEF-007, and the rating did not need likelihood in either direction. QA's reasons fell on testing them: the range does not have to sit at the epoch, and the local re-check works in one direction only. It stops at Sev-3 on what was observed: no AC fails, the failure is loud, and a later start works. The unknown is real Gmail's reading of a negative bound, and the fix removes the unknown rather than measuring it.
+- The row reading paid for itself again: four rows short of the plan, all of which held when run. A "Pass" row whose evidence differs from the row's words needs a correction, even when the result stands.
+
+**Posted:** PR #33 comment 6540247264; Jira PGD-15 c.10284; #39 comment 6540239278; new issue #40; risks PGD-1 c.10285.
