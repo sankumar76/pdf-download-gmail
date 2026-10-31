@@ -24,13 +24,13 @@ from pathlib import Path
 import pytest
 
 from gmail_pdf.domain import messages
-from tests.e2e.test_select_range import Workspace, hook_env
 from tests.fakes.fake_gmail import FakeGmail
 from tests.fakes.fake_gmail_json import dump_fake_gmail_to_json_file
 from tests.fixtures.builders import MessageBuilder, build_messages
 from tests.support import sentinels
 from tests.support.mailboxes import RANGE_ARGS, write_edge_mailbox
 from tests.support.subprocess_env import run_guarded
+from tests.support.workspace import Workspace, hook_env
 
 pytestmark = pytest.mark.req("FR-015", "NFR-024")
 

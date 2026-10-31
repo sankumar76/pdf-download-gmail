@@ -14,64 +14,33 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
 import pytest
 
-from gmail_pdf.bootstrap import ENV_FAKE_MAILBOX, ENV_TESTING
+from gmail_pdf.bootstrap import ENV_TESTING
 from gmail_pdf.domain import messages
 from tests.fakes.fake_gmail_json import to_json_dict
 from tests.support import sentinels
 from tests.support.mailboxes import (
     MESSAGES_IN_RANGE_LINE,
-    RANGE_ARGS,
     edge_mailbox,
     write_edge_mailbox,
 )
-from tests.support.subprocess_env import SUPPORT_DIR, run_guarded
+from tests.support.subprocess_env import SUPPORT_DIR
+from tests.support.workspace import PATH_SENTINEL, Workspace, hook_env
 
 pytestmark = pytest.mark.req("FR-008", "FR-012")
 
-# A sentinel in the file name and one in the file content: neither may be printed.
-PATH_SENTINEL = sentinels.CLIENT_SECRET
+# The file name carries a sentinel (PATH_SENTINEL) and so does the content: neither may be printed.
 CONTENT_SENTINEL = sentinels.REFRESH_TOKEN
-
-
-class Workspace:
-    """An empty working directory for the child, and a separate directory for fixture files."""
-
-    def __init__(self, tmp_path: Path) -> None:
-        self.cwd = tmp_path / "cwd"
-        self.fixtures = tmp_path / "fixtures"
-        self.cwd.mkdir()
-        self.fixtures.mkdir()
-
-    def mailbox_path(self) -> Path:
-        return self.fixtures / f"mailbox-{PATH_SENTINEL}.json"
-
-    def run(
-        self, extra_env: dict[str, str] | None = None, args: list[str] | None = None
-    ) -> subprocess.CompletedProcess[str]:
-        command = [sys.executable, "-m", "gmail_pdf", *(RANGE_ARGS if args is None else args)]
-        return run_guarded(command, self.cwd, extra_env)
-
-    def created_files(self) -> list[str]:
-        return sorted(str(p) for p in self.cwd.rglob("*"))
 
 
 @pytest.fixture
 def workspace(tmp_path: Path) -> Workspace:
     return Workspace(tmp_path)
-
-
-def hook_env(path: Path, *, testing: str | None = "1") -> dict[str, str]:
-    env = {ENV_FAKE_MAILBOX: str(path)}
-    if testing is not None:
-        env[ENV_TESTING] = testing
-    return env
 
 
 def assert_only_this_line_on_stderr(
