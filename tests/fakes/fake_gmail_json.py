@@ -15,7 +15,8 @@ the recursive part walk well inside the interpreter's recursion limit. Not cover
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+import time
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from gmail_pdf.app.ports import JsonObject
@@ -129,8 +130,12 @@ def _latency_s(value: object) -> float:
     return latency
 
 
-def from_json_dict(data: Mapping[str, object]) -> FakeGmail:
+def from_json_dict(
+    data: Mapping[str, object], *, sleep: Callable[[float], None] = time.sleep
+) -> FakeGmail:
     """Rebuild a fake from ``to_json_dict`` output.
+
+    ``sleep`` is what the fake calls for its ``latency_s``; a test passes a recorder instead.
 
     Raises:
         ValueError: the document is malformed, too deeply nested, or holds a value the fake
@@ -160,6 +165,7 @@ def from_json_dict(data: Mapping[str, object]) -> FakeGmail:
         shuffle_seed=None if seed is None else int(str(seed)),
         latency_s=_latency_s(data.get("latency_s", 0.0)),
         epoch_bounds=EpochBounds(str(data.get("epoch_bounds", DEFAULT_EPOCH_BOUNDS.value))),
+        sleep=sleep,
     )
 
 

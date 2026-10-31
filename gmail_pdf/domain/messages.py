@@ -30,6 +30,12 @@ FILE_ACCESS_ERROR_LINE = (
 MESSAGES_IN_RANGE_TEMPLATE = "Messages in range: {count}"
 SIGN_IN_UNAVAILABLE_LINE = "error: Gmail sign-in is not available in this build yet."
 
+# The two stdout lines of a run that finds nothing (UX section 12, PGD-17 AC-1). The first line
+# is the outcome heading, the second the count. Today "nothing" means no message in the range;
+# STORY-03.02 and STORY-07.04 keep the same wording for "messages found, no PDF candidate".
+NO_PDFS_FOUND = "No PDFs found"
+ZERO_PDFS_LINE = "0 PDFs found."
+
 # Test-hook failures at the command line (PGD-15 AC-6, decision on test-plan OQ-1). Test-only
 # wording that reuses the PGD-12 sentences; not part of the UX first-line table. None of them
 # carries a path, file content or exception text.
