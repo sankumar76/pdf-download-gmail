@@ -15,6 +15,7 @@ import pytest
 from gmail_pdf.bootstrap import ENV_FAKE_MAILBOX, ENV_TESTING
 from gmail_pdf.cli import main as cli_main
 from gmail_pdf.domain import messages
+from gmail_pdf.domain.models import RunResult, RunSummary
 from tests.support import sentinels
 from tests.support.mailboxes import MESSAGES_IN_RANGE_LINE, RANGE_ARGS, write_edge_mailbox
 
@@ -157,6 +158,19 @@ def test_a_hook_failure_is_final_the_run_never_starts_and_real_mode_is_not_tried
 
 def _must_not_run(*_args: object) -> object:
     raise AssertionError("the run must not start after a hook failure")
+
+
+@pytest.mark.req("AC-5", "FR-043")
+def test_a_cancelled_run_prints_the_notice_and_exits_one(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    use_hook(monkeypatch, write_edge_mailbox(tmp_path / "mailbox.json"))
+    monkeypatch.setattr(cli_main.runner, "run", lambda *_args: RunSummary(RunResult.CANCELLED))
+
+    code = cli_main.main(RANGE_ARGS)
+
+    captured = capsys.readouterr()
+    assert (code, captured.err, captured.out) == (1, "Run cancelled\n", "")
 
 
 # ------------------------------------------------------------------------- usage errors
