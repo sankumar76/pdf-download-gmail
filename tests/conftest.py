@@ -20,6 +20,7 @@ import pytest
 
 from gmail_pdf import redaction
 from tests.support import socket_guard
+from tests.support.redaction_pins import THIRD_PARTY_LOGGERS
 
 _restore_sockets: Callable[[], None] | None = None
 
@@ -46,7 +47,7 @@ def _isolate_process_wide_redaction_state() -> Iterator[None]:
     tests call it in-process; without this the hooks, the filter on ``logging.lastResort``, the
     logger levels and the registered secrets would leak from one test into the next.
     """
-    names = redaction.THIRD_PARTY_LOGGERS
+    names = THIRD_PARTY_LOGGERS
     levels = {name: logging.getLogger(name).level for name in names}
     last_resort_filters = list(logging.lastResort.filters) if logging.lastResort else []
     hooks = (sys.excepthook, threading.excepthook, sys.unraisablehook)

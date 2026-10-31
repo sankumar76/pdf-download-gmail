@@ -40,6 +40,7 @@ from gmail_pdf.cli import main as cli_main
 from gmail_pdf.domain.errors import GmailPdfError
 from gmail_pdf.redaction import install_excepthooks, install_logging_redaction, safe_message
 from tests.support import sentinels
+from tests.support.redaction_pins import THIRD_PARTY_LOGGERS
 from tests.support.subprocess_env import REPO_ROOT, run_guarded
 
 pytestmark = pytest.mark.req("FR-005", "NFR-012", "AC-6")
@@ -181,7 +182,7 @@ def uncaught_exception(h: Harness) -> None:
 
 
 def third_party_debug_log(h: Harness) -> None:
-    for name in redaction.THIRD_PARTY_LOGGERS:
+    for name in THIRD_PARTY_LOGGERS:
         logger = logging.getLogger(name)
         for level in (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR):
             logger.log(level, "request failed: %s", SECRET_TEXT)

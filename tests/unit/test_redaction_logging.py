@@ -15,6 +15,7 @@ import pytest
 from gmail_pdf import redaction
 from gmail_pdf.redaction import REDACTED, RedactingFilter, install_logging_redaction
 from tests.support import sentinels
+from tests.support.redaction_pins import THIRD_PARTY_LOGGERS
 
 pytestmark = pytest.mark.req("FR-005", "NFR-012", "AC-3")
 
@@ -73,7 +74,7 @@ def test_the_redacted_marker_replaces_the_secret_in_log_output(capture: Capture)
     assert REDACTED in capture.text
 
 
-@pytest.mark.parametrize("name", redaction.THIRD_PARTY_LOGGERS)
+@pytest.mark.parametrize("name", THIRD_PARTY_LOGGERS)
 @pytest.mark.parametrize("level", ALL_LEVELS)
 def test_third_party_logger_output_has_no_sentinel_at_any_level(
     capture: Capture, name: str, level: int
@@ -96,7 +97,7 @@ def capped_logger(capture: Capture, request: pytest.FixtureRequest) -> logging.L
     return logger
 
 
-CAPPED = pytest.mark.parametrize("capped_logger", redaction.THIRD_PARTY_LOGGERS, indirect=True)
+CAPPED = pytest.mark.parametrize("capped_logger", THIRD_PARTY_LOGGERS, indirect=True)
 
 
 @CAPPED
@@ -125,7 +126,7 @@ def test_a_capped_logger_still_passes_warnings(
     assert "warning detail" in capture.text
 
 
-@pytest.mark.parametrize("name", redaction.THIRD_PARTY_LOGGERS)
+@pytest.mark.parametrize("name", THIRD_PARTY_LOGGERS)
 def test_a_stricter_third_party_level_is_kept(name: str) -> None:
     logger = logging.getLogger(name)
     logger.setLevel(logging.ERROR)
