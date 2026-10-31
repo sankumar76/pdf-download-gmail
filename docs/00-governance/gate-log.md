@@ -761,3 +761,92 @@ Unit runs in memory on 3.12.10: hooks and logging test files 165 passed with Q7;
 - Master's fix table said "over the three hooks", not "each branch of a hook". That is the second time master's recipe was narrower than its purpose (C27 was the first); the developer delivered what was asked.
 
 **Posted:** PR #22 comment 6532598449; Jira PGD-13 c.10236; #28 comment 6532599519; risk note PGD-1 c.10237.
+
+---
+
+## G7 – QA Acceptance — STORY-01.01 (PGD-13) — 2026-10-30
+
+- **Decision:** GO (ACCEPT). The story may move to Done. **Merging PR #22 needs the delivery lead** (`MERGE_POLICY = docs-auto, code-human`); no merge in this run. The merge precondition and the items to name are below
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no for G7; the code merge is Santhosh's
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - `docs/07-qa/PGD-13-test-report.md` at `a84d558`, read in full. The code under test is `a135b4c`.
+  - QA summary PR #22 comment 6535886785; Jira PGD-13 c.10242, AC-1..8; PGD-67, PGD-68; #29, #30, #31, #32; `QUA-37` comment on #23.
+  - `docs/07-qa/test-plan.md` sections 2, 5, 6, 7, 9, 11, 13, 15; definition-of-done; PRD FR-005, FR-043; architecture lines 172, 296; `sprint-01-plan.md`; PGD-15.
+  - Source read on a fresh export: `gmail_pdf/cli/main.py`, `gmail_pdf/redaction.py`, `tests/e2e/test_redaction_subprocess.py`, `tests/unit/test_sentinel_matrix.py`.
+  - Check runs: `a135b4c` 10/10 (41116702718); **`a84d558` 10/10 (41146185678), read by master before and after posting the decision, completed, `pull_request` event**. `mergeStateStatus` CLEAN; `main` `27876b6`.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 0 | C28 closed as ruled | | ✅ | `git diff a135b4c a84d558 -- gmail_pdf tests` empty, one commit since (the report). Reviewer-quality items in place: TD-C #30, QUA-37 on #23, E11 on #29. SA acknowledgement 6531815106 (D-52) |
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | QA matrix: AC-1..8 Pass. Master re-ran AC-1, AC-3, AC-5 and AC-8 (below). AC-8 stands with the recorded limit (D-53) |
+| 2 | No open Sev-1/Sev-2 defects | ✱ | ✅ | Open: DEF-005 Sev-3, DEF-006 Sev-4. Test plan section 6 says what QA quotes: "test-quality hole that could hide a defect"; "Fix before G8; master may accept with a logged reason" |
+| 3 | Regression suite recorded and green | ✱ | ✅ | Master: `a135b4c` 649 passed, 99.70 %, `redaction.py` and `cli/main.py` 100 %; merge ref `ef75d59` 775 passed, 12 skipped. CI 10/10 on the PR head |
+| 4 | Exploratory notes present | | ✅ | Charters EC-2 and EC-9, mutation pass of 26 |
+| 5 | Accessibility (UI stories) | | n/a | No UI |
+| 6 | Sev-3 fixed or accepted (test plan section 5) | | ✅ | DEF-005 accepted for this story's exit (D-54) |
+| 7 | Traceability sample | | ✅ | GOAL-05 → FR-005 (PRD line 79) → PGD-13 AC-5 → `tests/e2e/test_redaction_subprocess.py` (`req("AC-5")`). Reverse: `test_sentinel_matrix.py` 33 passed → AC-6 → FR-005 → GOAL-05 |
+
+**Master's probes** (fresh export of `a135b4c`; real child interpreters; hidden console of its own; genuine console `CTRL_C_EVENT`; `SetConsoleCtrlHandler(None, False)` in the child because the harness inherits "ignore Ctrl+C"; fake sentinels; CPython 3.12.10; every child reported the export's `redaction.py`). Scripts in the session scratchpad, folder `g7`. Results were the same through `python -m gmail_pdf`, the root shim and `gmail-pdf.exe`:
+
+| Case | Status | stdout | stderr | Sentinels | Traceback |
+|---|---|---|---|---|---|
+| `RuntimeError` with a chained sentinel; `KeyError` with a token | 1 | empty | `error: unexpected failure, see the run log` | 0 | no |
+| One Ctrl+C during the run | 1 | empty | `Run cancelled` | 0 | no |
+| Ctrl+C while `main` reports a failure | `0xC000013A` | empty | the failure line, then `Run cancelled` | 0 | no |
+| Second Ctrl+C while `Run cancelled` is reported, no failure (new; timing forced) | `0xC000013A` | empty | `Run cancelled` twice | 0 | no |
+| Worker-thread failure | 0 | empty | the failure line | 0 | no |
+
+Literal probes: AC-1 7 characters ignored, 8 redacted. AC-3 five loggers by five levels, 0 sentinels, 17 lines; the four named loggers read WARNING; `httplib2.debuglevel` 0. AC-5 traceback through a logger handler with no filter: contains a traceback, 0 sentinels, 1 `[REDACTED]`; stderr one line. Mutants reproduced on their own exports: M20 649 passed, M23 649 passed, M22 639 passed, M13 609 passed and 10 skipped. With M22 and M13 the handler filter still gives 0 sentinels. Limits: 3.12.10 only; timing in the two limit rows is forced by a wrapper; no physical key was pressed.
+
+**Regression detail.** Merge ref: `ef75d59` (parents `27876b6`, `a84d558`) is the current ref; QA's `d44b60e` was built from `a135b4c`; the two differ by the report only. `-rs` on an export: 1 skip "not a git work tree", 11 POSIX-mode skips. CI on the PR head: Windows 776 passed, 11 skipped; Ubuntu and macOS 784 passed, 3 skipped; 787 in all, so the POSIX rows ran on the legs meant to run them.
+
+**Report corrections** (the report stays as committed: a docs commit restarts CI on the head):
+- Skips: the text says 10 POSIX-mode tests; it is 11. The PR comment is right.
+- QA did not read the POSIX legs, which test plan section 7 asks for. Master did.
+- DEF-006 is pre-existing for stderr as well as stdout.
+- NT-06 "Pass" holds for the runner path only; the plan's row says exit 1 and the worker gives 0.
+- R-12 target: not EPIC-02/06 (ruling 6).
+- Test plan section 9 item 3 asks that the AC-8 test deliver a real event and that a differing status be a Product defect. The shipped test raises `KeyboardInterrupt`; QA's probe delivered the event; the limit stays on #29, not a defect (attempt 3, D-53).
+
+**Rulings and dispositions**
+| # | Item | Ruling |
+|---|---|---|
+| 1 | C28 | Confirmed closed on `a135b4c` |
+| 2 | AC-8 | **Stands, with the recorded limit** (D-53) |
+| 3 | Regression | Confirmed: 649; 775 + 12 (11 POSIX, 1 export artefact) |
+| 4 | DEF-005 · PGD-67 · #31 | **Sev-3 confirmed. Accepted for PGD-13's exit; not required before merge. Target PGD-15, before its G5** (D-54). AC-1 and AC-3 are verified on this head |
+| 5 | DEF-006 · PGD-68 · #32 | **Sev-4 stands; not a regression of this story. Target STORY-07.01** (D-55) |
+| 6 | R-12 | **Registered as RISK-024, score 4. AC goes to the first story that starts a thread** (D-56) |
+| 7 | RISK-005 | **Stays 2 × 5 = 10.** Re-assess at the G7 of STORY-01.04 |
+| - | `register_secret` padded values | Not a defect (AC-1 says exact occurrence). STORY-01.04 strips or rejects them (C31) |
+| - | `py.warnings` muted until a handler exists | STORY-07.02 decides where they go (C31) |
+| - | Pattern gaps (escaped JSON, quoted value with a space) | Same class as #24; named in the merge request |
+| - | OQ-5 console encoding | Stays open, with QA's evidence, before the first story that prints file names |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C30 | scrum-master | Jira PGD-15, PGD-67; `sprint-01-plan.md` linked tech-debt table | PGD-67 blocks PGD-15; remote link to #31; row "in the PGD-15 PR, before its G5; no AC of PGD-15 changes". qa-engineer re-runs M13, M20, M22 and M23 at PGD-15's G7: each must fail | Before PGD-15 starts |
+| C31 | scrum-master | `sprint-01-plan.md` follow-up table | Rows: STORY-07.01 DEF-006 AC (#32; closed stream gives the D-21 code with no extra text, in a child process); STORY-06.02 second-press row with P3 (#29); STORY-01.04 strip or reject padded secrets; STORY-07.02 `py.warnings` destination; RISK-024's AC on the FR-038 story if promoted, otherwise the EPIC-09 `gui.worker` story | Sprint-02 G4 |
+| C32 | qa-engineer | `docs/07-qa/test-plan.md` | Split NT-06 into runner (exit 1) and worker (fixed line; exit per RISK-024). Point section 9 item 3 at STORY-06.02 and record the #29 limit. Add R-12 with RISK-024, and DEF-003..006 to section 14. Reset OQ-4: its needed-by, PGD-13 G5, passed unanswered and the story uses `req("AC-5")` | Sprint-02 G4 |
+
+**Merge precondition (orchestrator; re-read at the moment of the request):**
+1. PR head still `a84d558`, and `git diff a135b4c <head> -- gmail_pdf tests` empty.
+2. 10/10 `success` from check runs on that exact head.
+3. RISK-023: the `main` that run tested equals current `main`. If not, update the branch and re-read CI. That merge is not a D-50 commit as long as the code diff holds only what `main` brought; if `main` changed `gmail_pdf/` or `tests/`, return to master first. The status branch is not merged to `main` before PR #22.
+4. No `REQUEST_CHANGES` review outstanding.
+
+**Items to name in the merge request:** QUA-34 (#30); QUA-37 (#23, T-05); DEF-005 (#31; accepted, target PGD-15, not pinned at merge); DEF-006 (#32); the accepted residual and the `0xC000013A` limit (#29; D-52, D-53; R1 G8 rule); #23 argparse echo; #24 pattern gaps with QA's two new forms; RISK-024; RISK-005 stays 10; STORY-01.04, 06.02 and 07.01 have no Jira issue yet although they carry most of this. The merge unblocks PGD-15..18.
+
+Follow-ups (not conditions): qa-engineer sets Done. orchestrator sets the label and requests the human merge.
+
+**Risks registered:** RISK-024 (new, score 4). RISK-005 re-assessed, unchanged at 10.
+
+**Rationale:**
+- All three mandatory items have evidence that master reproduced in part from a fresh export, and QA's figures that master re-ran held.
+- GO, not CONDITIONAL GO: no mandatory or checklist item is short. C30..C32 are project-level follow-ups, as C19, C20, C25 and C26 were at earlier G7 GOs.
+- The hard questions were AC-8 and DEF-005, and neither is waved through by likelihood. AC-8 turns on what the criterion covers and on the attempt 3 ruling. DEF-005 turns on the difference between evidence about this head and protection for later heads.
+- The double press is new evidence that QA's "needs a failure" understates the limit. It stays in class: a second event during the report of the first, and it needed forced timing. It is named to Santhosh rather than left in a table.
+
+**Posted:** PR #22 comment 6536097991; Jira PGD-13 c.10244; #29 comment 6536098631; #31 comment 6536098986; #32 comment 6536099416; risks PGD-1 c.10245.
