@@ -985,3 +985,108 @@ Limits: 3.12.10 only for the CLI rows; CI covers 3.10 and 3.11 for the suite, no
 - The reviewer's QUA-39 recipe missed `latency_s` and an unread deep key, so the outcome is written first and the rows second, as the PGD-13 lessons require.
 
 **Posted:** PR #33 comment 6537950749, correction 6537957962; Jira PGD-15 c.10268; risks PGD-1 c.10269; new issues #35, #36, #37; comments on #21 (6537937814), #23 (6537938120), #29 (6537937382), #32 (6537936974).
+
+---
+
+## G6 – Peer Review — STORY-02.02 (PGD-15) — 2026-10-31 — attempt 2
+
+- **Decision:** GO, under the exit rule D-62. PGD-15 moves to In QA (orchestrator). Loop 3 of 3 is unused
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no; the code merge stays human
+- **Attempt:** 2 (dev↔review loop 2 of 3)
+- **Artefacts evaluated:**
+  - PR #33 head `7883f9c`, base `main` `2743016`. PR description read in full, including the fix-loop section. Delta `c847e1a..7883f9c`: 16 files.
+  - Reviews 5721304055 (quality; correction 6539176633) and 5721115331 (standards), bodies and all 9 inline comments read with `gh api`. Consolidated evidence 6539192141. Review 5720404048 (performance, `c847e1a`) stands.
+  - SA ruling 6538205936 and note #34 6538206581. Architecture lines 381, 485, 488, 587 read.
+  - Check runs on `7883f9c`: 10/10 `success`, read by master. `mergeable_state` clean. `main` still `2743016`.
+  - Commit `b20be4e` (C33 rows). Jira PGD-15, PGD-16, PGD-18. Issues #15, #35, #37.
+  - Code read at `7883f9c`: `tests/fakes/fake_gmail_json.py`, `tests/fakes/fake_gmail.py`, `gmail_pdf/app/planner.py`, `gmail_pdf/infra/gmail_gateway.py`, `tests/unit/test_exit_statements.py`, `tests/e2e/test_select_range.py` lines 225-345; `cli/main.py` and `infra/retry.py` diffs.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Reports present | ✱ | ✅ | Quality and standards on `7883f9c`. Performance stands under exit rule item 4: master read the retry diff (extraction of `_back_off`, no change of behaviour) and the gateway at H; both stay within R9..R12 and R15 |
+| 2 | Zero open Blocker/Critical | ✱ | ✅ | **QUA-39 closed** (D-64); master's probe below |
+| 3 | Majors fixed or accepted | | ✅ | No new Major. PERF-11, PERF-12 stay accepted deferred (D-59) |
+| 4 | Findings cite file:line | | ✅ | All anchored |
+| 5 | R1..R16 | | ✅ | Table below |
+| 6 | Unapproved file | | ✅ | 16 files, all listed. `cli/main.py` has two docstring hunks; `bootstrap.py` and `domain/messages.py` have no diff |
+| 7 | Architecture acknowledgement (D-44) | | ✅ | Ninth acknowledged; **C37(a) closed** (D-66) |
+| 8 | CI, base | | ✅ | 10/10 on `7883f9c`; orchestrator rerun 1164 passed, 12 skipped, 99.88 %, ruff, mypy --strict, bandit clean |
+| 9 | T-05 interim control | | ✅ | Reviewer-standards PASS. Master's grep over `gmail_pdf/` and the root shim: only `raise SystemExit(main())`, plus prose and the catch |
+| 10 | Issues tied to this story | | ⚠️ | #11, #31 done. QUA-39, DEF-001's residual, is fixed; **#15 stays open until QA confirms at G7** |
+| 11 | Traceability sample | | ✅ | AC-6 (iii) → `test_content_that_parses_but_cannot_be_read_still_ends_in_the_fixed_line` (`req("AC-6", "QUA-39")`). Reverse: that test → AC-6 → FR-008, D-21 |
+
+**R1..R16**
+| Item | Result | Evidence |
+|---|---|---|
+| R1 QUA-39 | ✅ | All rows; outcome confirmed by master (below) |
+| R2 STD-48 | ✅ | Every listed form flagged, one negative each; listed "not covered" items stated. STD-63 is not a miss (D-65) |
+| R3 QUA-40 | ✅ | Master read `test_retry.py:98-108`: 408, 409, 400 and 404 with rate-limit reasons |
+| R4 QUA-41 | ✅ | `m-return-0` killed |
+| R5 QUA-42 | ✅ | `g-cache-discovery` and `g-method-name-in-log` killed, both directions |
+| R6, R7 QUA-43, 44 | ✅ | Four literal rows matched by hand and by a separate oracle (reviewer); `tz-system-empty` killed |
+| R8 QUA-47 | ✅ | Docstrings match behaviour (reviewer, real children). Master read the hunks |
+| R9 QUA-49 | ✅ | Master read `test_sentinel_matrix.py:394-405`: 403 JSON, 403 non-JSON, 500; gateway docstring names the library's log line |
+| R10 STD-49 | ✅ | `GoogleObject: TypeAlias = Any` with its reason |
+| R11 STD-50 | ✅ | 36 lines; 40,000 scripted calls identical to `c847e1a` |
+| R12 STD-51 | ✅ | Raised outside the handler; `__context__ is None` asserted; `from None` removal killed |
+| R13 STD-52 | ✅ | `Raises:` complete; code unchanged |
+| R14 STD-56 | ✅ | Both justifications present |
+| R15 PERF-13 | ✅ | `messages()` built once at gateway line 105. Leftover line 104 is STD-61, not a miss |
+| R16 PR text | ✅ | **Read by master; not in the consolidated table.** Item 4 now states the exit 3 cases; item 10 says "tripwire, not the control"; AA-04 says correctness is not established |
+
+**Master's probes** (`git archive` of `7883f9c` in the scratchpad, folder `g6m2`; Python 3.12.10; `gmail_pdf.__file__` confirmed inside the export; AC-6 command):
+
+| Case | Result |
+|---|---|
+| 52 real children: every R1 row, QUA-53 and its mirror, deepest legal reads, encodings, roots, settings, unterminated `[` and `{"a":` at 300,000 | 15 success, 37 fixed line, **0 unexpected, 0 other** |
+| Deepest legal, listed and read | `parts` chain beside the PDF part 96 exit 0, 97 fixed line; read resource value 196 exit 0, 197 fixed line |
+| 51 JSON paths x 65 hostile values, plus deletions, plus 6,000 documents of 2 to 4 random edits, through real `main()`, sleep stubbed | 9,365 runs: 2,492 success, 6,873 fixed line, **0 unexpected, 0 other** |
+| **Control:** same 9,365 documents on the `c847e1a` export | 3,835 success, 5,015 fixed line, **515 unexpected**. The harness detects the failure |
+| `q-tree-stop-at-leaf` patched, `parts: [{"parts": [5]}, {}]` | Head: fixed line. Mutant: **unexpected-failure line** (QUA-53 reproduced) |
+| Digit cap 19 with a 20-digit date; latency cap 3599 with 3600 | Both give the fixed line: tighter, inside the outcome (QUA-54) |
+| `non_integer_exits` on a tuple, walrus, `for` target, default argument, dict value | All `[]`, not flagged; plain assignment flagged (STD-63 confirmed and wider) |
+| `_BUILD_FAILURES` and `_report_build_failure`, AST at H against `c847e1a` | Identical. The four constants are plain literals with no `{`, `}` or `%` |
+| `git grep _service 7883f9c` | Line 104 alone sets it; nothing reads it (STD-61) |
+
+Limits: 3.12.10 only for these rows. The in-process sweep shares the test process, and its first run was invalid: my sleep stub missed, because `sleep` is a default bound at definition, so a legal latency slept; the results above are from the corrected run. "Any file content" cannot be proved by tests. **No CI row reads a document near the cap through `get_message`:** the deepest read row is `parts-20`, the `parts-*` refusal rows stop at load (QUA-55), and the top-level 199 row is never read. So on 3.10 and 3.11 the read at the cap rests on arithmetic: pure-Python `deepcopy` at about 2 frames per level against a limit of 1000, with the reviewer's 410 measured on 3.12. #38 adds the row. No real Gmail call.
+
+**Ratings** (D-65; rating only under D-62)
+| Finding | Reviewer | Master | Disposition |
+|---|---|---|---|
+| QUA-52 = STD-61 `gmail_gateway.py:104` | Minor | **Minor**, counted once | #35, STORY-02.04; fallback STORY-03.03 |
+| STD-60 `test_select_range.py:244, 245, 249, 286` | Minor | **Minor** | #38, PGD-16 |
+| QUA-53 `test_fake_gmail_canonical.py:288` | Minor | **Minor** | #38, PGD-16, first in that issue |
+| QUA-54 `test_fake_gmail_canonical.py:303` | Minor | **Info, re-rated down** | #38, PGD-16 |
+| QUA-55 `test_select_range.py:292` | Info | **Info** | #38, PGD-16, with master's added row |
+| QUA-56 `retry.py:117` | Info | **Info** | #35, STORY-02.04 |
+| STD-62 `planner.py:39`, `runner.py:36`, `cli/main.py:25` | Info | **Info** | #38, PGD-16 |
+| STD-63 `test_exit_statements.py:13` | Info | **Info**, not a miss on R2 | #38, PGD-16 |
+
+All opened by master. No commit in PR #33 (D-65).
+
+**Conditions on G7 PGD-15**
+| # | Owner | Required |
+|---|---|---|
+| 1 | qa-engineer | Test `7883f9c` only. A code change after H: stop and return to master. The report commit is the one exception |
+| 2 | qa-engineer | C35 first: check 0 |
+| 3 | qa-engineer | M13, M20, M22, M23 each fail (C30). Reviewer's figures: 17, 5, 3, 3 |
+| 4 | qa-engineer | Confirm #15 / DEF-001 against its three items and the QUA-39 forms, then state whether PGD-63 and #15 can close |
+| 5 | master | Read the report against the test plan row by row, not only the AC matrix |
+| 6 | qa-engineer | Not defects: #38, the #35 additions, the arithmetic limit above, a legal `latency_s` of 3600 sleeping |
+| 7 | orchestrator | Before the merge request: CI 10/10 on the PR head, tested `main` SHA (RISK-023), and name PERF-11, PERF-12, #35 and #38 |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C33 | | | **Rows part closed:** all eight are in `b20be4e`, and STORY-01.04's says "Not Ready until STORY-02.04 exists with the pacer AC". The Jira part stays due at the sprint-02 G4 | Sprint-02 G4 |
+| C37(a) | | | **Closed** (D-66). C37(b), (c), (d) stay open | As recorded |
+| C38 | scrum-master | `sprint-01-plan.md`; Jira PGD-16 | (a) Row and remote link: #38 → PGD-16, in the PR before G5, no AC change. (b) STORY-02.04 row gains STD-61 and QUA-56 (#35). (c) STORY-01.04 and STORY-01.06 rows carry SA condition 2: the four fixed lines are no precedent, `GmailApiError`, `RetryExhaustedError` and real sign-in failures stay on `safe_message`, and an exit code chosen by type takes its text from `safe_message` | (a) before PGD-16 starts, with C34; (b), (c) sprint-02 G4 |
+
+**Risks registered:** no new risk. RISK-021 note added. RISK-005, RISK-011, RISK-025 unchanged.
+
+**Rationale:**
+- The label comes from the exit rule and the checklist: every listed item passed and nothing rates Major or higher. Master tried to break it on its own terms: a different mutator, a cross product rather than a fuzz, and a control that proves the harness can see the failure.
+- The check most likely to change the result was whether STD-63 is a miss on R2, because that would have needed a commit. It is not, and the reasons are in D-65. A wish for a clean docstring is not a reason to read it as a miss, and a wish to avoid a commit is not the reason it is not one.
+- The attempt 2 evidence table had no row for R16. Master read it. A fix item with no named verifier is a gap in the exit rule, and the next rule should name one.
+
+**Posted:** PR #33 comment 6539633088; Jira PGD-15 c.10279; new issue #38; #35 comment 6539632665.
