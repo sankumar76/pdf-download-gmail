@@ -56,6 +56,14 @@ def test_kolkata_january_runs_from_local_midnight_to_the_next_local_midnight() -
         pytest.param(
             "2025-12-31", "2025-12-31", ZoneInfo("UTC"), 1767139200, 1767225600, id="year-end"
         ),
+        pytest.param(
+            "2026-01-01",
+            "2026-01-01",
+            ZoneInfo("Pacific/Pago_Pago"),
+            1767265200,
+            1767351600,
+            id="utc-minus-11",
+        ),
     ],
 )
 def test_edge_ranges_in_fixed_zones(
@@ -89,6 +97,29 @@ def test_new_york_dst_days_are_calendar_days_not_86400_seconds(
     assert (date_range.start_epoch_s, date_range.end_epoch_s) == (start, end)
     if hours is not None:
         assert date_range.end_epoch_s - date_range.start_epoch_s == hours * 3600
+
+
+# Midnight itself does not exist on the day the clocks go forward at 00:00: the day then starts
+# at 01:00 local, the instant of 00:00 in the old offset, and a wrong ``fold`` starts it an hour
+# early, inside the previous day. Worked out by hand from the offsets, not with the code.
+MIDNIGHT_GAPS = [
+    # Havana, 2026-03-08: 00:00 CST (UTC-5) = 05:00 UTC; the day ends 2026-03-09 00:00 CDT (UTC-4).
+    pytest.param("America/Havana", "2026-03-08", 1772946000, 1773028800, id="havana"),
+    # Cairo, 2026-04-24 (last Friday of April): 00:00 EET (UTC+2) = 22:00 UTC the day before.
+    pytest.param("Africa/Cairo", "2026-04-24", 1776981600, 1777064400, id="cairo"),
+    # Apia, 2011-12-30 was skipped altogether: the day starts and ends at the same instant.
+    pytest.param("Pacific/Apia", "2011-12-30", 1325239200, 1325239200, id="apia-skipped-day"),
+]
+
+
+@pytest.mark.req("AC-3")
+@pytest.mark.parametrize(("zone", "day", "start", "end"), MIDNIGHT_GAPS)
+def test_a_day_whose_midnight_does_not_exist_starts_at_the_old_offsets_midnight(
+    zone: str, day: str, start: int, end: int
+) -> None:
+    date_range = days(day, day, ZoneInfo(zone))
+
+    assert (date_range.start_epoch_s, date_range.end_epoch_s) == (start, end)
 
 
 @pytest.mark.req("AC-3")
@@ -227,5 +258,10 @@ def test_an_unresolvable_system_zone_is_an_input_error(
 ) -> None:
     monkeypatch.setattr(tz_module.tzlocal, "get_localzone_name", lookup)
 
-    with pytest.raises(InputValidationError):
+    with pytest.raises(InputValidationError) as exc_info:
         tz_module.resolve_zone(None)
+
+    # An empty name must not fall through to ``ZoneInfo("")`` and its "unknown zone" sentence.
+    assert str(exc_info.value) == (
+        "The system time zone could not be determined; give one with --tz."
+    )
