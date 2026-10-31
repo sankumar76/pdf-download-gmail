@@ -2,21 +2,21 @@
 
 Only ``--start``, ``--end`` and ``--tz`` exist so far; the full flag table of the requirements
 document (FR-045) and the rule for unknown flags beyond argparse's own exit 2 are STORY-07.01.
-Dates are parsed strictly here (NFR-024); the wording of every rejection is STORY-02.03.
+This module hands the typed values to ``domain.validation`` and holds no rule or sentence of its
+own (STORY-02.03): the flag names below are the names its messages use (STD-55).
 """
 
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 
-from gmail_pdf.domain import messages
-from gmail_pdf.domain.daterange import parse_iso_date
-from gmail_pdf.domain.errors import InputValidationError
-from gmail_pdf.domain.models import RunRequest
+from gmail_pdf.domain.validation import FieldNames, RawInput
 
 FLAG_START = "--start"
 FLAG_END = "--end"
 FLAG_TZ = "--tz"
+FIELD_NAMES = FieldNames(start=FLAG_START, end=FLAG_END, tz=FLAG_TZ)
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
@@ -38,25 +38,25 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def requested_range(namespace: argparse.Namespace) -> RunRequest | None:
-    """Turn parsed options into a request.
+def dates_given(namespace: argparse.Namespace) -> bool:
+    """Whether ``--start`` or ``--end`` was given (with neither, the caller shows the usage)."""
+    return (
+        getattr(namespace, "start", None) is not None or getattr(namespace, "end", None) is not None
+    )
 
-    Returns:
-        The request, or ``None`` when neither ``--start`` nor ``--end`` was given (the caller
-        shows the usage text, as the walking skeleton did).
 
-    Raises:
-        InputValidationError: only one of the two dates was given, or a date is not a real
-            ``YYYY-MM-DD`` date. The message never echoes the value.
+def raw_input(namespace: argparse.Namespace, system_zone: Callable[[], str | None]) -> RawInput:
+    """The typed values, ready for ``domain.validation.validate``.
+
+    Args:
+        namespace: The parsed options.
+        system_zone: Returns the system zone's IANA name, or ``None`` when it cannot be found.
+            It is called only when ``--tz`` was not given.
     """
-    start_text = getattr(namespace, "start", None)
-    end_text = getattr(namespace, "end", None)
-    if start_text is None and end_text is None:
-        return None
-    if start_text is None or end_text is None:
-        raise InputValidationError(messages.DATES_REQUIRED_TOGETHER)
-    return RunRequest(
-        parse_iso_date(start_text, FLAG_START),
-        parse_iso_date(end_text, FLAG_END),
-        getattr(namespace, "tz", None),
+    typed_zone = getattr(namespace, "tz", None)
+    return RawInput(
+        start=getattr(namespace, "start", None),
+        end=getattr(namespace, "end", None),
+        zone_name=system_zone() if typed_zone is None else typed_zone,
+        names=FIELD_NAMES,
     )

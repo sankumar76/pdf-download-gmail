@@ -1,8 +1,10 @@
 """The single entry point of a run, shared by the CLI and (later) the GUI (architecture 6.1).
 
-In this slice a run validates the range, lists the candidate messages and keeps those inside the
-range. Downloading, the manifest and the report arrive with later stories. ``run`` is
-synchronous and thread-agnostic; it never prints (the front end renders the summary).
+In this slice a run lists the candidate messages and keeps those inside the range. The request
+has passed ``domain.validation`` first (the front end calls it before it builds ``Deps``, so a
+rejected input reads no credential and creates nothing). Downloading, the manifest and the
+report arrive with later stories. ``run`` is synchronous and thread-agnostic; it never prints
+(the front end renders the summary).
 """
 
 from __future__ import annotations
@@ -29,11 +31,12 @@ def run(request: RunRequest, deps: Deps, sink: EventSink, cancel: CancelToken) -
         A ``COMPLETED`` summary with the messages in range, or a ``CANCELLED`` one.
 
     Raises:
-        InputValidationError: the zone is unknown or the end day is before the start day.
+        ValueError, OverflowError, ZoneInfoNotFoundError: the request did not come from
+            ``domain.validation``: a programming error, not user input.
         GmailApiError: Gmail answered a call with a non-retryable HTTP error.
         RetryExhaustedError: a retryable call failed on every attempt.
         KeyError: a message resource has no ``internalDate`` (with ``ValueError`` and
-            ``TypeError`` for a malformed one: STD-53, no domain error for it yet).
+            ``TypeError`` for a malformed one: issue #37, no domain error for it yet).
 
     ``RunCancelledError`` does not escape: it becomes the ``CANCELLED`` summary. The CLI turns
     the other failures into its one fixed unexpected-failure line.

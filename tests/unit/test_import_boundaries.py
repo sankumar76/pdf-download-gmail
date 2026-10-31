@@ -7,6 +7,7 @@ Rules (``module`` is the dotted name, e.g. ``gmail_pdf.infra.auth``):
 * Only ``infra/gmail_gateway.py`` and ``infra/auth.py`` import Google libraries.
 * Only ``gui/**`` imports PySide6.
 * ``cli`` never imports ``googleapiclient`` or ``google.*``.
+* ``cli`` and ``gui`` never import ``infra``; they reach its adapters through ``bootstrap``.
 """
 
 from __future__ import annotations
@@ -81,6 +82,8 @@ def violations_in(module: str, source: str, *, is_package: bool = False) -> list
             problems.append(f"{module}: only gui/** imports PySide6 ({name})")
         if layer == "cli" and root in GOOGLE_ROOTS:
             problems.append(f"{module}: cli never imports Google libraries ({name})")
+        if layer in ("cli", "gui") and target == "infra":
+            problems.append(f"{module}: {layer} reaches infra through bootstrap, not {name}")
     return problems
 
 
@@ -129,6 +132,15 @@ def test_the_real_package_obeys_the_layering_rules() -> None:
         ("gmail_pdf.app.x", "from PySide6 import QtWidgets", "PySide6"),
         ("gmail_pdf.infra.x", "import PySide6.QtCore", "PySide6"),
         ("gmail_pdf.cli.x", "import shiboken6", "PySide6"),
+        ("gmail_pdf.cli.main", "from gmail_pdf.infra.tz import SystemClock", "through bootstrap"),
+        ("gmail_pdf.cli.main", "from gmail_pdf.infra import tz", "through bootstrap"),
+        ("gmail_pdf.cli.x", "from ..infra import tz", "through bootstrap"),
+        (
+            "gmail_pdf.gui.app",
+            "from gmail_pdf.infra.tz import system_zone_name",
+            "through bootstrap",
+        ),
+        ("gmail_pdf.gui.app", "import gmail_pdf.infra.tz", "through bootstrap"),
     ],
 )
 def test_synthetic_violations_are_detected(module: str, source: str, fragment: str) -> None:
@@ -154,6 +166,8 @@ def test_synthetic_violations_are_detected(module: str, source: str, fragment: s
             "from gmail_pdf.bootstrap import build_deps\nfrom gmail_pdf.app import runner",
         ),
         ("gmail_pdf.bootstrap", "from gmail_pdf.infra import auth"),
+        ("gmail_pdf.cli.main", "from gmail_pdf.bootstrap import SystemClock, system_zone_name"),
+        ("gmail_pdf.gui.app", "from gmail_pdf.bootstrap import SystemClock, system_zone_name"),
     ],
 )
 def test_permitted_imports_are_not_flagged(module: str, source: str) -> None:

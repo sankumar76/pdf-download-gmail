@@ -1,4 +1,8 @@
-"""AC-7: canonical mailboxes (RD 4.4 table, boundary, DST) and JSON persistence."""
+"""AC-7: canonical mailboxes (RD 4.4 table, boundary, DST) and JSON persistence.
+
+Over 400 lines on purpose (Coding Standards, files): the canonical mailboxes and their JSON
+round trip are one table of cases over the same fake.
+"""
 
 from __future__ import annotations
 
@@ -286,6 +290,8 @@ REJECTED_AT_LOAD: dict[str, dict[str, object]] = {
     "parts-of-strings": _doc(_payload(parts=["x"])),
     "parts-not-a-list": _doc(_payload(parts=5)),
     "nested-parts-of-numbers": _doc(_payload(parts=[{"parts": [5]}])),
+    # QUA-53: a bad nested part behind a leaf sibling (a walk that stops at a leaf misses it).
+    "nested-bad-part-behind-a-leaf-sibling": _doc(_payload(parts=[{"parts": [5]}, {}])),
     "label-ids-number": _doc({"labelIds": 5}),
     "label-ids-null": _doc({"labelIds": None}),
     "label-ids-unhashable": _doc({"labelIds": [[]]}),
@@ -325,6 +331,21 @@ def test_the_depth_cap_is_199_levels_under_a_top_level_key_and_200_is_refused() 
 
     with pytest.raises(ValueError, match="nested"):
         from_json_dict({"format": 1, "messages": [], "unread": _nested_lists(200)})
+
+
+@pytest.mark.req("AC-6", "QUA-39", "QUA-54")
+def test_the_accepted_edges_of_the_limits_load_and_read() -> None:
+    """The largest values the load accepts: a 20-digit ``internalDate``, a one-hour latency."""
+    slept: list[float] = []
+    document = _doc({"internalDate": "9" * 20}, latency_s=3600)
+
+    fake = from_json_dict(document)
+    fake._sleep = slept.append  # the accepted latency is a real sleep otherwise
+    _read_everything(fake)
+
+    assert fake.latency_s == 3600.0
+    assert slept
+    assert set(slept) == {3600.0}
 
 
 @pytest.mark.req("AC-6", "QUA-39")

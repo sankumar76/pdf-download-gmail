@@ -20,9 +20,18 @@ from gmail_pdf.domain.errors import (
     FakeMailboxNotImportableError,
     FakeMailboxUnavailableError,
 )
-from gmail_pdf.infra.tz import resolve_zone
+from gmail_pdf.infra.tz import SystemClock, resolve_zone, system_zone_name
 
-__all__ = ["ENV_FAKE_MAILBOX", "ENV_TESTING", "Deps", "build_deps"]
+# ``SystemClock`` and ``system_zone_name`` are re-exported so the front ends reach ``infra`` only
+# through this module (architecture 4.1): neither ``cli`` nor ``gui`` imports ``infra``.
+__all__ = [
+    "ENV_FAKE_MAILBOX",
+    "ENV_TESTING",
+    "Deps",
+    "SystemClock",
+    "build_deps",
+    "system_zone_name",
+]
 
 ENV_TESTING = "GMAIL_PDF_TESTING"
 ENV_FAKE_MAILBOX = "GMAIL_PDF_TEST_FAKE_MAILBOX"

@@ -3,6 +3,9 @@
 The library builds the requests and parses the errors; only the HTTP transport is scripted
 (``HttpMockSequence``, test-strategy section 3), so nothing leaves the process. The socket guard
 of ``tests/conftest.py`` is active for every test here.
+
+Over 400 lines on purpose (Coding Standards, files): every test drives the one gateway through
+the same scripted transport, and the PGD-16 zone sweep (AC-9) reuses that set-up.
 """
 
 from __future__ import annotations
@@ -10,10 +13,12 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import re
 from collections.abc import Callable
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
+from zoneinfo import available_timezones
 
 import httplib2
 import pytest
@@ -24,9 +29,11 @@ from gmail_pdf.domain.daterange import DateRange
 from gmail_pdf.domain.errors import GmailApiError, RetryExhaustedError, RunCancelledError
 from gmail_pdf.domain.events import CancelToken
 from gmail_pdf.domain.query import baseline_query
+from gmail_pdf.domain.validation import FieldNames, RawInput, validate
 from gmail_pdf.infra import gmail_gateway
 from gmail_pdf.infra.gmail_gateway import GmailGateway, build_service
-from tests.fakes.fake_time import FakeCancelToken, FakeSleeper
+from gmail_pdf.infra.tz import resolve_zone
+from tests.fakes.fake_time import FakeCancelToken, FakeSleeper, FixedInstantClock
 from tests.support import sentinels
 
 pytestmark = pytest.mark.req("FR-009", "NFR-006", "NFR-011")
@@ -379,3 +386,41 @@ def test_an_error_body_that_cannot_be_read_gives_an_empty_reason(content: bytes)
     _, error_ = _failure_text(rig, lambda g: g.get_message("m1"))
 
     assert (error_.status, error_.reason) == (404, "")
+
+
+# ----------------------------------------------------------------------------------- AC-9 (PGD-16)
+@pytest.mark.req("AC-9", "DEF-007")
+def test_every_zone_at_the_floor_and_the_ceiling_sends_a_query_with_no_negative_bound() -> None:
+    """DEF-007 / RISK-026: no ``q`` that reaches the real gateway carries a negative bound.
+
+    Every name in ``available_timezones()`` goes through validation, the range and the real
+    gateway on the scripted transport, once at 1970-01-02 and once at 9999-12-30.
+    """
+    zones = sorted(available_timezones())
+    days = ("1970-01-02", "9999-12-30")
+    names = FieldNames(start="--start", end="--end", tz="--tz")
+    clock = FixedInstantClock(datetime(2026, 2, 15, 12, 0, tzinfo=timezone.utc))
+    rig = Rig(*[OK_EMPTY] * (len(zones) * len(days)))
+    expected: list[tuple[str, str]] = []
+
+    for zone_name in zones:
+        for day in days:
+            request = validate(RawInput(day, day, zone_name, names), clock.today).request
+            assert request is not None, (zone_name, day)
+            date_range = DateRange.from_days(request.start, request.end, resolve_zone(zone_name))
+            rig.gateway.list_message_ids(baseline_query(date_range))
+            expected.append((zone_name, day))
+
+    queries = [query_of(uri)["q"][0] for _, uri in rig.requests]
+    assert len(queries) == len(expected) > 800
+    bounds = []
+    for query, case in zip(queries, expected, strict=True):
+        match = re.fullmatch(r"has:attachment filename:pdf after:(\d+) before:(\d+)", query)
+        assert match is not None, (case, query)  # no minus sign anywhere
+        bounds.append((int(match[1]), int(match[2])))
+    floor_after = [
+        after for (after, _), (_, day) in zip(bounds, expected, strict=True) if day == days[0]
+    ]
+    # Etc/GMT-14 is the zone with the earliest local midnight: 1970-01-01T10:00:00Z = 36000 s.
+    assert min(floor_after) == 35999
+    assert all(before > after >= 0 for after, before in bounds)

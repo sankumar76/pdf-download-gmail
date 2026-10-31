@@ -351,15 +351,47 @@ def cli_fake_mailbox_not_importable(h: Harness) -> None:
 
 def cli_bad_input_echoing_secrets(h: Harness) -> None:
     _restore_cli(h)
-    assert cli_main.main(["--start", SECRET_TEXT, "--end", "2026-01-31"]) == 2
+    assert cli_main.main(["--start", SECRET_TEXT, "--end", "2026-01-31", "--tz", "UTC"]) == 2
     path = _sentinel_named_file(h, None)
     h.monkeypatch.setenv(bootstrap.ENV_FAKE_MAILBOX, str(path))
     h.monkeypatch.setenv(bootstrap.ENV_TESTING, "1")
     zone = f"Zone/{sentinels.CLIENT_SECRET}"
     assert cli_main.main(["--start", "2026-01-01", "--end", "2026-01-31", "--tz", zone]) == 2
     assert h.stderr.getvalue().splitlines()[-2:] == [
-        "error: --start must be a date written as YYYY-MM-DD.",
-        "error: " + messages.ZONE_UNKNOWN,
+        "error: --start: Enter the date as YYYY-MM-DD, for example 2026-01-31.",
+        "error: --tz: Unknown time zone. Use an IANA name such as Asia/Kolkata.",
+    ]
+
+
+def cli_invalid_input_in_real_mode_with_secrets(h: Harness) -> None:
+    """PGD-16 AC-8: every rejection, with a sentinel as a value, in real mode (no hook variable).
+
+    ``--start SENTINEL-CLIENT-SECRET-0001`` is the mistake of the story; the rest put a sentinel
+    in each other place a rejected value can be typed, and add the rejections that echo no value.
+    """
+    _restore_cli(h)
+    h.monkeypatch.delenv(bootstrap.ENV_FAKE_MAILBOX, raising=False)
+    h.monkeypatch.delenv(bootstrap.ENV_TESTING, raising=False)
+    already_written = len(h.stderr.getvalue())
+    for argv in (
+        ["--start", sentinels.CLIENT_SECRET],
+        ["--start", "2026-01-01", "--end", sentinels.REFRESH_TOKEN, "--tz", "UTC"],
+        ["--start", sentinels.ACCESS_TOKEN, "--end", SECRET_TEXT, "--tz", f"Zone/{SECRET_TEXT}"],
+        ["--start", "1960-01-01", "--end", "9999-12-31", "--tz", "UTC"],
+        ["--start", "2026-03-31", "--end", "2026-01-01", "--tz", sentinels.UNREGISTERED_GOCSPX],
+        [
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-31",
+            "--tz",
+            sentinels.UNREGISTERED_REFRESH_SHAPE,
+        ],
+    ):
+        assert cli_main.main(argv) == 2
+    assert h.stderr.getvalue()[already_written:].splitlines()[:2] == [
+        "error: --start: Enter the date as YYYY-MM-DD, for example 2026-01-31.",
+        "error: --end: Enter the date as YYYY-MM-DD, for example 2026-01-31.",
     ]
 
 
@@ -461,6 +493,7 @@ ERROR_PATHS = [
     pytest.param(cli_fake_file_unusable, id="cli-fake-file-unusable"),
     pytest.param(cli_fake_mailbox_not_importable, id="cli-fake-mailbox-not-importable"),
     pytest.param(cli_bad_input_echoing_secrets, id="cli-bad-input-echoing-secrets"),
+    pytest.param(cli_invalid_input_in_real_mode_with_secrets, id="cli-invalid-input-real-mode"),
     pytest.param(gateway_error_with_secrets_in_the_response, id="gateway-error-with-secrets"),
     pytest.param(gateway_forbidden_and_server_errors, id="gateway-403-and-500"),
     pytest.param(retry_exhaustion_after_transport_errors, id="retry-exhaustion"),

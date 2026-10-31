@@ -10,14 +10,19 @@ What it flags (a call whose first argument is anything but an integer literal or
 * ``sys.exit(...)``, also through ``import sys as s``;
 * ``from sys import exit`` with or without ``as``;
 * the builtins ``exit`` and ``quit``, and ``SystemExit(...)``;
-* a name bound to any of these (``e = sys.exit``, ``E = SystemExit``, ``s = sys``), followed
-  through chains of such assignments;
+* a name bound to any of these by a plain or annotated assignment (``e = sys.exit``,
+  ``E = SystemExit``, ``s = sys``), followed through chains of such assignments ("a name bound"
+  means those two forms and nothing else);
 * a class that derives from ``SystemExit`` (or from such a name): flagged at its definition.
 
 What it accepts and does not cover: ``getattr(sys, "exit")``, ``builtins.exit``, a bare
 ``raise`` of an instance built elsewhere, ``parser.error`` and ``parser.exit`` (argparse prints
 the text itself; that path is #23), third-party code, and a local function named ``main`` or
-``entry`` returning text (the call is trusted by name). T-05 stays a review step until #23
+``entry`` returning text (the call is trusted by name). A name bound by any other form is not
+followed either, and a call through it is not flagged (STD-63): tuple unpacking
+(``a, b = sys.exit, 0``), a walrus (``(e := sys.exit)``), a ``for`` target
+(``for e in (sys.exit,):``), a default argument (``def f(e=sys.exit)``) and a value held in a
+container (``handlers = [sys.exit]``; ``handlers[0]('boom')``). T-05 stays a review step until #23
 closes; this test is a tripwire, not the control.
 """
 

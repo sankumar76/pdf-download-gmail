@@ -1,46 +1,51 @@
-"""Time-zone resolution (FR-008, ADR-002 rule 5).
+"""Time-zone resolution and the real clock (FR-008, ADR-002 rule 5).
 
 The default zone is the system zone, read with ``tzlocal``; every zone object is a
 ``zoneinfo.ZoneInfo``. ``tzdata`` is a hard dependency, so the same IANA data is used on every
-operating system, Windows included. Wording of the rejections for an unknown zone is
-STORY-02.03's; here they only keep the failure out of the "unexpected failure" path.
+operating system, Windows included. Whether a name is acceptable to the user is decided by
+``domain.validation`` before anything here runs; this module only looks names up.
 """
 
 from __future__ import annotations
 
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from datetime import date, datetime, tzinfo
+from zoneinfo import ZoneInfo
 
 import tzlocal
 
-from gmail_pdf.domain import messages
-from gmail_pdf.domain.errors import InputValidationError
 
+def system_zone_name() -> str | None:
+    """The IANA name of the system zone, or ``None`` when it cannot be determined.
 
-def system_zone_name() -> str:
-    """The IANA name of the system zone.
-
-    Raises:
-        InputValidationError: The system zone cannot be determined (the user can pass ``--tz``).
+    ``tzlocal`` has no single failure type. ``LookupError`` covers a registry without a zone
+    key (and ``ZoneInfoNotFoundError``, which is a ``KeyError``); ``ValueError`` and ``OSError``
+    cover an unreadable or malformed source; ``AttributeError`` and ``TypeError`` cover a registry
+    value of the wrong type (PGD-16 AC-4). A listed class includes its subclasses.
     """
     try:
         name = tzlocal.get_localzone_name()
-    except (ZoneInfoNotFoundError, ValueError, OSError) as exc:
-        raise InputValidationError(messages.SYSTEM_ZONE_UNAVAILABLE) from exc
-    if not name:
-        raise InputValidationError(messages.SYSTEM_ZONE_UNAVAILABLE)
-    return name
+    except (LookupError, ValueError, OSError, AttributeError, TypeError):
+        return None
+    return name or None
 
 
 def resolve_zone(name: str | None) -> ZoneInfo:
     """Return the zone for ``name``, or the system zone when ``name`` is ``None``.
 
     Raises:
-        InputValidationError: ``name`` is not an IANA zone known to ``zoneinfo``/``tzdata``, or
-            the system zone cannot be determined. The message never echoes ``name``.
+        ValueError: the system zone is wanted but cannot be determined.
+        ZoneInfoNotFoundError: ``name`` is not a zone ``zoneinfo`` knows. Both are programming
+            errors: a validated request names a known zone (``domain.validation``).
     """
     zone_name = system_zone_name() if name is None else name
-    try:
-        return ZoneInfo(zone_name)
-    except (ZoneInfoNotFoundError, ValueError, OSError) as exc:
-        # ValueError: not a normalised relative key; OSError: a key that names a directory.
-        raise InputValidationError(messages.ZONE_UNKNOWN) from exc
+    if zone_name is None:
+        raise ValueError("the system time zone cannot be determined")
+    return ZoneInfo(zone_name)
+
+
+class SystemClock:
+    """The real clock: today's date in a given zone (the ``Clock`` port, ``app.ports``)."""
+
+    def today(self, zone: tzinfo) -> date:
+        """The current calendar date in ``zone``."""
+        return datetime.now(zone).date()

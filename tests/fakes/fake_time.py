@@ -1,6 +1,8 @@
 """Time doubles for the retry helper (test-strategy section 3): no real sleeping, no real clock.
 
 * ``FakeClock``: a settable "now" that the retry helper reads for HTTP-date ``Retry-After``.
+* ``FixedInstantClock``: the ``Clock`` port (``app.ports``) frozen at one instant, so "today" in a
+  zone never depends on the machine's date or zone.
 * ``FakeSleeper``: records every requested sleep and moves the fake clock forward by it.
 * ``FakeCancelToken``: a ``CancelToken`` whose ``wait`` goes through the sleeper, so a backoff
   of 64 s takes no time, while ``set`` / ``is_set`` behave exactly as the real token does.
@@ -8,7 +10,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, tzinfo
 
 from gmail_pdf.domain.events import CancelToken
 
@@ -28,6 +30,19 @@ class FakeClock:
     def advance(self, seconds: float) -> None:
         """Move the clock forward."""
         self._now += timedelta(seconds=seconds)
+
+
+class FixedInstantClock:
+    """The ``Clock`` port at a fixed instant: today in a zone is that instant's local date."""
+
+    def __init__(self, instant: datetime) -> None:
+        if instant.tzinfo is None:
+            raise ValueError("a fixed instant needs a time zone")
+        self._instant = instant
+
+    def today(self, zone: tzinfo) -> date:
+        """The calendar date of the fixed instant in ``zone``."""
+        return self._instant.astimezone(zone).date()
 
 
 class FakeSleeper:
