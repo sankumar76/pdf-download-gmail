@@ -56,9 +56,6 @@ def _new_names(
         return {a.asname or a.name for a in node.names if a.name == "sys"}, set()
     if isinstance(node, ast.ImportFrom) and node.module == "sys":
         return set(), {a.asname or a.name for a in node.names if a.name == "exit"}
-    if isinstance(node, ast.ClassDef):
-        derived = any(_is_exit_ref(base, sys_names, exit_names) for base in node.bases)
-        return set(), {node.name} if derived else set()
     if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
         names = {t.id for t in targets if isinstance(t, ast.Name)}
