@@ -21,7 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, tzinfo
 from functools import lru_cache
-from zoneinfo import ZoneInfo, available_timezones
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 from gmail_pdf.domain import messages
 from gmail_pdf.domain.models import RunRequest
@@ -30,6 +30,10 @@ from gmail_pdf.domain.models import RunRequest
 # and the range names every file, the manifest and every re-run (PGD-16 AC-9, assumption A-4).
 EARLIEST_DATE = date(1970, 1, 2)
 LATEST_DATE = date(9999, 12, 30)
+
+# The zone of a run when no ``--tz`` was typed and no usable system zone was found (PGD-84,
+# FR-008, PD-21). It is a constant, so validation needs no ``Deps`` and no I/O of its own.
+FALLBACK_ZONE_NAME = "Asia/Kolkata"
 
 # ASCII only: ``\d`` alone matches other digit scripts (NFR-024). ``fullmatch`` is used, so a
 # trailing newline does not slip through the way it would with ``$``.
@@ -53,7 +57,8 @@ class RawInput:
         start: The start date text, or ``None`` when it was not given.
         end: The end date text, or ``None`` when it was not given.
         zone_name: The time zone name the run would use: what the user typed, else the name of
-            the system zone, or ``None`` when no name could be found for it.
+            the system zone, or ``None`` when no name could be found for it. ``None`` means
+            ``FALLBACK_ZONE_NAME``; a typed empty string is a name and is rejected.
         names: How messages name the three inputs.
     """
 
@@ -85,6 +90,11 @@ def _known_zones() -> frozenset[str]:
     return frozenset(available_timezones())
 
 
+def is_known_zone(name: str) -> bool:
+    """Whether ``name`` is a member of ``zoneinfo.available_timezones()``, as written."""
+    return name in _known_zones()
+
+
 def parse_iso_date(text: str) -> date | None:
     """Parse ``YYYY-MM-DD`` strictly; ``None`` when ``text`` is not a real date in that form."""
     if _ISO_DATE.fullmatch(text) is None:
@@ -107,16 +117,29 @@ def _check_date(text: str | None, name: str) -> tuple[date | None, str | None]:
     return parsed, None
 
 
-def _check_zone(zone_name: str | None, name: str) -> tuple[ZoneInfo | None, str | None]:
+def _check_zone(zone_name: str, name: str) -> tuple[ZoneInfo | None, str | None]:
     """The zone, or the sentence that rejects ``zone_name``.
 
     A name is valid only if it is a member of ``zoneinfo.available_timezones()``, as written:
     no trimming, no case folding, no separator conversion, so the answer is the same on every
     operating system.
     """
-    if zone_name is None or zone_name not in _known_zones():
+    if not is_known_zone(zone_name):
         return None, messages.ZONE_NOT_IANA_TEMPLATE.format(field=name)
     return ZoneInfo(zone_name), None
+
+
+def _fallback_zone() -> ZoneInfo:
+    """The fallback zone.
+
+    Raises:
+        ZoneInfoNotFoundError: the time-zone data lacks ``FALLBACK_ZONE_NAME`` (a broken
+            install, AC-8). It is a fault, not input: it ends in ``cli.main``'s last line of
+            defence (exit 1), never as the "Unknown time zone" sentence.
+    """
+    if not is_known_zone(FALLBACK_ZONE_NAME):
+        raise ZoneInfoNotFoundError(FALLBACK_ZONE_NAME)
+    return ZoneInfo(FALLBACK_ZONE_NAME)
 
 
 def validate(raw: RawInput, today: Callable[[tzinfo], date]) -> ValidationResult:
@@ -130,11 +153,19 @@ def validate(raw: RawInput, today: Callable[[tzinfo], date]) -> ValidationResult
     Returns:
         The problems in the order start, end, range (only when both dates are valid), zone; or,
         when there are none, the request and, if the end date is after today in the chosen
-        zone, the future-end warning.
+        zone, the future-end warning. With ``raw.zone_name`` ``None`` the zone is
+        ``FALLBACK_ZONE_NAME`` and ``RunRequest.tz`` holds that name (PGD-84).
+
+    Raises:
+        ZoneInfoNotFoundError: the input is valid, no zone name was given and the time-zone
+            data lacks ``FALLBACK_ZONE_NAME`` (AC-8). Raised after the date checks, so a bad
+            date still gets its sentence.
     """
     start, start_error = _check_date(raw.start, raw.names.start)
     end, end_error = _check_date(raw.end, raw.names.end)
-    zone, zone_error = _check_zone(raw.zone_name, raw.names.tz)
+    zone, zone_error = (
+        (None, None) if raw.zone_name is None else _check_zone(raw.zone_name, raw.names.tz)
+    )
 
     errors = [error for error in (start_error, end_error) if error is not None]
     if start is not None and end is not None and start > end:
@@ -148,8 +179,18 @@ def validate(raw: RawInput, today: Callable[[tzinfo], date]) -> ValidationResult
         )
     if zone_error is not None:
         errors.append(zone_error)
-    if errors or start is None or end is None or zone is None or raw.zone_name is None:
+    if errors or start is None or end is None:
         return ValidationResult(tuple(errors), ())
 
-    warnings = (messages.END_IN_FUTURE_WARNING,) if end > today(zone) else ()
-    return ValidationResult((), warnings, RunRequest(start, end, raw.zone_name))
+    zone_name = raw.zone_name
+    if zone is None or zone_name is None:  # no name was given: the fallback (PGD-84 AC-1)
+        zone, zone_name = _fallback_zone(), FALLBACK_ZONE_NAME
+
+    warnings: tuple[str, ...] = ()
+    if raw.zone_name is None:  # AC-10: say so, first, because the next check ran in this zone
+        warnings += (
+            messages.ZONE_FALLBACK_WARNING_TEMPLATE.format(zone=zone_name, field=raw.names.tz),
+        )
+    if end > today(zone):
+        warnings += (messages.END_IN_FUTURE_WARNING,)
+    return ValidationResult((), warnings, RunRequest(start, end, zone_name))
