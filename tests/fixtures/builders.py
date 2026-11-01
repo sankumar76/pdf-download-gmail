@@ -17,10 +17,11 @@ The result is a ``FakeMessage``: a Gmail ``format=full`` resource plus the bytes
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from email.message import Message
 from email.utils import format_datetime
 from zoneinfo import ZoneInfo
 
@@ -110,19 +111,45 @@ class MessageBuilder:
         self._add(_Node("text/plain", inline=body.encode("utf-8")))
         return self
 
+    def html(self, body: str = "<p>Synthetic body.</p>") -> MessageBuilder:
+        """Add an inline ``text/html`` part."""
+        self._add(_Node("text/html", inline=body.encode("utf-8")))
+        return self
+
     def pdf(
-        self, filename: str | None, *, content: bytes | None = None, inline: bool = False
+        self,
+        filename: str | None,
+        *,
+        content: bytes | None = None,
+        inline: bool = False,
+        headers: Sequence[tuple[str, str]] = (),
     ) -> MessageBuilder:
         """Add an ``application/pdf`` part; ``None`` means a part with no file name."""
         data = content if content is not None else make_pdf_bytes(label=filename or "unnamed")
-        return self.attachment(filename, "application/pdf", data, inline=inline)
+        return self.attachment(filename, "application/pdf", data, inline=inline, headers=headers)
 
     def attachment(
-        self, filename: str | None, mime_type: str, content: bytes, *, inline: bool = False
+        self,
+        filename: str | None,
+        mime_type: str,
+        content: bytes,
+        *,
+        inline: bool = False,
+        headers: Sequence[tuple[str, str]] = (),
     ) -> MessageBuilder:
         """Add a file part. ``inline=True`` puts the bytes in ``body.data``; otherwise they sit
-        behind an ``attachmentId`` and are served by ``get_attachment``."""
-        node = _Node(mime_type, filename=filename or "")
+        behind an ``attachmentId`` and are served by ``get_attachment``.
+
+        The part carries the headers a real Gmail part has (``Content-Type`` with ``name=``,
+        ``Content-Disposition`` with ``filename=``, ``Content-Transfer-Encoding: base64``).
+        ``headers`` are added after them; one whose name (any case) matches a default replaces
+        that default, so a test can give a part an RFC 2047 name or a different disposition.
+        """
+        node = _Node(
+            mime_type,
+            filename=filename or "",
+            headers=_file_part_headers(mime_type, filename or "", inline, headers),
+        )
         if inline:
             node.inline = content
         else:
@@ -179,6 +206,32 @@ class MessageBuilder:
             "payload": payload,
         }
         return FakeMessage(resource, attachments)
+
+
+def _header_value(primary: str, **params: str) -> str:
+    """``primary; key="value"``, written by the standard library (quoting; RFC 2231 if not ASCII).
+
+    A parameter with an empty value is left out.
+    """
+    carrier = Message()
+    carrier.add_header("X", primary, **{key: value for key, value in params.items() if value})
+    return str(carrier["X"])
+
+
+def _file_part_headers(
+    mime_type: str, filename: str, inline: bool, extra: Sequence[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    """The default headers of a file part, then ``extra``; an ``extra`` replaces its default."""
+    defaults = [
+        ("Content-Type", _header_value(mime_type, name=filename)),
+        (
+            "Content-Disposition",
+            _header_value("inline" if inline else "attachment", filename=filename),
+        ),
+        ("Content-Transfer-Encoding", "base64"),
+    ]
+    replaced = {name.lower() for name, _ in extra}
+    return [header for header in defaults if header[0].lower() not in replaced] + list(extra)
 
 
 def _render(node: _Node, part_id: str, message_id: str, store: dict[str, bytes]) -> JsonObject:
