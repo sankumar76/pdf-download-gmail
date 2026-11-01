@@ -50,13 +50,17 @@ def decode_part_name(name: str) -> str:
             (``charset'language'percent-text``).
 
     Returns:
-        The decoded name, not stripped of white space.
+        The decoded name. White space around an RFC 2231 value is dropped with the value; the
+        text of an RFC 2047 name keeps its own white space.
     """
-    extended = _EXTENDED_VALUE.fullmatch(name)
+    # Surrounding white space is not part of an RFC 2231 value, so it cannot change the reading.
+    extended = _EXTENDED_VALUE.fullmatch(name.strip())
     if extended is not None:
-        charset, escaped = extended.groups()
-        decoded = _decode_extended(charset, escaped)
-        return name if decoded is None else decoded
+        decoded = _decode_extended(*extended.groups())
+        if decoded is not None:
+            return decoded
+    # Not an RFC 2231 value, or one that cannot be decoded: an RFC 2047 word can hold two
+    # apostrophes (``=?utf-8?q?O'Brien's.pdf?=``), so the name is still read as encoded words.
     return _decode_encoded_words(name)
 
 

@@ -184,6 +184,20 @@ DECODE_ROWS = [
     ("utf-8''plain.pdf", "plain.pdf"),
     ("utf-8''", ""),
     ("utf-8''é.pdf", "é.pdf"),
+    # white space around an RFC 2231 value is not part of it (QUA-75, F2)
+    (" utf-8''a%2Epdf", "a.pdf"),
+    ("utf-8''a%2Epdf ", "a.pdf"),
+    ("\tutf-8''a%2Epdf\r\n", "a.pdf"),
+    (" \tUTF-8'en'r%C3%A9sum%C3%A9.pdf  ", "résumé.pdf"),
+    # an RFC 2047 word may hold apostrophes: a name that fails the RFC 2231 reading is then read
+    # as encoded words (QUA-74, F1)
+    ("=?utf-8?q?O'Brien's.pdf?=", "O'Brien's.pdf"),
+    ("=?UTF-8?Q?John's_wife's_r=C3=A9sum=C3=A9.pdf?=", "John's wife's résumé.pdf"),
+    ("=?iso-8859-1?q?l'=E9t=E9_d'hiver.pdf?=", "l'été d'hiver.pdf"),
+    ("=?utf-8?q?a'b'c.PDF?=", "a'b'c.PDF"),
+    ("=?utf-8?q?it's?==?utf-8?q?bob's.pdf?=", "it'sbob's.pdf"),
+    ("report'draft' =?utf-8?q?a.pdf?=", "report'draft' a.pdf"),
+    ("nosuch''=?utf-8?q?a.pdf?=", "nosuch''a.pdf"),
     # undecodable names (no new AC): bad bytes become U+FFFD, bad fragments stay as received
     ("=?utf-8?q?=FF=FE.pdf?=", REPLACEMENT * 2 + ".pdf"),
     ("=?utf-8?b?/w==?=.pdf", REPLACEMENT + ".pdf"),
@@ -241,6 +255,22 @@ ENCODED_NAME_ROWS = [
     pytest.param("utf-8''a%2Epdf", True, id="AC-5 rfc 2231 encoded dot"),
     pytest.param("=?utf-8?q?a.pdf=20?=", True, id="AC-8 word that decodes to a trailing space"),
     pytest.param("=?utf-8?q?=20a.pdf?=", True, id="AC-8 word that decodes to a leading space"),
+    # QUA-74 (F1): a well-formed word with apostrophes is decoded, whatever its charset case
+    pytest.param("=?utf-8?q?O'Brien's.pdf?=", True, id="AC-5 word with two apostrophes"),
+    pytest.param(
+        "=?UTF-8?Q?John's_wife's_r=C3=A9sum=C3=A9.pdf?=", True, id="AC-5 word, upper case"
+    ),
+    pytest.param(
+        "=?iso-8859-1?q?l'=E9t=E9_d'hiver.pdf?=", True, id="AC-5 latin-1 word, apostrophes"
+    ),
+    pytest.param("=?utf-8?q?a'b'c.PDF?=", True, id="AC-5 word with apostrophes, .PDF"),
+    pytest.param("=?utf-8?q?it's?==?utf-8?q?bob's.pdf?=", True, id="AC-5 two words, apostrophes"),
+    pytest.param("report'draft' =?utf-8?q?a.pdf?=", True, id="AC-5 apostrophes then a word"),
+    pytest.param("nosuch''=?utf-8?q?a.pdf?=", True, id="AC-5 unknown 2231 charset then a word"),
+    # QUA-75 (F2): white space around an RFC 2231 value does not change the verdict
+    pytest.param(" utf-8''a%2Epdf", True, id="AC-8 leading space on an rfc 2231 value"),
+    pytest.param("utf-8''a%2Epdf ", True, id="AC-8 trailing space on an rfc 2231 value"),
+    pytest.param("\tutf-8''a%2Epdf\r\n", True, id="AC-8 tab and line end on an rfc 2231 value"),
     pytest.param("=?utf-8?q?a.exe?=", False, id="AC-5 word that decodes to another extension"),
     pytest.param("=?utf-8?q?a.pdf?=.exe", False, id="AC-5 word then another extension"),
     pytest.param("=?utf-8?q?a.pdf.?=", False, id="AC-8 word that decodes to a trailing dot"),
