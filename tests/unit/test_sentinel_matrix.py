@@ -41,14 +41,16 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import HttpMockSequence
 
 from gmail_pdf import bootstrap, redaction
+from gmail_pdf.app.ports import Deps
 from gmail_pdf.cli import main as cli_main
 from gmail_pdf.domain import messages
 from gmail_pdf.domain.errors import GmailApiError, GmailPdfError, RetryExhaustedError
+from gmail_pdf.infra import tz as tz_module
 from gmail_pdf.infra.gmail_gateway import GmailGateway, build_service
 from gmail_pdf.redaction import install_excepthooks, install_logging_redaction, safe_message
 from tests.fakes.fake_time import FakeCancelToken, FakeSleeper
 from tests.support import sentinels
-from tests.support.mailboxes import RANGE_ARGS, write_edge_mailbox
+from tests.support.mailboxes import RANGE_ARGS, write_edge_mailbox, write_empty_mailbox
 from tests.support.redaction_pins import THIRD_PARTY_LOGGERS
 from tests.support.subprocess_env import REPO_ROOT, run_guarded
 
@@ -288,11 +290,13 @@ def hook_failure(h: Harness) -> None:
 # Paths share one monkeypatch in the every-surface test, so each CLI path puts back what an
 # earlier path (``keyboard_interrupt``, the not-importable row) replaced.
 REAL_BUILD_PARSER = cli_main.build_parser
+REAL_BUILD_DEPS = cli_main.build_deps
 REAL_FAKE_MODULE = bootstrap._FAKE_MODULE
 
 
 def _restore_cli(h: Harness, fake_module: str = REAL_FAKE_MODULE) -> None:
     h.monkeypatch.setattr(cli_main, "build_parser", REAL_BUILD_PARSER)
+    h.monkeypatch.setattr(cli_main, "build_deps", REAL_BUILD_DEPS)
     h.monkeypatch.setattr(bootstrap, "_FAKE_MODULE", fake_module)
 
 
@@ -479,6 +483,42 @@ def retry_exhaustion_after_transport_errors(h: Harness) -> None:
     assert len(sleeper.delays) == 5
 
 
+def cli_empty_range_with_a_sentinel_named_mailbox(h: Harness) -> None:
+    """PGD-17 AC-1: the empty-range result lines, from a mailbox whose file name is a sentinel."""
+    path = h.log_path.parent / f"mailbox-{sentinels.CLIENT_SECRET}.json"
+    write_empty_mailbox(path)
+
+    assert _cli_in_mode(h, mailbox=path, testing="1") == 0
+    assert h.stdout.getvalue().endswith("No PDFs found\n0 PDFs found.\n")
+
+
+def cli_list_failure_with_secrets_in_the_response(h: Harness) -> None:
+    """PGD-17 AC-4: six 503 answers that echo the sentinels end the CLI in the fixed line.
+
+    The real gateway is behind ``build_deps``, so the five retry records reach the logging
+    filter and the one error line reaches stderr, whatever the answers carry.
+    """
+    body = {"error": {"code": 503, "message": SECRET_TEXT, "errors": [{"reason": SECRET_TEXT}]}}
+    sleeper = FakeSleeper()
+    gateway = GmailGateway(
+        build_service(
+            http=HttpMockSequence(
+                [({"status": "503", "x-echo": SECRET_TEXT}, json.dumps(body))] * 6
+            )
+        ),
+        FakeCancelToken(sleeper),
+        now=sleeper.clock.now,
+        jitter=lambda low, high: high,
+    )
+    _restore_cli(h)
+    deps = Deps(gmail=gateway, resolve_zone=tz_module.resolve_zone)
+    h.monkeypatch.setattr(cli_main, "build_deps", lambda: deps)
+
+    assert cli_main.main(RANGE_ARGS) == 1
+    assert h.stderr.getvalue().endswith("error: unexpected failure, see the run log\n")
+    assert len(sleeper.delays) == 5
+
+
 # Append later stories' paths here (see the module docstring).
 ERROR_PATHS = [
     pytest.param(uncaught_exception, id="uncaught-exception"),
@@ -497,6 +537,8 @@ ERROR_PATHS = [
     pytest.param(gateway_error_with_secrets_in_the_response, id="gateway-error-with-secrets"),
     pytest.param(gateway_forbidden_and_server_errors, id="gateway-403-and-500"),
     pytest.param(retry_exhaustion_after_transport_errors, id="retry-exhaustion"),
+    pytest.param(cli_empty_range_with_a_sentinel_named_mailbox, id="cli-empty-range"),
+    pytest.param(cli_list_failure_with_secrets_in_the_response, id="cli-list-failure-with-secrets"),
 ]
 
 

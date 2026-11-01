@@ -25,6 +25,11 @@ by exception type and never built from ``str(exc)`` or the exception chain (PGD-
 * a refused or unusable test hook (``GMAIL_PDF_TEST_FAKE_MAILBOX``) exits 1 and is final: it is
   never retried as real mode, so no sign-in or network call can follow it;
 * real mode, where no Gmail adapter is wired yet, exits 3 (interim, until STORY-01.04/01.06).
+
+A range with no matching mail is not a failure: the run finishes, prints ``No PDFs found`` and
+``0 PDFs found.`` and exits 0 (PGD-17). A failed list call is the opposite: its error reaches the
+last-resort handler below, so stdout stays empty and stderr carries the one fixed error line and
+no retry notice (AC-4).
 """
 
 from __future__ import annotations
@@ -53,6 +58,9 @@ from gmail_pdf.domain.models import ExitCode, RunRequest
 logger = logging.getLogger(__name__)
 
 PROG = "gmail-pdf"
+# The retry helper logs each retry at WARNING (PGD-15 AC-7). Until the run log exists
+# (STORY-07.02) those records are log content, not user output (PGD-17 AC-4, C40, issue #40).
+_RETRY_LOGGER = "gmail_pdf.infra.retry"
 EXIT_OK = int(ExitCode.OK)
 # The run did not complete cleanly: unexpected failure, Ctrl+C or a test-hook failure (D-21,
 # the first line tells which).
@@ -94,6 +102,21 @@ def _exit_code(exc: SystemExit) -> int:
     if code is None:
         return EXIT_OK
     return code if isinstance(code, int) else EXIT_USAGE
+
+
+def _keep_retry_records_off_stderr() -> None:
+    """Give the retry logger a handler of its own, so ``logging.lastResort`` is not used for it.
+
+    With no handler anywhere, Python prints a record of WARNING or higher to stderr through
+    ``lastResort``: five ``Retrying ...`` lines would precede the one error line (issue #40).
+    A ``NullHandler`` on this logger only counts as "a handler was found"; it prints nothing.
+    The records still propagate, so the run log handler of STORY-07.02 receives them. Every
+    other logger, ``gmail_pdf`` ones included, keeps the redacted ``lastResort`` fallback, and
+    the handler is added once however often ``main`` runs.
+    """
+    retry_logger = logging.getLogger(_RETRY_LOGGER)
+    if not any(isinstance(handler, logging.NullHandler) for handler in retry_logger.handlers):
+        retry_logger.addHandler(logging.NullHandler())
 
 
 def _report_invalid_input(errors: tuple[str, ...]) -> int:
@@ -174,6 +197,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     redaction.install_logging_redaction()
     redaction.install_excepthooks()
+    _keep_retry_records_off_stderr()
     try:
         return _run(argv)
     except KeyboardInterrupt:

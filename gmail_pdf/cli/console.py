@@ -5,7 +5,8 @@ a registered secret or a token shape, whatever built the line. Result lines go t
 errors and notices go to stderr.
 
 The ``Messages in range`` line is interim (assumption A-5 of PGD-15): STORY-07.04 replaces it
-with the FR-042 summary and the progress lines of STORY-06.x join this module.
+with the FR-042 summary and the progress lines of STORY-06.x join this module. A run that finds
+nothing prints ``No PDFs found`` and ``0 PDFs found.`` instead of that line (PGD-17).
 """
 
 from __future__ import annotations
@@ -40,8 +41,11 @@ def print_warning_line(text: str) -> None:
 
 
 def print_summary(summary: RunSummary) -> None:
-    """Print the interim outcome of a run: the message count, or the cancel notice."""
-    if summary.result is RunResult.COMPLETED:
+    """Print the interim outcome of a run: the empty-range lines, the count or the cancel notice."""
+    if summary.is_empty:
+        _write(sys.stdout, messages.NO_PDFS_FOUND)
+        _write(sys.stdout, messages.ZERO_PDFS_LINE)
+    elif summary.result is RunResult.COMPLETED:
         _write(sys.stdout, messages.MESSAGES_IN_RANGE_TEMPLATE.format(count=len(summary.messages)))
     else:
         _write(sys.stderr, messages.RUN_CANCELLED_LINE)

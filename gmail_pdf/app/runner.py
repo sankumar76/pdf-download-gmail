@@ -28,7 +28,9 @@ def run(request: RunRequest, deps: Deps, sink: EventSink, cancel: CancelToken) -
         cancel: Checked before every Gmail call.
 
     Returns:
-        A ``COMPLETED`` summary with the messages in range, or a ``CANCELLED`` one.
+        A ``COMPLETED`` summary with the messages in range, or a ``CANCELLED`` one. A range
+        with no message is a normal ``COMPLETED`` run with an empty tuple (EC-06, exit 0): only
+        a list call that succeeded can end that way, because a failed one raises (below).
 
     Raises:
         ValueError, OverflowError, ZoneInfoNotFoundError: the request did not come from

@@ -5,7 +5,9 @@
 * The ``req`` and ``perf`` markers are registered in ``pyproject.toml``
   (``--strict-markers`` makes an unregistered marker an error).
 * Process-wide redaction state (hooks, logger caps, secret registry) is restored after every
-  test, because ``cli.main.main`` installs it as its first action (PGD-13 AC-7).
+  test, because ``cli.main.main`` installs it as its first action (PGD-13 AC-7). The handler
+  that ``main`` adds to the retry logger (PGD-17 AC-4) is restored the same way: left in place,
+  it would make every later test pass the "no retry line on stderr" check without ``main``.
 """
 
 from __future__ import annotations
@@ -50,6 +52,8 @@ def _isolate_process_wide_redaction_state() -> Iterator[None]:
     names = THIRD_PARTY_LOGGERS
     levels = {name: logging.getLogger(name).level for name in names}
     last_resort_filters = list(logging.lastResort.filters) if logging.lastResort else []
+    retry_logger = logging.getLogger("gmail_pdf.infra.retry")
+    retry_handlers = list(retry_logger.handlers)
     hooks = (sys.excepthook, threading.excepthook, sys.unraisablehook)
     showwarning = warnings.showwarning
     yield
@@ -58,6 +62,7 @@ def _isolate_process_wide_redaction_state() -> Iterator[None]:
     warnings.showwarning = showwarning
     if logging.lastResort is not None:
         logging.lastResort.filters[:] = last_resort_filters
+    retry_logger.handlers[:] = retry_handlers
     for name, level in levels.items():
         logging.getLogger(name).setLevel(level)
     redaction.clear_secrets()
