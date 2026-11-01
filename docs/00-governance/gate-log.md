@@ -1781,3 +1781,24 @@ Earlier conditions: C11–C14, C20, C23, C25, C26, C29, C31, C32 (extended), C33
 **Risks:** RISK-010 note, score unchanged. No new risk.
 
 **Posted:** PGD-1 c.10364.
+
+---
+
+## Recording of the delivery lead's rulings — no gate — 2026-11-01
+
+**Not a gate decision.** D-111..D-115 record his relayed rulings on the severity scale, D-76 and D-75, and the scope change he opened. Source for all of them: chat, relayed by the session coordinator; he posted none of them on PGD-1, and c.10372 is the orchestrator's relay. A relay is a named source, not a Jira approval.
+
+**Human override logged (CLAUDE.md section 3):** QUA-57, PGD-16 G6 attempt 1, is Major, not Critical (D-113). The records of G6 attempts 1 and 2 stay as written: attempt 1 stays NO-GO, two attempts and two of three loops stay spent, and attempt 2 stays GO. With QUA-57 at Major, attempt 1 still had one open Critical, STD-64 = QUA-58, accepted at D-112.
+
+**Scale for PGD-18's G6:** D-111 is the operative wording until T-16 lands (D-115).
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C53 | product-manager; product-owner; orchestrator | PRD; the carrier's AC; merge request | (a) product-manager: the PRD text for D-114 under rule 6 (written as PRD v0.6, c.10375, uncommitted; closes when committed). (b) product-owner: rewrite AC-4's "no `--tz`" limb on the carrier they choose, with rows proving the default's bounds and file-name date, and say how D-105 condition (2) is met if the carrier is in sprint 01. (c) orchestrator: name the coordinator's visible line to the delivery lead at the merge request, as a point he can drop; the carrier follows his answer (PQ-05) | Carrier named on PGD-1 by the sprint-02 G4. (a), (b) before the carrier is Ready. (c) at the merge request, which must come before the carrier is Ready (PQ-05) |
+
+Earlier conditions: C11–C14, C20, C23, C25, C26, C29, C31, C32 (extended), C33 (Jira part), C36, C37 (b, c, d), C38 (b, c), C44, C46, C48 (d), C51, C52 stay open, due as recorded.
+
+**Risks:** RISK-028 new, 1 × 4 = 4 🟢. No other score changed.
+
+**Posted:** PGD-1 c.10376.
