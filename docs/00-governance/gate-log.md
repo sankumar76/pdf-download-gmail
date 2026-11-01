@@ -2074,3 +2074,45 @@ Limits: Windows, 3.12.10, shared host. 3.10, 3.11, Ubuntu, macOS are CI's. No fr
 | C57 | qa-engineer | `docs/07-qa/test-plan.md` | One line in the plan's header or section 4: after PGD-18 section 10 overrides its mutation and sweep lines, secrets handling excepted | Before PGD-84's G7 report; ⚠️ only |
 
 **Posted:** PGD-1 c.10430.
+
+---
+
+## G6 – Peer Review — STORY-03.01 (PGD-18), C56 ruling — 2026-11-01
+
+- **Decision:** no new gate decision. D-125's CONDITIONAL GO stands. QUA-89 is a new Minor, not a second miss (D-132). QUA-90 is Info (D-133). Attempt 3 does not open
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no; the delivery lead may override the reading
+- **Attempt:** stays 2, loop 2 of 3. Head H2 `a480b5d9ded64ad982fabee98fc8951254abc8e1`, base `main` `5b705a5`
+- **Artefacts evaluated:** PR #47 c.6553585157 (reviewer-quality on H2), c.6552934964 (SA), c.6553274197 (master's bound text), PR body at `updatedAt` 2026-11-01T04:50:19Z; D-47, D-65, D-92, D-120, D-126..D-129; architecture line 599; ADR-005; `ci.yml` triggers; Jira PGD-18 c.10431, c.10435; #49. Check runs on H2 read by master: 10/10 `pass`, run 41273905851. Orchestrator's rerun as reported: 2067 passed, 12 skipped, 5 deselected, 99.90 %; ruff, format, mypy, bandit clean.
+
+| C56 item | Result | Evidence |
+|---|---|---|
+| 8 bound hunks | ✅ | reviewer-quality: byte for byte, both files |
+| Two rows False | ✅ | reviewer-quality: direct call and collected rows |
+| `mime.py` code unchanged | ✅ | AST equal with docstrings aside, printed; 235 lines, STD-95 closes |
+| Scope | ✅ | Two files in `c61e2e0..a480b5d` |
+| CI, rerun | ✅ | Above |
+| Notes 3, 4, heading, Dev Record | ✅ | reviewer-quality |
+| Note 1 | ⚠️ | Bound fact delivered; last sentence false against 6552934964: QUA-89 |
+
+**Master's probe** (export of `a480b5d`, folder `g6m18c`, Windows, CPython 3.12.10, `-I`, the export proven as the loaded `mime`; string handling only, no socket guard needed and none used; nothing deleted; the worktree not written). 59 charsets over 256 bytes, `<c>''%XX.pdf` and `=?<c>?q?=XX.pdf?=`: False only for the three UTF-16 names and `iso-2022-jp`, `iso-2022-kr` at `1B`. Added: `iso-2022-jp''%1B$B.pdf`, `iso-2022-jp''%1B(.pdf` False. Well-formed `あ.pdf` and `가.pdf` True in both charsets and forms, percent-escaped and literal for Japanese.
+
+**Ratings**
+| Finding | Reviewer | Master | Disposition |
+|---|---|---|---|
+| QUA-89 | Minor, a miss | Minor, **not a miss under D-128** | PR body edit, no commit (D-132) |
+| QUA-90 | Info | Info, wider than the one byte | #49 (D-133) |
+
+**Rationale:**
+- Read alone, "a second miss" catches QUA-89, so this is a stated reading, not a plain application. D-128 said exact text and gave a fact for note 1. That was mine.
+- It needs both facts: bound text delivered, head unmoved. Attempt 3 would have nothing to re-read.
+- QUA-90's name pair sat in my own D-125 rows, False, before I wrote the hunk.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C56 (amended) | developer (edit); reviewer-quality (confirms); orchestrator (status, label) | PR #47 body | The D-132 edit, no commit. One read-back comment: same head, sentence exact, `additions to 6.6` and `is open` gone, nothing else changed against a copy taken before the edit. Then In QA, `gate:g6-pass`. D-122 term (a) is met then | Before G7 starts; master reads it as G7 check 0 |
+| C58 | orchestrator, with the delivery lead's permission | #49 | Post master's QUA-90 note, text in master's hand-off. Master's post was denied: `Permission for this action was denied by the Claude Code auto mode classifier. Reason: [External System Writes].` Not retried by another route. Does not hold C56 | Before PGD-18's merge request |
+
+**At the merge request, added:** QUA-90 with QUA-85 and QUA-86.
+
+**Posted:** PR #47 c.6553634157; Jira PGD-18 c.10437. #49 not posted (C58).
