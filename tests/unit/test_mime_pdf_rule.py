@@ -24,13 +24,23 @@ pytestmark = pytest.mark.req("FR-019", "BR-008")
 
 PDF = "application/pdf"
 OCTET = "application/octet-stream"
-REPLACEMENT = "�"
+REPLACEMENT = "\ufffd"  # what bytes that are invalid in their charset decode to
 
 
-def part(mime_type: str, filename: str = "") -> PartInfo:
+def part(
+    mime_type: str,
+    filename: str = "",
+    *,
+    part_id: str = "1",
+    has_attachment_id: bool = False,
+) -> PartInfo:
     """A part with the given type and Gmail ``filename``; the other fields do not matter."""
     return PartInfo(
-        part_id="1", mime_type=mime_type, filename=filename, size=0, has_attachment_id=False
+        part_id=part_id,
+        mime_type=mime_type,
+        filename=filename,
+        size=0,
+        has_attachment_id=has_attachment_id,
     )
 
 
@@ -113,6 +123,27 @@ def test_other_fields_of_the_part_do_not_change_the_answer() -> None:
     other = PartInfo("9.9.9", PDF, "", 123456, True)
 
     assert is_pdf_part(plain) is is_pdf_part(other) is True
+
+
+@pytest.mark.parametrize("has_attachment_id", [False, True])
+@pytest.mark.parametrize("part_id", ["", "0.1"])
+@pytest.mark.parametrize(
+    ("mime_type", "filename", "expected"),
+    [
+        pytest.param(PDF, "", True, id="pdf, no name"),
+        pytest.param(PDF, "a.bin", True, id="pdf, other name"),
+        pytest.param(OCTET, "a.pdf", True, id="octet-stream, .pdf"),
+        pytest.param(OCTET, "a.bin", False, id="octet-stream, other name"),
+        pytest.param(OCTET, "", False, id="octet-stream, no name"),
+    ],
+)
+def test_the_part_id_and_the_attachment_id_never_change_the_verdict(
+    mime_type: str, filename: str, expected: bool, part_id: str, has_attachment_id: bool
+) -> None:
+    # QUA-80: the root part has an empty id, and a real attachment has an attachmentId.
+    info = part(mime_type, filename, part_id=part_id, has_attachment_id=has_attachment_id)
+
+    assert is_pdf_part(info) is expected
 
 
 # ------------------------------------------------------------------ AC-5: content type
@@ -205,6 +236,13 @@ DECODE_ROWS = [
     # if it was an ordinary name (QUA-77, F8: the code stays and the docstring says so)
     ("latin1'draft'report.pdf", "report.pdf"),
     ("UTF8'it's'x.pdf", "s'x.pdf"),
+    # QUA-80 (F9): what the patterns exclude is pinned. White space inside a word's text or
+    # charset means it is not a word, and white space before the first word is kept.
+    ("=?utf-8?q?a b.pdf?=", "=?utf-8?q?a b.pdf?="),
+    ("=?utf-8 x?q?a?= =?utf-8?q?b?=", "=?utf-8 x?q?a?= b"),
+    ("utf-8''a\nb.pdf", "a\nb.pdf"),
+    ("  =?utf-8?q?a?=", "  a"),
+    (" =?utf-8?q?a?= ", " a "),
     # white space around an RFC 2231 value is not part of it (QUA-75, F2)
     (" utf-8''a%2Epdf", "a.pdf"),
     ("utf-8''a%2Epdf ", "a.pdf"),
@@ -314,6 +352,10 @@ ENCODED_NAME_ROWS = [
     pytest.param("a\x00b''abc", False, id="undecodable charset with a NUL"),
     pytest.param("\ud800.pdf", True, id="lone surrogate"),
     pytest.param("utf-8''\ud800.pdf", True, id="lone surrogate in an rfc 2231 value, .pdf"),
+    # QUA-80 (F9): a word with white space in its text is not a word; the name stays as received
+    pytest.param("=?utf-8?q?a b.pdf?=", False, id="white space inside a word's text"),
+    pytest.param("=?utf-8 x?q?a.pdf?=", False, id="white space inside a word's charset"),
+    pytest.param("utf-8''a\nb.pdf", True, id="line end inside an rfc 2231 value"),
     # QUA-79 (F7): literal text in an rfc 2231 value keeps its extension
     pytest.param("utf-16''a.pdf", True, id="rfc 2231 utf-16 with literal text"),
     pytest.param("iso-8859-1''é.pdf", True, id="rfc 2231 latin-1 with literal text"),
