@@ -1802,3 +1802,136 @@ Earlier conditions: C11–C14, C20, C23, C25, C26, C29, C31, C32 (extended), C33
 **Risks:** RISK-028 new, 1 × 4 = 4 🟢. No other score changed.
 
 **Posted:** PGD-1 c.10376.
+
+---
+
+## G6 – Peer Review — STORY-03.01 (PGD-18) — 2026-11-01
+
+- **Decision:** NO-GO (D-116). Orchestrator: PGD-18 to Changes Requested, label `gate:g6-changes`; product-owner F0 first, then developer F1..F11
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no
+- **Attempt:** 1, loop 1 of 3. Head `e0d11c1`, base `main` `5b705a5`. Scale: D-111
+- **Artefacts evaluated:**
+  - Reviews 5725923222 (standards), 5725937064 (performance), 5725959542 (quality), bodies and all inline comments read with `gh api`; corrections 6552092415, 6552295514; consolidation 6552113272; G5 comment 6551885501. All three `COMMENTED`.
+  - Jira PGD-18 description, AC-1..8, Dev Context, c.10380, c.10361, c.10149, c.10371, c.10373..10378, c.10387; #13; PGD-1 c.10375, c.10376, c.10379, c.10381, c.10382, c.10386.
+  - Source at `e0d11c1`: `gmail_pdf/domain/mime.py` in full, `git diff --stat 5b705a5`, PR body. `sprint-01-plan.md` lines 7, 41, 87; PRD lines 195, 196, 387; architecture 6.3.1, 6.6; Coding Standards sections 5, 7; reviewer scales.
+  - Check runs on the head: 10/10 `success`, run 41261518256, read by master. `mergeable_state` clean.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Above: standards APPROVE WITH COMMENTS, performance and quality REQUEST CHANGES |
+| 2 | Zero open Blocker/Critical | ✱ | ❌ | QUA-74 Critical, reproduced (D-116). PERF-21 re-rated Major (D-117); the decision does not rest on it |
+| 3 | Majors fixed or accepted | | ❌ | PERF-21, PERF-22, PERF-26, QUA-75 open, fix now (D-117) |
+| 4 | Findings cite file:line | | ✅ | All inline but STD-87, the PR body, and PERF-25, the PRD |
+| 5 | Architecture acknowledgement (D-44) | | ✅ on this head | No deviation listed, none found. The fix adds what the architecture does not state, so one SA comment on H (D-120) |
+| 6 | ACs, CI | | ❌ | AC-5 partial; AC-1..4, AC-6..8 met on the reviewers' tables. Orchestrator: 1805 passed, 12 skipped, 99.90 %; ruff, mypy --strict (26 files), bandit clean. CI 10/10 |
+| 7 | T-05 interim control | | ✅ | Reviewer-standards' grep of the diff; master's read of `mime.py`: no `sys.exit`, `SystemExit`, `parser.error` |
+| 8 | #13 (RISK-021) | | ✅ | Read done by standards and quality; master ran its 28 tests on the export: 28 passed. Closes with the merge (D-121) |
+| 9 | Reach | | ✅ | No caller of `is_pdf_part` or `decode_part_name` under `gmail_pdf/` outside `mime.py` |
+
+**Master's probes** (`git archive` of `e0d11c1` in the scratchpad, folder `g6m18`, scripts `run_find.py`, `p_find.py`, `p_cold.py`, `p_rows.py`, `p_tz.py`, spike `mime_fix.py`, never for the branch; Windows, CPython 3.12.10). Before any child starts, `run_find.py` proves in the child's own environment, with no socket call, that `socket_guard` comes from the export and `socket.socket.connect` is `guarded_connect`; each child asserts it again first. Nothing was deleted, and the worktree was not written.
+
+| Row | Result on the head |
+|---|---|
+| The five QUA-74 names | All undecoded, False. One-apostrophe control True |
+| `report'draft' =?utf-8?q?a.pdf?=` (mine) | Undecoded, False: same branch, not an encoded word's apostrophe alone |
+| QUA-75: `" utf-8''a%2Epdf"`, `"\tutf-8''a%2Epdf\r\n"` | False. Trailing-space and word controls True |
+| `=?utf-8?q?日本.pdf?=` | True, decoded to the literal escapes `日本.pdf`, not `日本.pdf` as the reviewer's table says |
+| QUA-77, QUA-78, QUA-79 rows | As reviewed |
+| `=?unicode_escape?q?=5Cud800.pdf?=` (mine) | A lone surrogate in the result, True |
+| `punycode''` + `a`*n | 4 KB 18 ms, 16 KB 35 ms, 64 KB 0.22 s, 256 KB 2.9 s |
+| One unknown charset repeated | 4 KB 9.5 ms, 64 KB 118 ms |
+| 350 distinct unknown charsets in one 4,096-char name | 83 ms; `encodings._cache` grew by 350 |
+
+| Spike on a scratch copy, 11 fresh processes, ms | Cold median | Cold max | Second call |
+|---|---|---|---|
+| Cap + 62-name list, all listed cycled, 267 words | **120** | 226 | 3.5 |
+| Same, 397 distinct unknown | 1.0 | 1.9 | 0.9 |
+| Cap + every stdlib alias, 271 words | 261 | 343 | 4.6 |
+| Cap + 8 distinct, listed names | 32 | 41 | 1.9 |
+| Cap + 8 distinct, unknown | 9.2 | 10.8 | 1.9 |
+
+Spike rows: 26 of 26 as expected (QUA-74, 75, 76, 79, aliases, unlisted, refused). Cap boundary as F3. The head's tests with the spike in place: 272 of 273 in the three files; the one that moves is `utf-8''\ud800.pdf`. Longest legitimate forms, 255 characters: 4-byte text 3,023 as RFC 2231 and 1,696 as RFC 2047; 3-byte text 2,270 and 1,248.
+
+Limits: Windows, 3.12.10 only. 3.10, 3.11, Ubuntu and macOS are CI's. No frozen build. No real Gmail, so nobody knows whether Gmail passes raw encoded words or what its longest `filename` is. The spike's list is master's candidate, not a decision.
+
+**Ratings** (D-116, D-117, D-119)
+| Finding | Reviewer | Master | Disposition |
+|---|---|---|---|
+| QUA-74 | Critical | Critical | F1 |
+| PERF-21 | Critical | **Major** | F3, F4 |
+| PERF-22 | Major | Major | F4 |
+| PERF-26 | Major | Major | F4 |
+| QUA-75 | Major | Major | F2 |
+| QUA-76 | Minor | Minor | F6, PO's changed rule |
+| QUA-77 | Minor | Minor | F8, code stays |
+| QUA-78 | Minor | Minor | Deferred, #49 |
+| QUA-79 | Minor | Minor | F7 |
+| QUA-80 | Minor | Minor | F9 |
+| PERF-23 | Minor | Minor | F5 |
+| STD-86, STD-87 | Minor | Minor | F10, F11 |
+| STD-88, STD-89, STD-90, STD-91, PERF-24 | Info | Info | No action |
+| QUA-81, QUA-83, QUA-84 (2) | Info | Info | #48 |
+| QUA-82, QUA-84 (1) | Info | Info | #49 |
+| PERF-25 | Info | Info | C54, C55 |
+
+**Fix list.** Scope: `gmail_pdf/domain/mime.py`, `tests/unit/test_mime_pdf_rule.py`, `tests/unit/test_mime_part_info.py`, the PR body; no new file. Exit rule D-120.
+| # | Owner agent | Outcome | Rows and mutants (each mutant must fail) | Verifier | Due gate |
+|---|-------------|---------|------------------------------------------|----------|----------|
+| F0 | product-owner | Confirms the charset list and the cap on PGD-18, before the developer commits them (D-118) | Each listed name resolves on 3.10..3.12 | master | Before the developer starts |
+| F1 | developer | A name that fails the RFC 2231 reading is then read as encoded words | The five QUA-74 names and `report'draft' =?utf-8?q?a.pdf?=` True; `nosuch''=?utf-8?q?a.pdf?=` gives `nosuch''a.pdf`. M1: early return restored | reviewer-quality | Attempt 2 |
+| F2 | developer | Surrounding white space does not change a verdict in either form | The two QUA-75 rows True. M2: strip removed | reviewer-quality | Attempt 2 |
+| F3 | developer | A name over 4,096 characters is returned as received, before any regex or decode, by a named constant | 4,096 decoded, 4,097 not; plain over the cap with `.pdf` True; encoded over the cap False; no `decode_header` call. M3: cap removed. M4: `>=` | reviewer-performance | Attempt 2 |
+| F4 | developer | No charset outside the list reaches `codecs.lookup` or `decode_header`, on both branches; `punycode`, `idna`, `unicode_escape`, `raw_unicode_escape` are not listed; unlisted stays as received | Case, `_` for `-`, `utf-8*en`; 0 lookups and an unchanged `encodings._cache` for 400 distinct unlisted names. M5, M6: check removed per branch. M7: `punycode` added | reviewer-performance | Attempt 2 |
+| F5 | developer | The suite pins counts, not time | Spies on `codecs.lookup` and `decode_header`; wall-clock only under the `perf` marker | reviewer-performance | Attempt 2 |
+| F6 | developer | c.10380 pinned; the docstring states it | `=?utf-8?q?日本.pdf?=`, `=?utf-8?b?éééé?=.pdf` True: verdict, not text | reviewer-quality | Attempt 2 |
+| F7 | developer | RFC 2231 uses `unquote(escaped, encoding=charset, errors="replace")`; PR note 3 corrected | QUA-79's three rows; the `utf-8''\ud800.pdf` row restated | reviewer-quality | Attempt 2 |
+| F8 | developer | Docstring and PR note say what the code does (QUA-77) | One row with a listed alias | reviewer-quality | Attempt 2 |
+| F9 | developer | QUA-80's six rows | The six mutants fail; the equivalent stays out | reviewer-quality | Attempt 2 |
+| F10 | developer | STD-86: U+FFFD written as an escape | n/a | reviewer-standards | Attempt 2 |
+| F11 | developer | STD-87: Build row; Dev Record current | n/a | reviewer-standards | Attempt 2 |
+
+**Listed evidence for attempt 2.** H frozen, CI 10/10 on it. All three reviewers re-read, delta only; standards confirms T-05. reviewer-performance reports each hostile shape warm and cold, with `encodings._cache`: warm worst at most 50 ms; the cold first hit is reported and accepted as once per process (master's spike: 120 median, 226 max) unless it recurs warm. M1..M7 fail, master reruns M1, M5, M6. SA one comment on H before G7 GO (D-120). Master checks F0's list against the code. **At G7:** QA tests H only; M1, M5, M6 fail; a hostile-name sweep shows no exception; rows per the product-owner's list; `builders.py` unchanged or #13 re-read.
+
+**Loop count (D-47).** This NO-GO is a counted attempt: 1, loop 1 of 3. A Critical is open, so attempt 2 is a master decision on H, not a scoped condition: loop 2 of 3. Attempt 3 would be the last.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C54 | scrum-master | `sprint-01-plan.md` | (a) STORY-03.02 row and DoR carry #48. (b) The first EPIC-04 naming story's row carries #49. (c) The W3 real-mailbox row reads whether Gmail passes raw encoded words in `filename` and its longest `filename` (D-118, RISK-029) | Sprint-02 G4 |
+| C55 | product-manager | PRD | PERF-25: the 4,096 cap and the charset list recorded as an assumption, with its W3 check | Sprint-02 G4 |
+| T-17 | orchestrator | #13 | Closes after the merge of PR #47 (D-121) | After the merge |
+
+Earlier conditions: C11–C14, C20, C23, C25, C26, C29, C31, C32 (extended), C33 (Jira part), C36, C37 (b, c, d), C38 (b, c), C44, C46, C48 (d), C51, C52, C53 stay open, due as recorded.
+
+**Risks registered:** RISK-029 new, 4. RISK-021 note, score unchanged. Others below.
+
+**Rationale:**
+- The one mandatory failure is QUA-74: a name inside the class AC-5 names gives the wrong verdict, and a real PDF is lost with no report. Nothing else was needed for NO-GO.
+- The hard question was PERF-21. The numbers are real, but the scale, NFR-003's own fit and the absent caller all say Major, and section 7 says fix it now. Gmail's limit would have changed neither.
+- The reviewer's fix figure was a proxy. A real list costs more on its first cold hit, once, so the exit rule measures both instead of carrying 12 to 14 ms forward.
+
+**Posted:** PR #47 comment 6552527307; Jira PGD-18 c.10390. GitHub #48, #49.
+
+---
+
+## Rulings on the IST carrier — no gate — 2026-11-01
+
+**Not a gate decision, and nothing on the carrier is rated.** D-122..D-124. Sources: PGD-1 c.10379, c.10381, c.10382, c.10386.
+
+| # | Point | Ruling |
+|---|---|---|
+| 1 | Plan line 41; D-114 (6) | Line 41 is PGD-18's row; D-114 (6) read it too widely. Not needed from him before the run; the capacity effect is named at the carrier's merge request. The carrier may run after PGD-18's G6 GO and stops at that request. Close: 34; 37 with PGD-18; 36 or 37 with the carrier alone; 39 or 40 with both (D-122) |
+| 2 | C53 (c) | AC-10, droppable, replaces the wait: "at the carrier's merge request". A drop after G7 is that change only, under D-47 (D-123) |
+| 3 | PQ-06 (c) | AC-7 as drafted may stand until he answers, named at the merge request (D-124) |
+| 4 | RISK-028 | 1 × 4 = 4 becomes 2 × 4 = 8 (D-124) |
+
+**Master's rows** (`p_tz.py`, tzlocal 5.4.5's real function over a faked `winreg`, Python 3.12.10; the SA's run was 3.14.7): 142 keys, 0 unresolved with DST on, every mapped name in `available_timezones()`. DST off: 4 unresolved (Australia/Adelaide, Pacific/Chatham, Australia/Lord_Howe, America/St_Johns), each 4 to 9 hours from IST in January and July. New key: `None`. Controls: India `Asia/Calcutta`, Pacific `Etc/GMT+8`, empty value `None`. Not a real registry.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C53 (amended) | orchestrator; product-manager | merge request; PRD | (a) closed: PRD v0.6 is committed. (b) stands: product-owner, with the SA's AC notes, and AC-7 per D-124. (c) orchestrator: at the carrier's merge request, name AC-10 as droppable, PQ-06 (c), the capacity effect and RISK-028's new evidence. (d) product-manager: PQ-05's row (PRD line 387) and item 14 read "at the carrier's merge request"; PA-13 no longer says "rare" as a fact; ⚠️ only | (b), (d) before the carrier's DoR. (c) at its merge request |
+
+**Risks:** RISK-028 re-scored to 8 🟡. RISK-010 note, score unchanged.
+
+**Posted:** PGD-1 c.10391.
