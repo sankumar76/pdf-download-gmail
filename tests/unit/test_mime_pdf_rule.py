@@ -228,7 +228,7 @@ DECODE_ROWS = [
     ("UTF_8''a%2Epdf", "a.pdf"),
     ("ISO_8859_1'en'r%E9sum%E9.pdf", "résumé.pdf"),
     ("LATIN1''r%E9.pdf", "ré.pdf"),
-    # RFC 2231 text that is not %XX is literal: urllib's unquote decodes only the escapes (QUA-79)
+    # an RFC 2231 value with no % is kept as it is (QUA-79); a % changes that, see QUA-85's rows
     ("utf-16''a.pdf", "a.pdf"),
     ("iso-8859-1''é.pdf", "é.pdf"),
     ("ascii''é.pdf", "é.pdf"),
@@ -356,14 +356,17 @@ ENCODED_NAME_ROWS = [
     pytest.param("=?utf-8?q?a b.pdf?=", False, id="white space inside a word's text"),
     pytest.param("=?utf-8 x?q?a.pdf?=", False, id="white space inside a word's charset"),
     pytest.param("utf-8''a\nb.pdf", True, id="line end inside an rfc 2231 value"),
-    # QUA-79 (F7): literal text in an rfc 2231 value keeps its extension
+    # QUA-79 (F7): literal text in an rfc 2231 value with no % keeps its extension
     pytest.param("utf-16''a.pdf", True, id="rfc 2231 utf-16 with literal text"),
     pytest.param("iso-8859-1''é.pdf", True, id="rfc 2231 latin-1 with literal text"),
     pytest.param("ascii''é.pdf", True, id="rfc 2231 ascii with literal text"),
-    # QUA-77 (F8): a listed charset first makes an ordinary name an rfc 2231 value; verdict holds
+    # QUA-77 (F8): a listed charset first makes an ordinary name an rfc 2231 value
     pytest.param("latin1'draft'report.pdf", True, id="ordinary name read as rfc 2231, listed"),
+    # QUA-85: once a value holds a %, its ASCII goes through the charset, so utf-16 loses .pdf
+    pytest.param("utf-16''a%2Epdf", False, id="rfc 2231 utf-16 with a percent"),
+    pytest.param("utf-16'draft'a%20b.pdf", False, id="ordinary name read as rfc 2231, utf-16"),
     # QUA-76 (F6, c.10380): the verdict is pinned, not the text. A word in a listed charset is
-    # decoded, whatever its text holds, so it keeps its .pdf ending.
+    # decoded, whatever its text holds, so a utf-8 word keeps its .pdf ending.
     pytest.param("=?utf-8?q?日本.pdf?=", True, id="c.10380 raw non-ASCII text in a Q word"),
     pytest.param("=?utf-8?b?éééé?=.pdf", True, id="c.10380 raw non-ASCII text in a B word"),
     pytest.param("=?utf-8?q?日本.exe?=", False, id="c.10380 raw non-ASCII text, other extension"),

@@ -20,7 +20,7 @@ PDF_SUFFIX = ".pdf"
 
 # A name longer than this (``len`` of the string as received) is never decoded: the work is
 # bounded before any pattern or codec runs (PERF-21, PERF-22). The longest legitimate name,
-# 255 characters in 4-byte text as RFC 2047 words, is about 3,730 characters (F0, c.10394).
+# 255 characters in 4-byte text as RFC 2047 words, is about 3,730 characters (PGD-18 c.10394).
 MAX_NAME = 4096
 # The only charsets a name is decoded with, in their matching form (see ``_charset_key``). A
 # charset outside this set is never looked up: a lookup of an unseen name costs a failed import
@@ -111,15 +111,16 @@ def decode_part_name(name: str) -> str:
 
     A name of the shape ``charset'language'text`` whose charset is in ``LISTED_CHARSETS`` is read
     as an RFC 2231 value, and any other name as RFC 2047 words, so an ordinary name of that shape
-    is rewritten too: ``latin1'draft'report.pdf`` gives ``report.pdf`` (detection is not
-    affected, since the suffix survives; naming decides whether to keep the rewrite). Only the
-    ``%XX`` runs of an RFC 2231 value are decoded with its charset.
+    is rewritten too: ``latin1'draft'report.pdf`` gives ``report.pdf`` (naming decides whether to
+    keep the rewrite). Text with no ``%`` is kept; with one, each ASCII run, literal text too, is
+    unquoted and decoded with the charset, which loses a literal ``.pdf`` in the three UTF-16
+    charsets (``utf-16''a%2Epdf``). Other text passes through.
 
     An encoded word in a listed charset is always decoded, whatever its text holds: bytes that
     are invalid in the charset become U+FFFD, and raw non-ASCII text (``=?utf-8?q?`` followed
-    by Japanese characters, say) is decoded as the standard library does, so a name that ends
-    in ``.pdf`` keeps that ending and is a PDF (PGD-18 c.10380: losing a real PDF is the worse
-    error). Tests pin the verdict for such words, not their text.
+    by Japanese characters, say) is decoded as the standard library does, so a name ending in
+    ``.pdf`` keeps that ending and is a PDF, UTF-16 and a stray ISO-2022 escape aside (PGD-18
+    c.10380: losing a real PDF is the worse error). Tests pin the verdict, not the text.
 
     Only a fragment that cannot be decoded at all is kept exactly as received, and the rest of
     the name is still decoded: a charset not in the list (it is never looked up), bad base64,
@@ -207,7 +208,7 @@ def _decode_extended(charset: str, escaped: str) -> str | None:
     if key not in LISTED_CHARSETS:  # never reaches a codec lookup
         return None
     try:
-        # Only the ``%XX`` runs are decoded with the charset; other text passes through as it is.
+        # With a ``%``, ASCII text goes through the charset too; other text passes through.
         return unquote(escaped, encoding=key, errors="replace")
     except LookupError:  # a listed codec that this runtime lacks
         return None
