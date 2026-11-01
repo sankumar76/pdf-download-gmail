@@ -197,6 +197,14 @@ DECODE_ROWS = [
     ("UTF_8''a%2Epdf", "a.pdf"),
     ("ISO_8859_1'en'r%E9sum%E9.pdf", "résumé.pdf"),
     ("LATIN1''r%E9.pdf", "ré.pdf"),
+    # RFC 2231 text that is not %XX is literal: urllib's unquote decodes only the escapes (QUA-79)
+    ("utf-16''a.pdf", "a.pdf"),
+    ("iso-8859-1''é.pdf", "é.pdf"),
+    ("ascii''é.pdf", "é.pdf"),
+    # a name of the shape charset'language'text with a listed charset is read as RFC 2231, even
+    # if it was an ordinary name (QUA-77, F8: the code stays and the docstring says so)
+    ("latin1'draft'report.pdf", "report.pdf"),
+    ("UTF8'it's'x.pdf", "s'x.pdf"),
     # white space around an RFC 2231 value is not part of it (QUA-75, F2)
     (" utf-8''a%2Epdf", "a.pdf"),
     ("utf-8''a%2Epdf ", "a.pdf"),
@@ -231,7 +239,8 @@ DECODE_ROWS = [
     ("rot13''a%2Epdf", "rot13''a%2Epdf"),
     ("idna''abc", "idna''abc"),
     ("a\x00b''abc", "a\x00b''abc"),
-    ("utf-8''\ud800.pdf", "utf-8''\ud800.pdf"),
+    # a lone surrogate is literal text, not a %XX run, so it passes through the charset (F7)
+    ("utf-8''\ud800.pdf", "\ud800.pdf"),
     ("\ud800.pdf", "\ud800.pdf"),
     ("=?utf-8?b?\ud800?=.pdf", "=?utf-8?b?\ud800?=.pdf"),
 ]
@@ -304,6 +313,18 @@ ENCODED_NAME_ROWS = [
     pytest.param("idna''abc.pdf", True, id="undecodable codec error stays as received"),
     pytest.param("a\x00b''abc", False, id="undecodable charset with a NUL"),
     pytest.param("\ud800.pdf", True, id="lone surrogate"),
+    pytest.param("utf-8''\ud800.pdf", True, id="lone surrogate in an rfc 2231 value, .pdf"),
+    # QUA-79 (F7): literal text in an rfc 2231 value keeps its extension
+    pytest.param("utf-16''a.pdf", True, id="rfc 2231 utf-16 with literal text"),
+    pytest.param("iso-8859-1''é.pdf", True, id="rfc 2231 latin-1 with literal text"),
+    pytest.param("ascii''é.pdf", True, id="rfc 2231 ascii with literal text"),
+    # QUA-77 (F8): a listed charset first makes an ordinary name an rfc 2231 value; verdict holds
+    pytest.param("latin1'draft'report.pdf", True, id="ordinary name read as rfc 2231, listed"),
+    # QUA-76 (F6, c.10380): the verdict is pinned, not the text. A word in a listed charset is
+    # decoded, whatever its text holds, so it keeps its .pdf ending.
+    pytest.param("=?utf-8?q?日本.pdf?=", True, id="c.10380 raw non-ASCII text in a Q word"),
+    pytest.param("=?utf-8?b?éééé?=.pdf", True, id="c.10380 raw non-ASCII text in a B word"),
+    pytest.param("=?utf-8?q?日本.exe?=", False, id="c.10380 raw non-ASCII text, other extension"),
     pytest.param("utf-8''\ud800", False, id="lone surrogate in an rfc 2231 value"),
 ]
 
@@ -316,7 +337,18 @@ def test_an_octet_stream_part_is_judged_on_the_decoded_name(filename: str, expec
 @pytest.mark.parametrize(
     "filename",
     [row[0] for row in DECODE_ROWS]
-    + ["=?utf-8?q?" * 50, "'" * 10, "''", "'a'", "\x00", "=?\x00?q?\x00?=", "%" * 20, "%zz"],
+    + [
+        "=?utf-8?q?" * 50,
+        "'" * 10,
+        "''",
+        "'a'",
+        "\x00",
+        "=?\x00?q?\x00?=",
+        "%" * 20,
+        "%zz",
+        "=?utf-8?q?日本.pdf?=",
+        "=?utf-8?b?éééé?=.pdf",
+    ],
 )
 def test_no_name_makes_the_rule_raise(filename: str) -> None:
     assert isinstance(is_pdf_part(part(OCTET, filename)), bool)
@@ -536,6 +568,18 @@ def test_each_listed_word_reaches_decode_header_once_and_no_codec_lookup_is_made
     assert decode_part_name(name) == "abc=?nosuch?q?d?="
     assert calls.words == ["=?utf-8?q?a?=", "=?LATIN_1?q?b?=", "=?cp1252*en?q?c?="]
     assert calls.lookups == []
+
+
+def test_a_listed_charset_that_this_runtime_lacks_is_kept_as_received(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A stripped (frozen) build may lack a listed codec; the fragment must not raise.
+    monkeypatch.setattr(mime, "LISTED_CHARSETS", mime.LISTED_CHARSETS | {"nosuch"})
+    word = "=?nosuch?q?a.pdf?="
+    value = "nosuch''%41.pdf"
+
+    assert decode_part_name(word) == word
+    assert decode_part_name(value) == value
 
 
 def _filled(prefix: str, suffix: str, size: int) -> str:

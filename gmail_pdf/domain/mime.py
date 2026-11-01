@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from email.errors import HeaderParseError
 from email.header import decode_header
-from urllib.parse import unquote_to_bytes
+from urllib.parse import unquote
 
 from gmail_pdf.domain.models import PartInfo
 
@@ -109,10 +109,22 @@ def normalise_content_type(value: str) -> str:
 def decode_part_name(name: str) -> str:
     """Decode an RFC 2047 or RFC 2231 encoded file name; never raises, never logs.
 
-    Bytes that are invalid in their charset become U+FFFD. A fragment that cannot be decoded
-    (a charset not in ``LISTED_CHARSETS``, bad base64, unfinished word) is kept exactly as
-    received, and the rest of the name is still decoded. A charset outside the list is never
-    looked up. A name longer than ``MAX_NAME`` characters is returned as received, undecoded.
+    A name of the shape ``charset'language'text`` whose charset is in ``LISTED_CHARSETS`` is read
+    as an RFC 2231 value, and any other name as RFC 2047 words, so an ordinary name of that shape
+    is rewritten too: ``latin1'draft'report.pdf`` gives ``report.pdf`` (detection is not
+    affected, since the suffix survives; naming decides whether to keep the rewrite). Only the
+    ``%XX`` runs of an RFC 2231 value are decoded with its charset.
+
+    An encoded word in a listed charset is always decoded, whatever its text holds: bytes that
+    are invalid in the charset become U+FFFD, and raw non-ASCII text (``=?utf-8?q?`` followed
+    by Japanese characters, say) is decoded as the standard library does, so a name that ends
+    in ``.pdf`` keeps that ending and is a PDF (PGD-18 c.10380: losing a real PDF is the worse
+    error). Tests pin the verdict for such words, not their text.
+
+    Only a fragment that cannot be decoded at all is kept exactly as received, and the rest of
+    the name is still decoded: a charset not in the list (it is never looked up), bad base64,
+    an unfinished word. A name longer than ``MAX_NAME`` characters is returned as received,
+    undecoded. Any other name is returned unchanged.
 
     Args:
         name: A part's ``filename``, possibly holding encoded words or an RFC 2231 value
@@ -195,8 +207,9 @@ def _decode_extended(charset: str, escaped: str) -> str | None:
     if key not in LISTED_CHARSETS:  # never reaches a codec lookup
         return None
     try:
-        return _decode_bytes(unquote_to_bytes(escaped), key)
-    except ValueError:  # a lone surrogate cannot be turned into bytes
+        # Only the ``%XX`` runs are decoded with the charset; other text passes through as it is.
+        return unquote(escaped, encoding=key, errors="replace")
+    except LookupError:  # a listed codec that this runtime lacks
         return None
 
 
