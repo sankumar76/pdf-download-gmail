@@ -1,7 +1,8 @@
 """Records shared by the application and its front ends (architecture 4.1).
 
-Only what the date-range slice needs exists so far; the other records of the model (message
-plans, PDF candidates, outcomes) arrive with the stories that use them.
+Only what the date-range slice and the PDF-part rule need exists so far (``RunRequest``,
+``MessageRef``, ``RunSummary`` and the part metadata ``PartInfo``); the other records of the
+model (message plans, PDF candidates, outcomes) arrive with the stories that use them.
 """
 
 from __future__ import annotations
@@ -53,6 +54,29 @@ class MessageRef:
 
     message_id: str
     internal_date_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class PartInfo:
+    """The metadata of one message part: all that ``domain.mime`` reads (NFR-016).
+
+    There is deliberately no field for the part's content: the body is fetched, and decoded,
+    only for a part already judged to be a PDF.
+
+    Attributes:
+        part_id: Gmail ``partId`` (dotted path, ``""`` for the root part).
+        mime_type: The part's type as received; it may have another case or parameters.
+        filename: Gmail's ``filename`` field as received; ``""`` when the part has none. The
+            ``Content-Type name=`` and ``Content-Disposition filename=`` headers are not read.
+        size: Gmail ``body.size`` in bytes.
+        has_attachment_id: True when the body sits behind an ``attachmentId``.
+    """
+
+    part_id: str
+    mime_type: str
+    filename: str
+    size: int
+    has_attachment_id: bool
 
 
 @dataclass(frozen=True, slots=True)
