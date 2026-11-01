@@ -1935,3 +1935,142 @@ Earlier conditions: C11–C14, C20, C23, C25, C26, C29, C31, C32 (extended), C33
 **Risks:** RISK-028 re-scored to 8 🟡. RISK-010 note, score unchanged.
 
 **Posted:** PGD-1 c.10391.
+
+---
+
+## G6 – Peer Review — STORY-03.01 (PGD-18), attempt 2 — 2026-11-01
+
+- **Decision:** CONDITIONAL GO (D-125). Orchestrator: PGD-18 to Changes Requested, label `gate:g6-changes`; developer C56; reviewer-quality one comment on H2; then In QA, `gate:g6-pass`
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no
+- **Attempt:** 2, loop 2 of 3. Head `c61e2e0`, base `main` `5b705a5`. Scale: D-111. Exit rule: D-120
+- **Artefacts evaluated:**
+  - Reviews 5726252665 (standards), 5726272084 (quality), 5726304957 (performance), bodies and all inline comments on the head read with `gh api`; corrections 6553115054; consolidation 6553126968; G5 rerun 6552868126; fix table 6552839996; SA 6552934964. All three `COMMENTED`, APPROVE WITH COMMENTS, none `CHANGES_REQUESTED`.
+  - Jira PGD-18 description, c.10394, c.10396, c.10406, c.10407, c.10411, c.10416, c.10418; PGD-84; PGD-1 c.10395, c.10409, c.10410, c.10414, c.10419; #48, #49.
+  - Source at `c61e2e0`: `gmail_pdf/domain/mime.py` in full, `test_mime_pdf_rule.py` lines 20..404 and the fixture and `perf` test; `git diff --stat e0d11c1..c61e2e0`; PR body. Architecture lines 445, 599, 885. PRD lines 320, 388. Plan lines 129..131, 149..150. D-116..D-124, D-44, D-47, D-65, D-79, D-92. CLAUDE.md section 10 at `b3a7fd9`.
+  - Check runs on the head: 10/10 `pass`, run 41268440412, read by master. `mergeable` true. PR labels `ai-delivery`, `feature`: no gate label today, though c.10393 said `gate:g6-changes`; the orchestrator sets it.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Above, all on the head |
+| 2 | Zero open Blocker/Critical | ✱ | ✅ | QUA-74 closed: master's rows, M1 fails 14 |
+| 3 | Majors fixed or accepted | | ✅ | PERF-21, PERF-22, PERF-26, QUA-75 closed. No new Major |
+| 4 | Findings cite file:line | | ✅ | All; STD-95 and QUA-85 also name the PR body |
+| 5 | H frozen, scope, CI | | ✅ | Two files, both in scope; 10/10; orchestrator 2065 passed, 12 skipped, 5 deselected, 99.90 %; base current |
+| 6 | Architecture acknowledgement (D-44) | | ✅ | Three acknowledged, none required removed (D-129) |
+| 7 | T-05 | | ✅ | reviewer-standards' grep of the delta |
+| 8 | #13 (RISK-021) | | ✅ | `builders.py` not in the delta, so the reading carries (D-121) |
+| 9 | F0 | | ✅ | Master: `LISTED_CHARSETS` equals c.10394's 59 names; cap 4,096; 43 codecs; no barred name |
+| 10 | Listed fix items | | ⚠️ | F7, F8 text missed. C56 |
+
+| # | Result | Verifier | Evidence |
+|---|---|---|---|
+| F1 | ✅ | quality, master | 7 named rows; M1 fails, 14 on both runs |
+| F2 | ✅ | quality | 12,700 white-space cases, 0 changes; M2 fails |
+| F3 | ✅ | performance | First statement; tripwires; 4,096 and 4,097; M3, M4 fail |
+| F4 | ✅ | performance, master | 400 names, independent counters, all 0; M5 32, M6 44 on both runs; M7 fails |
+| F5 | ✅ | performance | Counts by `calls.words` and the cache; PERF-27 not a miss |
+| F6 | ✅ | quality | Rows and docstring; one sentence over-reaches, C56 |
+| F7 | ⚠️ | quality | Code and rows verified; text missed (QUA-85) |
+| F8 | ⚠️ | quality | Rows verified; text missed (QUA-85) |
+| F9 | ✅ | quality | Six rows; Q1..Q6 fail |
+| F10 | ✅ | standards | The escape, no literal in either file |
+| F11 | ✅ | standards | Build row against `ci.yml`; STD-95 closes with C56 |
+
+**Master's probes** (`git archive` of `c61e2e0` and `e0d11c1` in the scratchpad, folder `g6m18b`; `drive.py` proves, in the child's environment and with no socket call, that `socket_guard` comes from the export, `socket.socket.connect` is `guarded_connect` and `mime.py` comes from the export, before any child starts; each mutant copy is proven again before pytest; each script asserts it again first. Windows, CPython 3.12.10. Nothing deleted; the worktree not written.)
+
+| Row | Result on the head |
+|---|---|
+| Baseline, two test files | 495 passed, 5 deselected |
+| M1 / M5 / M6 | 14 / 32 / 44 fail |
+| `utf-16''a.pdf` | True. `e0d11c1`: False |
+| `utf-16''a%2Epdf`, `utf-16''50%.pdf`, `utf-16'draft'a%20b.pdf`, `utf-16le''100%25.pdf`, `utf-16be''a%2Epdf` | False, as on `e0d11c1` |
+| `cp1252'draft'a%20b.pdf`, `utf-16le''a%00.%00p%00d%00f%00` | True |
+| `=?utf-16?q?a.pdf?=`, `=?utf-16le?q?a.pdf?=`, `=?utf-16be?q?a.pdf?=` (mine) | False |
+| `=?iso-2022-jp?q?=1B.pdf?=`, `=?iso-2022-kr?q?=1B.pdf?=`, `iso-2022-jp''%1B.pdf`, `iso-2022-kr''%1B.pdf` (mine) | False |
+| Sweep of 59: `<c>''a%2Epdf`, `=?<c>?q?a.pdf?=` | False for the three UTF-16 names only, in both forms |
+| `report'draft' =?utf-8?q?a.pdf?=` | True. `latin1'draft' ...`, `ascii'x'...`, `utf-8''=?...`: False, as on `e0d11c1` |
+| Profile events per warm call, 50 shapes, 4 calls each | No shape varies; `U5` 20,205 on each of 30; largest 31,935 (`L3`) |
+| `U5`, 3 processes, 3,000 calls each, paired with a control | Median 1.51 to 2.17 ms, max 8.2, 18.9, 20.2; none over 50. Control max 15.1, 33.2, 38.9 |
+| 50 shapes, 300 calls each, 3 runs | Worst median 2.6, 12.0, 2.9 ms. Worst max 5.7, 41.8, 60.4 (`L5`, one call, median 2.8) |
+| Fix text on a scratch copy | `ruff check`, `ruff format --check` clean; 497 passed; `mime.py` AST equal with docstrings aside; no line over 100; `decode_part_name` 40 lines; `mime.py` 235, test file 720 |
+
+Limits: Windows, 3.12.10, shared host. 3.10, 3.11, Ubuntu, macOS are CI's. No frozen build. No real Gmail. reviewer-performance's shape list was imported read-only from its folder.
+
+**Warm limit (D-126).** F3, F4, F5 pass. The limit reads as the code's cost for a shape; as a single sample it fails on this host, on three of performance's calls and one of mine. The code's work is fixed, `U5` did not repeat 52.3 in 9,000 calls, and a lone call moves between shapes.
+
+**Ratings** (D-127)
+| Finding | Reviewer | Master | Disposition |
+|---|---|---|---|
+| QUA-85 | Minor | Minor, a miss on F7 and F8, wider by one sentence | C56 |
+| QUA-86 | Minor | Minor, not an F1 miss | #49 |
+| STD-92 | Minor | Minor | #48, no commit |
+| QUA-87 | Info | Info | Note in C56; optional row #48 |
+| QUA-88 | Info | Info, seven names | #48 |
+| STD-93 | Info | Info | #48, if touched |
+| STD-94 | Info | Info | Listed in C56 (D-65 (4)) |
+| STD-95 | Info | Info | Closes with C56: the fix makes `mime.py` 235 lines |
+| PERF-27 | Info | Info, not a miss on F5 | #48 |
+| PERF-28 | Info | Info | #48 |
+
+**Fix.** The exact hunks are in PR #47 c.6553274197, and they are binding text. In short: `mime.py` line 23, lines 114..116, lines 120..122, line 210; test file lines 231, 359, 363, 366, and two rows after 364; PR heading and notes 1, 3, 4; Dev Record current. No code.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C56 | developer (fix); reviewer-quality (verifies); orchestrator (G5 rerun, CI) | `gmail_pdf/domain/mime.py` docstring and comments only; `tests/unit/test_mime_pdf_rule.py`; PR #47 body | One commit: the text of c.6553274197, D-128. reviewer-quality posts one comment on H2: each hunk as written, both rows False, `mime.py` code equal to `c61e2e0` with docstrings aside, printed. CI 10/10 on H2; rerun 2067 passed, 12 skipped, 5 deselected. One correction, no loop. A second miss, a code change or a file outside the scope opens attempt 3, loop 3 of 3, the last | Before G7 starts; master confirms as G7 check 0 |
+| T-17 | orchestrator | #13 | Unchanged: closes after the merge (D-121) | After the merge |
+
+**At G7:** C56 check 0; QA tests H2 only; M1, M5, M6 fail; a hostile-name sweep shows no exception; rows per c.10394; NT-04, NT-05; `builders.py` unchanged. PGD-18 finishes under the earlier process (D-130).
+
+**At the merge request, named:** the list and cap as known limits (D-118), with QUA-85 and QUA-86; squash (D-108); section 10 as written, for him to correct (D-130); T-16; T-17 after it.
+
+**PGD-84:** D-122's "after PGD-18's G6 GO" is met when C56 closes, term (a). If C56 opens attempt 3, it waits. It stops at its merge request.
+
+**Rationale:**
+- Everything that decides a real PDF or bounds the work holds on the head. What failed is text saying more than the code does, and D-120 sent that to the same file.
+- The hard question was QUA-86, because my own row at attempt 1 looks like it. It is not the same name: a listed first token makes it an RFC 2231 value under QUA-77's ruling, and no AC says otherwise.
+- The warm limit failed on my words, not on the code. Saying so is better than reading the number away.
+
+**Posted:** PR #47 c.6553274197 (edited once, two claims narrowed to what ran); Jira PGD-18 c.10429; #48 c.6553265902; #49 c.6553265425.
+
+---
+
+## Delivery mode change — no gate — 2026-11-01
+
+**Not a gate decision.** D-130, D-131. Source: Santhosh in chat, "go lighter", relayed by the session coordinator; PGD-1 c.10419 is the orchestrator's relay. Text: CLAUDE.md section 10, commit `b3a7fd9`, on the status branch, not on `main`. Master read the diff: 28 lines added at the end, none changed. Applies to every story started after PGD-18; PGD-18 finishes under the earlier process; PGD-84 runs under it.
+
+**The sprint close and the sprint-02 G4 are not started, on the coordinator's word.** Section 10 does not remove G4 from section 3. While none is held, a condition due "sprint-02 G4" falls due before the first story it names is Ready, or at the R1 G8 if it names none; the DoR reads it.
+
+| Condition | Reading under section 10 | Due now |
+|---|---|---|
+| C52 (b) | Stands: a read on a date, no ceremony. "Plan it at the sprint-02 G4" reads "at the next planning point" | 2026-11-12 |
+| C53 (c) | Stands | PGD-84's merge request: AC-10, PQ-06 (c), capacity, RISK-028 evidence |
+| C53 (b) | **Closed by reading PGD-84:** ten ACs, AC-7 per D-124, DoR READY | |
+| C53 (d) | **Closed by reading PRD v0.7** lines 319, 388, item 14 | |
+| C54 | **Closed by reading the plan at `b3a7fd9`,** lines 129..131, 149..150. No ceremony needed. New #48 and #49 items reach the rows through the issue numbers | |
+| C55 | **Closed by reading PRD v0.7,** PA-14, with its W3 check | |
+| T-16, T-17 | Stand | As recorded |
+| T-05 | Stands: secret protection. The combined review does the grep until #23 closes | Each G6 |
+| D-44 | Stands when a review lists a deviation: one SA comment. The routine comment falls away | Before G7 GO |
+| C33 (Jira, D-102 addition), C37 (b, c, d), C38 (b, c) | Stand: real Gmail is next | C33, C37 (b), C38 (b): before STORY-02.04 is Ready. C37 (c): as recorded. C37 (d), C38 (c): before STORY-01.04 is Ready |
+| C36, C12 | Stand | Before STORY-02.08 and STORY-02.09 are Ready |
+| C23, C25, C26, C29 (extended), C31 | Stand: secret protection and exit behaviour | Before the story each names is Ready; C26 before STORY-01.04 is Ready |
+| C11 | Stands | Before any EPIC-09/10 story is Ready |
+| C20, C46 | Stand | C20: the next story that changes `tests/support/`. C46: before STORY-07.01 is Ready |
+| C44, C48 (d), C13, C14 | Stand | R1 G8 at the latest; CC-07 before an R2 DLG-03/SCR-06 story is Ready |
+| C32 (extended), C51 | **Split.** Stand: NT-06 split, DEF rows in section 14, the STORY-02.04 row past 500, R-12, OQ-4, plan header, PGD-82's wider reach. Fall away after PGD-18: "every new enforcement test mutated", "NT sweeps and wheel as written", "NT-03 rows run as written", the allow-list mutant (CI's allow-list check stays) | Before STORY-02.04 is Ready |
+
+**Fall away for stories after PGD-18:** mutants at G7, PGD-84's included; DEF-005's rerun, 17, 5, 3, 3; M lists; master's reruns at G6 and G7; NT-04 and NT-05 by master; every-zone matrices; `reviewer-standards` and `reviewer-performance` unless a change touches credentials, tokens or redaction; rating entries in the decision log unless truly risky to his data or credentials. Mutation and fuzz stay for secrets handling. **All of these stay for PGD-18.**
+
+**For PGD-84:** ten ACs in full, D-122's terms, D-123's rule on a drop, D-124, C53 (c). A drop or a yes after G7 is his decision, not the one fix round.
+
+**Risks:** RISK-030 new, 3 × 3 = 9 🟡. RISK-029, RISK-021, RISK-010 notes, scores unchanged.
+
+**Open to him:** whether section 10 stands as written; whether G4 and the sprint close are retired or only not started.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C57 | qa-engineer | `docs/07-qa/test-plan.md` | One line in the plan's header or section 4: after PGD-18 section 10 overrides its mutation and sweep lines, secrets handling excepted | Before PGD-84's G7 report; ⚠️ only |
+
+**Posted:** PGD-1 c.10430.
