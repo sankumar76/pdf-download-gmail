@@ -17,10 +17,12 @@ import sys
 import threading
 import warnings
 from collections.abc import Callable, Iterator
+from zoneinfo import available_timezones
 
 import pytest
 
 from gmail_pdf import redaction
+from gmail_pdf.domain import validation
 from tests.support import socket_guard
 from tests.support.redaction_pins import THIRD_PARTY_LOGGERS
 
@@ -39,6 +41,16 @@ def pytest_unconfigure(config: pytest.Config) -> None:
     if _restore_sockets is not None:
         _restore_sockets()
         _restore_sockets = None
+
+
+@pytest.fixture
+def no_kolkata_data(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """A broken install: ``available_timezones()`` has no ``Asia/Kolkata`` (AC-8)."""
+    without = frozenset(available_timezones()) - {validation.FALLBACK_ZONE_NAME}
+    monkeypatch.setattr(validation, "available_timezones", lambda: set(without))
+    validation._known_zones.cache_clear()
+    yield
+    validation._known_zones.cache_clear()  # the next test reads the real set again
 
 
 @pytest.fixture(autouse=True)

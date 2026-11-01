@@ -62,6 +62,11 @@ RANGE_REVERSED_TEMPLATE = (
 )
 ZONE_NOT_IANA_TEMPLATE = "{field}: Unknown time zone. Use an IANA name such as Asia/Kolkata."
 END_IN_FUTURE_WARNING = "End date is in the future. Only mail received so far is included."
+# PGD-84 AC-10 (droppable): the notice that dates use the fallback zone. ``{zone}`` is the zone
+# name and ``{field}`` the front end's name for the zone input (STD-55: no flag name here).
+ZONE_FALLBACK_WARNING_TEMPLATE = (
+    "The system time zone could not be identified, so dates use {zone}. Use {field} to change it."
+)
 
 # Gateway and retry (PGD-15 AC-7): fixed sentences, no URL, query or response text.
 GMAIL_HTTP_ERROR_TEMPLATE = "Gmail answered the request with HTTP {status}."

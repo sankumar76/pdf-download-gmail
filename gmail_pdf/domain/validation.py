@@ -183,8 +183,14 @@ def validate(raw: RawInput, today: Callable[[tzinfo], date]) -> ValidationResult
         return ValidationResult(tuple(errors), ())
 
     zone_name = raw.zone_name
-    if zone is None or zone_name is None:  # no name was given: the fallback (PGD-84)
+    if zone is None or zone_name is None:  # no name was given: the fallback (PGD-84 AC-1)
         zone, zone_name = _fallback_zone(), FALLBACK_ZONE_NAME
 
-    warnings = (messages.END_IN_FUTURE_WARNING,) if end > today(zone) else ()
+    warnings: tuple[str, ...] = ()
+    if raw.zone_name is None:  # AC-10: say so, first, because the next check ran in this zone
+        warnings += (
+            messages.ZONE_FALLBACK_WARNING_TEMPLATE.format(zone=zone_name, field=raw.names.tz),
+        )
+    if end > today(zone):
+        warnings += (messages.END_IN_FUTURE_WARNING,)
     return ValidationResult((), warnings, RunRequest(start, end, zone_name))

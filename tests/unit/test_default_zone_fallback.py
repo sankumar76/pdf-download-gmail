@@ -10,10 +10,9 @@ this file stands whether or not AC-10 is kept. "Today" is a clock frozen at 2026
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from datetime import date, datetime, timezone
 from pathlib import Path
-from zoneinfo import available_timezones
 
 import pytest
 
@@ -82,16 +81,6 @@ def build_deps_calls(monkeypatch: pytest.MonkeyPatch) -> list[None]:
 
     monkeypatch.setattr(cli_main, "build_deps", spy)
     return calls
-
-
-@pytest.fixture
-def no_kolkata_data(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """A broken install: ``available_timezones()`` has no ``Asia/Kolkata`` (AC-8)."""
-    without = frozenset(available_timezones()) - {validation.FALLBACK_ZONE_NAME}
-    monkeypatch.setattr(validation, "available_timezones", lambda: set(without))
-    validation._known_zones.cache_clear()
-    yield
-    validation._known_zones.cache_clear()  # the next test reads the real set again
 
 
 # ----------------------------------------------------------------------------------- AC-1
