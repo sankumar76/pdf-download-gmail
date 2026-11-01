@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.2 |
+| Version | 0.3 |
 | Owner | solution-architect |
-| Date | 2026-10-29 |
-| Status | In Review (G3 condition C10 closed; G4 entry). C9 outcome: ux-spec v0.3 (4f1536f) accepts UX-I-01..06 and defines R-COUNT, adopted here (§17.4) |
-| Inputs | **PRD v0.4** (commit 5dc3289; PD-17..PD-20; current; v0.3 f1ba385 was the version reviewed at G3), release-plan v0.2, requirements-catalog v0.2+, RD (Oct 28, 2026), decisions D-01..D-34 (D-29: shadcn/ui not used), delivery-lead decisions of 2026-10-29 (PGD-1 comment 10108), RISK-001..019, coding-standards and DoD as amended (commits e71302b, 834f7d2, 481a46f), **UX spec v0.3** (commit 4f1536f; current; C9 outcome and R-COUNT; v0.2 d200c27 was the version reviewed at G3) + wireframes (reconciled in §17), G3 record (gate-log, conditions C9–C11) |
+| Date | 2026-11-01 |
+| Status | In Review (G3 condition C10 closed; G4 entry). C9 outcome: ux-spec v0.3 (4f1536f) accepts UX-I-01..06 and defines R-COUNT, adopted here (§17.4). **v0.3 designs D-114 (§6.3.1, not built: `main` still exits 2 until the carrier merges)** |
+| Inputs | **PRD v0.6** (commit dce76d9; PD-21, PA-13, PQ-05, PQ-06; read for D-114 only, §18), **PRD v0.4** (commit 5dc3289; PD-17..PD-20; v0.3 f1ba385 was the version reviewed at G3), release-plan v0.2, requirements-catalog v0.2+, RD (Oct 28, 2026), decisions D-01..D-34 (D-29: shadcn/ui not used), delivery-lead decisions of 2026-10-29 (PGD-1 comment 10108), RISK-001..019, coding-standards and DoD as amended (commits e71302b, 834f7d2, 481a46f), **UX spec v0.3** (commit 4f1536f; current; C9 outcome and R-COUNT; v0.2 d200c27 was the version reviewed at G3) + wireframes (reconciled in §17), G3 record (gate-log, conditions C9–C11) |
 | Jira | [PGD-1](https://sankumar76.atlassian.net/browse/PGD-1) |
 | Companions | [ADR index](#13-architecture-decisions) · [test-strategy.md](test-strategy.md) |
 
@@ -142,7 +142,7 @@ flowchart TB
 | Component | Module | Responsibility | Key FRs |
 |-----------|--------|----------------|---------|
 | Models | `domain/models.py` | Frozen dataclasses and enums: `RunRequest`, `MessageRef`, `MessagePlan`, `PdfCandidate`, `Outcome` (one CSV row), `RunSummary`, `Status` (LOG-03 values only), `RunResult`, `ExitCode` | FR-041, 042, 043 |
-| Validation | `domain/validation.py` | One set of rules and messages for CLI and GUI: date format, start ≤ end, future-end warning, IANA zone, output path not a file, query length | FR-015, 048 |
+| Validation | `domain/validation.py` | One set of rules and messages for CLI and GUI: date format, start ≤ end, future-end warning, IANA zone, output path not a file, query length. From D-114 it also holds the default zone `FALLBACK_ZONE_NAME` and applies it (§6.3.1), so both front ends share it | FR-008, 015, 048 |
 | Date range | `domain/daterange.py` | Local start 00:00 and next calendar day 00:00 in the zone → epoch seconds; `contains(internal_date_ms)` | FR-008, 012 |
 | Query builder | `domain/query.py` | Builds the baseline and recall-sweep queries (§6.2) plus the user `--query` text | FR-009, 010, 017 |
 | MIME walker | `domain/mime.py` | Recursive walk of the `messages.get(format=full)` payload incl. `multipart/*` and `message/rfc822`; PDF rule (FR-019); part order = document order; RFC 2047/2231 decoding of names | FR-018, 019, 025 |
@@ -159,7 +159,7 @@ flowchart TB
 | File store | `infra/file_store.py` | Output-folder resolution, containment check, temp file + `fsync` + no-clobber atomic move, directory listing for the allocator | FR-027, 028, 031 |
 | Manifest | `infra/manifest.py` | Load/validate snapshot + journal, append records, compact, last-good backup (ADR-004) | FR-029, 030, 032, 033, 034 |
 | Audit | `infra/audit.py` | Run log (`logging.FileHandler` + redaction filter) and CSV writer (row flushed per outcome, formula-injection neutralised) | FR-039, 040, 041, 046 |
-| Time zone | `infra/tz.py` | System IANA zone via `tzlocal`, `ZoneInfo` with `tzdata` fallback (ADR-002) | FR-008 |
+| Time zone | `infra/tz.py` | System IANA zone via `tzlocal`, `ZoneInfo` with `tzdata` fallback (ADR-002). Reports "no usable system zone" as `None`; it owns no default of its own beyond `resolve_zone(None)` reading the same constant (§6.3.1, D-114) | FR-008 |
 | Paths | `infra/paths.py` | OS-specific defaults for secrets and output (ADR-003, §8.2) | FR-002, 004 |
 | Redaction | `redaction.py` | The one redaction path: secret registry + patterns, `logging.Filter`, `safe_message(exc)`, `sys.excepthook`/`threading.excepthook` installers | FR-005; NFR-012 |
 | Composition root | `bootstrap.py` | Wires infra adapters into `Deps` for the CLI and the GUI (one place, so parity holds) | FR-064 |
@@ -356,6 +356,65 @@ sequenceDiagram
   R-->>FE: RunSummary (exit code)
 ```
 
+### 6.3.1 Default time zone (D-114, PRD v0.6 PD-21)
+
+**Status: design. Not built.** `main` keeps the PGD-16 behaviour (exit 2) until the carrier merges (D-114). The diagram above still shows validation inside `runner`; the merged order is parse, validate, print warnings, `build_deps`, run (PGD-16 ruling, document text pending on #34).
+
+**Rule.** With no `--tz`, when no usable system zone is found, the run uses `Asia/Kolkata` and goes on. A given `--tz` is never looked up and a bad one stays exit 2 with the AC-4 sentence.
+
+**Where it lives.** The fallback sits in `domain/validation.py`, because `validate` is the one builder of `RunRequest` and the one place both front ends share.
+
+| Module | Change | Why it holds |
+|--------|--------|--------------|
+| `domain/validation.py` | New constant `FALLBACK_ZONE_NAME = "Asia/Kolkata"`, beside `EARLIEST_DATE`. New `is_known_zone(name)` over the cached zone set. `RawInput.zone_name is None` no longer rejects: once the dates pass, the zone is `FALLBACK_ZONE_NAME` and `RunRequest.tz` holds that name | **Validation needs no `Deps`:** it reads a constant. The file stays free of I/O beyond the zone database read it already has |
+| `infra/tz.py` | `system_zone_name()` still returns `None` for D-75's classes and an empty name. It also returns `None` when `tzlocal` names a zone, that name is unknown and the fallback is unknown too (no time-zone data, see below). `resolve_zone(None)` reads `system_zone_name() or FALLBACK_ZONE_NAME`, so its `ValueError` goes; a validated request never passes `None` | **It is the only code that runs only when no `--tz` was given** (`args.raw_input`), so "this name was not typed" needs no new field on `RawInput` |
+| `cli/args.py`, `cli/main.py`, `bootstrap.py` | No logic change. `--tz` help text gains its clause (FR-045) | **`cli` imports no `infra` (D-76):** the `cli` import list does not change and neither does the layering rule at the end of §4; `infra` importing `domain` is already allowed. **A given `--tz` never looks the zone up:** `raw_input` still calls `system_zone` only when `--tz` is absent |
+| `domain/messages.py` | One template, only if the line stays | See "The visible line" |
+
+Every consumer (range, future-end check, file-name dates, log times) reads `RunRequest.tz`, so one run has one zone and nothing re-reads the system.
+
+**The visible line (PQ-05, coordinator's, not ruled).** It is one more row in `ValidationResult.warnings`, printed by the loop in `cli/main.py` that already prints the future-end warning. No new print call.
+- Template in `domain/messages.py` with `{zone}` and `{field}`, because the table holds no flag name (STD-55). Wording is ux-expert's.
+- **To drop it:** delete the template and the one branch in `validate` that adds the row. The fallback does not change, because the row reads the fallback and the fallback does not read the row.
+
+| Case | Line printed? | stderr order |
+|------|---------------|--------------|
+| Real run, fallback in force | Yes, once | zone line, future-end warning if any, then what the run prints |
+| Dry run (flag arrives with STORY-07.01) | Yes, same path: `validate` does not know the mode | Same. stderr is not the output folder (FR-044) |
+| Failed run or failed dry run (`build_deps`, sign-in, list call) | Yes | zone line, future-end warning if any, then the fixed error line (QUA-63 precedent) |
+| Rejected input (bad date, reversed range) | No: warnings are empty when errors exist. The run used no zone | Date or range lines only, exit 2 |
+| No time-zone data (below) | No: nothing was assumed | One error line |
+| `--help`, or neither date | No: validation is not reached and nothing is looked up | Usage |
+
+The zone line comes first because the future-end verdict was reached in that zone. stdout never changes, so script output stays exact.
+
+**No time-zone data (broken install).** `tzdata` is a hard dependency (ADR-002), so this is a fault, not an input. With no `--tz`: exit **1** with `error: unexpected failure, see the run log`, which is `ZoneInfoNotFoundError` from `ZoneInfo(FALLBACK_ZONE_NAME)` reaching the last line of defence in `main`.
+- It is never the "Unknown time zone" sentence and never a run in another zone.
+- It is raised after the date checks, so a bad date still gets its date line and exit 2. D-75 objected to that line being lost.
+- Exit 1, not 2: FR-043 keeps 2 for bad arguments and gives an unnamed fault exit 1 (PD-13). The user cannot fix this by changing an argument.
+- No new sentence and no new exception type: the case needs an active uninstall. The cost is that the line points at a log that does not exist yet at this stage, as for every failure before a log opens.
+- With `--tz` typed, a broken install keeps today's AC-4 sentence, exit 2 (D-114: only the no-`--tz` limb moves). That sentence is misleading for `--tz Asia/Kolkata`. Noted, not in scope.
+
+**Why the named route matters.** On Windows `tzlocal` maps the registry with its own table and needs no `tzdata`, so a broken install gives a real system zone name, not `None`. A check on the `None` path alone would miss the route that actually happens.
+
+**A name `tzlocal` returns that `zoneinfo` does not know, on a healthy install (PQ-06 c).**
+
+| Install | Reachable? | Evidence |
+|---------|-----------|----------|
+| Windows 11, pinned `tzlocal` 5.4.5 and `tzdata` 2026.6 | No | 142 mapped names, 588 `TZ`-accepted names and all 27 `Etc/GMT` forms are in the 598-name set |
+| POSIX (best effort, NFR-020) | Yes | `/etc/timezone` text is returned unchecked: `Mars/Olympus` and `localtime` came straight back |
+
+Today that case exits 2 with the `--tz` sentence, for a user who typed no `--tz`; row `not-an-iana-name` pins it. It is not D-75's `None`: nothing raises. **Open for the delivery lead.** The design default keeps today's outcome (PRD PD-21 (c)). If he rules it "cannot be identified", `system_zone_name()` drops one clause, the name maps to `None`, and that row flips to IST. Nothing else moves.
+
+**Routes to the fallback on an undamaged Windows** (AR-07, input to RISK-028). The tzlocal 5.4.5 Windows function, run over a faked `winreg` (not a real registry), raises `ZoneInfoNotFoundError` for an intact key when DST is switched off in the four zones with a non-whole-hour standard offset that observe DST: Newfoundland, Cen. Australia, Lord Howe, Chatham Islands. It raises the same for a key newer than its table. These users are not in IST, and the fallback gives them a range that is wrong by hours.
+
+**GUI (R2).** The form shows `system_zone_name()`, else `FALLBACK_ZONE_NAME` from `domain`, and the field stays editable (PD-21 d). A pre-filled value reaches `validate` as a name, so the line does not fire there; the label replaces it (ux-expert at R2).
+
+**Tests that move with the AC.** Measured by a throwaway spike of this design on a copy of `5b705a5` (§18).
+- `tests/unit/test_cli_invalid_input.py`: `test_an_unusable_system_zone_without_tz_gets_the_zone_sentence` (7 of 8 rows; `not-an-iana-name` stays unless the delivery lead rules otherwise) and `test_an_unresolved_system_zone_comes_after_the_date_line`.
+- `tests/unit/test_daterange.py`: `test_an_unresolvable_system_zone_has_no_name_and_cannot_be_resolved` (7 rows; only its `resolve_zone(None)` tail changes, `system_zone_name() is None` stays).
+- `tests/unit/test_validation_zone_and_table.py`: `test_a_name_outside_the_iana_set_is_rejected_as_written_with_no_echo`, row `system-zone-unresolved`.
+
 ### 6.4 Retry and backoff (NFR-006)
 - Retryable: HTTP 429, 500, 502, 503, 504; 403 with reason `rateLimitExceeded` or `userRateLimitExceeded`; transport errors (`TimeoutError`, `ConnectionError`, `ssl.SSLError`, `httplib2.ServerNotFoundError`).
 - Not retryable: other 4xx (400, 401 after refresh, 403 other, 404) → the message/attachment gets an `ERROR` row (FR-036); `RefreshError` → `AUTH_FAILED`, exit 3.
@@ -369,6 +428,7 @@ sequenceDiagram
 | Success, no errors (including 0 PDFs found, FR-016) | `COMPLETED` | 0 | Yes (non-dry run) |
 | ≥ 1 `ERROR` row (FR-036) | `COMPLETED_WITH_ERRORS` | 1 | Yes |
 | Bad arguments / validation (FR-015, 045) | — | 2 | No (input validation not passed, GOAL-10 scope) |
+| **No time-zone data, no `--tz` (broken install; D-114, §6.3.1; design, not built)** | — | **1** | No (stops before a log opens). First line is the internal-failure line without a path |
 | `credentials.json` missing or **not a Desktop app OAuth client** (UA-12, checked before any flow), consent failed, `RefreshError` mid-run (FR-003, 006) | `AUTH_FAILED` | 3 | Yes (log + header-only or partial CSV) |
 | **Manifest unreadable or newer schema (FR-032, PD-18)** | `FAILED` | **1** | Log + header-only CSV; **no PDF written, manifest untouched** |
 | **Unexpected internal exception** | `FAILED` | **1** | Yes; redacted one-line message on console/GUI; redacted traceback in the log at `DEBUG` only |
@@ -489,7 +549,7 @@ The GUI cannot use CWD-relative defaults because a double-clicked app has an unp
 4. **Structural rules:** `Credentials` objects, HTTP headers and request URIs are never formatted into messages; third-party loggers (`googleapiclient`, `google_auth_oauthlib`, `urllib3`, `oauthlib`) are capped at `WARNING`; `httplib2.debuglevel` stays 0.
 
 ### 8.5 Input validation (TB-4, TB-6)
-- User inputs: §4.1 validation, one rule set; `--query` is passed to Gmail as data (no shell, no eval); IANA zone validated against `zoneinfo.available_timezones()`.
+- User inputs: §4.1 validation, one rule set; `--query` is passed to Gmail as data (no shell, no eval); IANA zone validated against `zoneinfo.available_timezones()`. A system zone that cannot be used is not user input: it takes the §6.3.1 path, not a rejection (the exception, a named zone on a healthy install, is open there).
 - Email-derived text: file names → §6.6; `From`/`Subject` → control characters escaped in logs; **CSV formula injection** neutralised (a cell starting with `=`, `+`, `-`, `@`, tab or CR gets a leading `'`; documented in the README); in the GUI every email-derived string is shown with `Qt.TextFormat.PlainText` (Qt labels otherwise auto-detect rich text).
 - MIME: recursion depth limit 32 and part-count limit 1,000 per message (malformed or hostile structures → `ERROR` row).
 
@@ -517,6 +577,8 @@ The GUI cannot use CWD-relative defaults because a double-clicked app has an unp
 
 ### 8.7 Audit logging
 The run log records: app version, sanitised parameters (paths, dates, zone, query length rather than full query at `INFO`; full query at `DEBUG` — AA-11), phase transitions, one line per decision (skip, save, rename, not-a-PDF, error with redacted reason), warnings, summary. No body text, no secrets.
+
+**Zone used (PQ-06 d).** No run log exists on `main`, so nothing records the zone yet. When STORY-07.02 builds the log, the zone parameter is `RunRequest.tz`, which always holds the concrete name, so a fallback run logs `Asia/Kolkata`. Three limits: the name alone does not say it was assumed; a dry run has no log (FR-044), so there the visible line is the only trace; and warnings printed by the front end before the log opens do not reach it by themselves, the future-end warning included. STORY-07.02 needs an AC for each it wants covered.
 
 ### 8.8 Supply chain
 ADR-002: runtime allow-list, exact pins with hashes (`pip-compile --generate-hashes`, dev-only tool), `pip-audit` on every PR, `bandit -r gmail_pdf`, gitleaks, licence check (Apache-2.0, MIT, BSD, LGPL-3.0 dynamic linking only).
@@ -602,8 +664,8 @@ PDF-Download-Gmail/
 | Language | CPython | 3.12 target, 3.10 min | CLAUDE.md §1 | PSF | — |
 | Gmail client | google-api-python-client | ≥ 2.x (pin at W1) | RD stack; static discovery | Apache-2.0 | ADR-002 |
 | Auth | google-auth, google-auth-oauthlib, google-auth-httplib2 | pin at W1 | RD stack; loopback flow (SEC-02) | Apache-2.0 | ADR-002, 003 |
-| Time-zone data | tzdata | latest at W1 | Windows has no IANA database for `zoneinfo` | Apache-2.0 | ADR-002 |
-| System zone name | tzlocal | ≥ 5 | Windows zone → IANA name (FR-008 default) | MIT | ADR-002 |
+| Time-zone data | tzdata | latest at W1 | Windows has no IANA database for `zoneinfo`; without it the default zone cannot load either (§6.3.1) | Apache-2.0 | ADR-002 |
+| System zone name | tzlocal | ≥ 5 | Windows zone → IANA name (FR-008 default). When it finds none, FR-008 uses `Asia/Kolkata` (PD-21, D-114, §6.3.1; design, not built). No new dependency | MIT | ADR-002 |
 | GUI | PySide6-Essentials (Qt 6 Widgets) | ≥ 6.8 (Qt LTS line; pin at W4) | §9 tokens via generated QSS, one button subclass, high-DPI always on, keyboard focus, UIA accessibility | LGPL-3.0 (dynamic linking via pip) | ADR-001 |
 | Tests | pytest, pytest-cov, pytest-qt, diff-cover | pin in dev | NFR-022; GUI tests | MIT / MIT / MIT / Apache-2.0 | ADR-002 (dev) |
 | Lint/format/type | ruff, mypy | pin in dev | CLAUDE.md §1 | MIT | — |
@@ -627,7 +689,7 @@ Every PRD v0.4 FR and NFR (commit 5dc3289) maps to at least one component (FR-00
 | FR-005 | redaction, infra.audit, cli.console, gui (all text surfaces) | §8.4 |
 | FR-006 | infra.auth, cli.main (exit 3), gui.dialogs.setup_help | Same steps text constant |
 | FR-007 (R3) | infra.auth `sign_out()`, gui | No revocation call (PD-04) |
-| FR-008 | domain.daterange, infra.tz, domain.validation | Calendar-day boundary |
+| FR-008 | domain.daterange, infra.tz, domain.validation | Calendar-day boundary; default zone §6.3.1 (PD-21) |
 | FR-009 | domain.query, infra.gmail_gateway | Epoch bounds ±1 s |
 | FR-010 | domain.query, cli.args, gui form | Appended as data |
 | FR-011 | infra.gmail_gateway | `nextPageToken` loop |
@@ -706,6 +768,7 @@ Every PRD v0.4 FR and NFR (commit 5dc3289) maps to at least one component (FR-00
 | AR-04 | No-clobber move needs hard links on POSIX; FAT/exFAT volumes lack them | Narrow race window (check-then-replace fallback) on such volumes | Windows uses `os.rename` (fails if target exists, no race); POSIX fallback documented; single-user tool | EPIC-05; GitHub issue (tech-debt) |
 | AR-05 | `attachmentId` staleness during long runs | Spurious ERROR rows | Re-fetch message once (§6.2) | EPIC-03 |
 | AR-06 | `\\?\` long-path handling on Windows untested | Write failures for deep folders | W1 test on Windows CI | EPIC-04 |
+| AR-07 (input to RISK-028) | The IST default also applies on an undamaged Windows: DST off in four zones, or a Windows zone newer than `tzlocal`'s table (§6.3.1). Faked `winreg`; frequency unmeasured | A user outside IST gets a range wrong by hours on a normal exit | Visible line if kept (PQ-05); carrier rows; master re-scores | STORY-02.10 (proposed carrier) |
 | TD-01 | Token stored as plaintext JSON protected only by OS ACL/permissions | Exposure if the profile is compromised | Accepted for MVP (RD contract); DPAPI encryption candidate | GitHub issue (tech-debt) |
 | TD-02 | CSV formula neutralisation alters cell text | Users see a leading `'` on some subjects | Documented in README | EPIC-07 |
 
@@ -732,6 +795,8 @@ Every PRD v0.4 FR and NFR (commit 5dc3289) maps to at least one component (FR-00
 | AA-10 | Google token prefixes (`ya29.`, `1//`, `GOCSPX-`) are heuristics; registry is the primary control | SA | — | Defence in depth only |
 | AA-11 | Full `--query` text logged only at DEBUG (may contain e-mail addresses) | PM | G4 (C8) | **Confirmed — PD-19** |
 | UA-12 (ux-spec v0.3) | The client-file check runs on its own, without starting the OAuth flow | SA | G4 | **Yes** — `check_client_file()` / `auth_status()` (§6.1, ADR-003 §4) |
+| PQ-06 (PRD v0.6) | The IST default: line behaviour, broken install, unknown name, zone in the log | SA | Carrier's DoR | **Answered in §6.3.1 and §8.7**, except (c) on POSIX, which is open with Santhosh. The default holds if he does not answer |
+| AA-12 | No name `tzlocal` returns on Windows is outside the `zoneinfo` set | SA | Re-check when `tzlocal` or `tzdata` pins change | Measured at the pins only; `pyproject.toml` does not pin them, so an unpinned install could differ |
 
 ---
 
@@ -749,6 +814,9 @@ Status as of v0.2 (2026-10-29). Items resolved at G3 or by the delivery lead sta
 | master | `# pragma: no cover` exception list | **Withdrawn.** D-31 supersedes D-25 in full: with the 80 %/80 % gates (D-30) no pragma exception is defined. A pragma in a diff is an ordinary review point under coding-standards §6 (test-strategy §5) |
 | master / reviewer-standards | coding-standards §10 `os.replace` vs "never overwrite"; §7 web budgets | **Resolved** — D-32 (supersedes D-26): amended coding-standards §10 and §7 (e71302b, 834f7d2); §10.2 applies it and master found the design conforming |
 | Santhosh (delivery lead) | AQ-02 (UI component-library preference) | **Closed** — ruled not applicable (D-29) |
+| product-owner | Draft ACs for STORY-02.10 (PGD-1 c.10381): AC-1 names `RunRequest.zone_name`, the field is `RunRequest.tz`. AC-8's Given must not say "fallback in force": the Windows route has a named system zone (§6.3.1); fill it with exit 1 and the unexpected-failure line, a bad date still winning. AC-7's first row needs "while `Asia/Kolkata` is known". AC-10 is a `warnings` row, no print call, zone line before the future-end warning | Open |
+| qa-engineer | Test plan NT-01 and NT-09 line counts gain the zone line when the fallback is in force, as they did for QUA-63 | Open, after the carrier's ACs |
+| master | RISK-028 likelihood rests on "rare"; AR-07 gives routes on an undamaged Windows | Open, for the re-score |
 | Santhosh (delivery lead) | The CLAUDE.md §1 build command installs runtime pins only; developers and CI also need `pip install -r requirements-dev.txt` (optional append-only note) | Optional FYI |
 
 ---
@@ -814,3 +882,4 @@ A later ux-spec change to any row above is re-checked by the solution-architect 
 |---------|------|--------|--------|
 | 0.1 | 2026-10-29 | solution-architect | First version for G3 (commit 75b7e47) |
 | 0.2 | 2026-10-29 | solution-architect | Closes G3 **C10**. Cites the current ux-spec v0.3 (4f1536f, C9 outcome) and PRD v0.4 (5dc3289) in the header, Inputs, §7, §12 and §17, naming v0.2 / v0.3 as the versions reviewed at G3; §17.4 records the C9 outcome against the committed v0.3. §5.2 and §10.2: run log and CSV opened with exclusive create and never replaced; PDFs by no-clobber move; `os.replace` only for the manifest snapshot and the token (coding-standards §10 `_1`/`_2` rule; D-32 supersedes D-26). §7 NFR-022: ≥ 80 % changed code and ≥ 80 % whole package (D-30), no pragma exceptions (D-31). Count refresh adopts ux-spec v0.3 R-COUNT: worker ≤ 10 Hz, window redraw ≤ 4 times a second (§4.3, §6.8, §7, §17.4); UX-I-05 fixed in §4.2; UX-I-01 counter-point accepted (ADR-001 row 10). AQ-01, AQ-02 (D-29) and AQ-05 closed; AQ-03/04 and AA-07/08/11 linked to C8 and closed by PD-18/PD-19 (PRD v0.4); NFR-009 and AR-03 take the PD-17 wording. UI component-library preference ruled not applicable (D-29). Windows 11 confirmed (Q-02); ASAP with R1 first (Q-01). §16 is now a status table |
+| 0.3 | 2026-11-01 | solution-architect | **D-114 (PRD v0.6 PD-21); answers PQ-06.** New §6.3.1: the default zone lives in `domain/validation.py`, `infra/tz.py` reports an unusable system zone as `None`, the visible line is one droppable row in `warnings`, a broken install exits 1. Follow-on rows: §4.1 Validation and Time zone, §6.5, §8.5, §8.7 (zone in the log), §11 tzdata and tzlocal, §12 FR-008, §14 AR-07, §15 PQ-06 and AA-12, §16. **Unchanged:** the layering rule (line 187) and ADR-002. **No ADR:** the fallback is one constant, adds no dependency and is cheap to reverse. **Evidence:** run on Windows with Python 3.14.7, not the 3.12 target, in a scratch copy of `5b705a5` with the hash-checked pins: the pinned `tzlocal` and `tzdata`, the merged CLI with `tzdata` off the path, and a throwaway spike of the design. Against the baseline of that copy the spike adds 16 failing rows in 4 test functions, the §6.3.1 list; the 65 failures and errors of the baseline were the same with and without the spike (the copy has no git repository, no `requirements.txt` and no installed package). mypy strict and ruff check pass on the spike. The registry cases used a faked `winreg`. **Not done here:** the #14, #20 and #34 amendments, still due at the sprint-02 G4, so §4.1's diagram and §6.3's sequence still show validation in `runner`. **Open:** PQ-05 (the line) and PQ-06 (c) on POSIX, with Santhosh |
