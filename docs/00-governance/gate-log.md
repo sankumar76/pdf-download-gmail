@@ -1764,3 +1764,20 @@ Earlier conditions: C47, C48 (a, b, c), C49 closed. C11–C14, C20, C23, C25, C2
 - The brief's premise, "only once the real gateway is wired", was true of the form filed and not of the class. Changing the input found that, as it did at D-67.
 
 **Posted:** PR #44 comment 6546989378; Jira PGD-17 c.10354 (edited once, to link the comment; the content is unchanged); PGD-82 c.10355; PGD-1 c.10356 (risks). Notes on #46 (6546999023), #45 (6546999670), #42 (6547000047).
+
+---
+
+## Recording after the merge of PR #44 — no gate — 2026-11-01
+
+**Not a gate decision.** D-105..D-110 record the delivery lead's relayed answers, the product-owner's half of D-97, the coordinator's merge-method decision and PR #44's trail. C52 carries D-105.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| C52 | scrum-master | `sprint-01-plan.md`; Jira PGD-18 | (a) The capacity row, line 7, states option A: the 30 stays an assumption, and the sprint closes at 37 if PGD-18 lands, 34 if not (D-97, D-105). (b) On 2026-11-12, read PGD-18: with no G7 GO, remove `sprint-01`, plan it at the sprint-02 G4, and post that the sprint closes at 34 on PGD-1 | (a) with the plan commit; ⚠️ only, it does not hold PGD-18's start. (b) 2026-11-12 |
+
+Earlier conditions: C11–C14, C20, C23, C25, C26, C29, C31, C32 (extended), C33 (Jira part), C36, C37 (b, c, d), C38 (b, c), C44, C46, C48 (d), C51 stay open, due as recorded.
+
+**Risks:** RISK-010 note, score unchanged. No new risk.
+
+**Posted:** PGD-1 c.10364.
