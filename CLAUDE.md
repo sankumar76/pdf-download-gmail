@@ -251,3 +251,31 @@ individual screens or widgets:
 ### 9.4 Applies to
 ux-expert (UX spec, wireframes), solution-architect (UI framework choice), developer
 (implementation), reviewer-standards and qa-engineer (verification against §9.2–9.3).
+
+---
+
+## 10. Lighter Delivery Mode (2026-11-01, delivery lead)
+
+Santhosh approved this mode on 2026-11-01 ("go lighter"). It applies to every story started
+after PGD-18 and **overrides any earlier section or agent definition that conflicts with it**.
+PGD-18 finishes under the earlier process.
+
+**Goal:** a usable tool soon. Connect real Gmail next (paging, pacing, sign-in), then a simple
+GUI: date picker, folder choice, progress bar, results list. Scope outside that goes to the
+delivery lead before it is built.
+
+**Per story:** developer, then one combined review, then one QA pass.
+- G6 is one review by `reviewer-quality`, covering correctness, standards and performance
+  together. `reviewer-standards` and `reviewer-performance` run only when a change touches
+  credentials, tokens or redaction.
+- `master` decides G6 and G7 from the review and QA results without re-running them. No
+  separate decision-log entries on ratings, unless a finding is truly risky to the delivery
+  lead's data or credentials.
+- At most one fix round per story before stopping to report.
+
+**Testing:** cover real behaviour. Aim for about 85 % coverage; the CI floor stays as
+configured. Mutation and fuzz testing apply only to secrets handling. No exhaustive
+matrices (for example every time zone) unless a bug calls for one.
+
+**Always kept:** credential and secret protection, CI on every PR, the delivery lead's merge
+approval, and checks that no file is missed or overwritten. Code PRs are squash-merged.

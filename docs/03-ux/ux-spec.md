@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.3 (G3 condition C9: UX-I-01..06 answered, one count-refresh rule, local credentials-file check; builds on v0.2, PRD v0.3 PD-11..16) |
+| Version | 0.3.1 (STORY-02.10 AC-10 wording, section 12 `--tz` row only); 0.3 (G3 condition C9: UX-I-01..06 answered, one count-refresh rule, local credentials-file check; builds on v0.2, PRD v0.3 PD-11..16) |
 | Owner | ux-expert |
 | Status | In Review (G3 conditional GO; C9 addressed, awaiting master) |
 | Inputs | PRD v0.3 (FR-001..066, NFR-017..021, PD-01..09), project brief v0.1 (P-01, P-02), requirements catalogue GUI-01..19, decision log D-01..D-28 (design-kit part of D-20 superseded, PGD-1 comment 10108), architecture §17.3 (UX-I-01..06), ADR-001 (PySide6, QSS limits), ADR-003 §4 (local client-file check), gate-log G3 C9, CLAUDE.md §9, RD §2.1 and §3 |
@@ -512,7 +512,7 @@ Small sample (one real user plus two proxy testers, UA-11); results are findings
 |------|---------|-------|
 | `--start`, `--end` | required | `YYYY-MM-DD`, inclusive |
 | `--out` | `./downloads` | created on a real run only |
-| `--tz` | system zone | IANA name |
+| `--tz` | system zone, else `Asia/Kolkata` | IANA name. When the system zone cannot be identified and `--tz` is not given, the run uses `Asia/Kolkata` and stderr shows one warning first: `warning: The system time zone could not be identified, so dates use Asia/Kolkata. Use --tz to change it.` Not shown when `--tz` is given or the system zone is found |
 | `--query` | empty | extra Gmail search text |
 | `--include-spam-trash` | off | |
 | `--dry-run` | off | writes nothing |
@@ -577,3 +577,4 @@ No stack trace and no secret in any of them (FR-005).
 | 0.1 | 2026-10-29 | Initial UX spec for G3: PQ-03 answered, tokens, 6 views, 8 dialogs, CLI interaction |
 | 0.2 | 2026-10-29 | Aligned to PRD v0.3: PD-11 MW-1/MW-2/DLG-03/DLG-04 text now advises a new output folder, never deleting the manifest; PD-12 clamp-to-work-area rule and 1920 × 1080 / 200 % matrix row; PD-13 distinct first lines for cancel, unreadable history and internal failure (GUI and CLI); PD-14 UA-07..09, UQ-05, UQ-09 closed; PD-15 shortcuts shown on screen; PD-16 `--help` / `-h`. Closed UA-04 (product rule), UA-07..10, UQ-05, UQ-09, UQ-10 |
 | 0.3 | 2026-10-29 | G3 condition C9. Section 0.1 answers UX-I-01..06 (all accepted; counter-points on reduced motion for the progress bar and on the scrim fallback). One GUI count-refresh rule R-COUNT: worker up to 10 Hz, window redraw at most 4 times a second. 7.1 line height becomes guidance (size and weight are the contract) and tabular-figure fallback; 7.2 `motion.fast` = 0 and new `layout.stat.min`; 7.3/7.5 scrim optional and dialog edge; 8.3 motion rewrite; DLG-07 gets the CLI sign-in sharing line; 12 second Ctrl+C behaviour. UJ-01, UJ-05, SCR-03, 6.B, 12: local wrong-credentials-file check (ADR-003 section 4, one text, closes UA-05); UA-12, UA-13, UR-9, UR-10 added. Framework line now PySide6; no third-party design kit is referenced (the delivery lead said to ignore it, PGD-1 comment 10108; v0.2 and the wireframes contained no such reference, checked by search) |
+| 0.3.1 | 2026-11-01 | STORY-02.10 AC-10 (PGD-1 c.10395; coordinator addition, not ruled on by the delivery lead, droppable). Section 12 `--tz` row: default is the system zone, else `Asia/Kolkata`, and the one `warning:` line shown in that fallback is settled: `The system time zone could not be identified, so dates use {zone}. Use {field} to change it.` (two sentences, fact then action, like the future-end warning; `warning: ` is added by the console, not the template; names the IANA zone, never `IST`, because `--tz IST` is rejected; "could not be identified" matches the delivery lead's wording for the fallback case). **Not changed, R2:** section 8 line 238 (Time zone default `Asia/Kolkata (system)`) is wrong when the system zone cannot be identified, and the GUI cannot reuse this sentence (`{field}` is a flag name; the window needs its own wording and a default label without "(system)"). Both go to the R2 stories. |
