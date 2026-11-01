@@ -34,7 +34,10 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         FLAG_TZ,
         metavar="ZONE",
-        help="IANA time zone of the days above, for example Asia/Kolkata (default: system zone).",
+        help=(
+            "IANA time zone of the days above, for example Asia/Kolkata "
+            "(default: system zone, or Asia/Kolkata when it cannot be identified)."
+        ),
     )
 
 
@@ -50,8 +53,9 @@ def raw_input(namespace: argparse.Namespace, system_zone: Callable[[], str | Non
 
     Args:
         namespace: The parsed options.
-        system_zone: Returns the system zone's IANA name, or ``None`` when it cannot be found.
-            It is called only when ``--tz`` was not given.
+        system_zone: Returns the system zone's IANA name, or ``None`` when it cannot be found
+            (the run then uses the fallback zone, PGD-84). It is called only when ``--tz`` was
+            not given, so a typed zone is never looked up.
     """
     typed_zone = getattr(namespace, "tz", None)
     return RawInput(

@@ -53,13 +53,23 @@ pytestmark = pytest.mark.req("FR-015", "NFR-024")
         pytest.param("America", id="a-directory"),
         pytest.param("Asia/Kolkata\x00", id="nul-byte"),
         pytest.param(f"Zone/{sentinels.CLIENT_SECRET}", id="sentinel"),
-        pytest.param(None, id="system-zone-unresolved"),
     ],
 )
-def test_a_name_outside_the_iana_set_is_rejected_as_written_with_no_echo(zone: str | None) -> None:
+def test_a_name_outside_the_iana_set_is_rejected_as_written_with_no_echo(zone: str) -> None:
     result = check(zone=zone)
 
     assert (result.errors, result.warnings, result.request) == ((ZONE_ERROR,), (), None)
+
+
+@pytest.mark.req("AC-1")
+def test_no_zone_name_means_the_fallback_zone_in_the_request() -> None:
+    # PGD-84: the system zone could not be identified (``zone_name`` None); this was a rejection.
+    result = check(zone=None)
+
+    assert (result.errors, result.request) == (
+        (),
+        RunRequest(date(2026, 1, 1), date(2026, 1, 31), "Asia/Kolkata"),
+    )
 
 
 @pytest.mark.req("AC-4")

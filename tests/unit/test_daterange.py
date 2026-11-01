@@ -272,15 +272,14 @@ def _raising(error: Exception) -> Callable[[], str]:
         pytest.param(_raising(TypeError("not a string")), id="type-error"),
     ],
 )
-def test_an_unresolvable_system_zone_has_no_name_and_cannot_be_resolved(
+def test_an_unresolvable_system_zone_has_no_name_and_resolves_to_the_fallback_zone(
     monkeypatch: pytest.MonkeyPatch, lookup: Callable[[], str]
 ) -> None:
     monkeypatch.setattr(tz_module.tzlocal, "get_localzone_name", lookup)
 
     assert tz_module.system_zone_name() is None
-    # An empty name must not fall through to ``ZoneInfo("")``.
-    with pytest.raises(ValueError, match="system time zone"):
-        tz_module.resolve_zone(None)
+    # PGD-84 AC-1: no name means Asia/Kolkata, and an empty name must not reach ``ZoneInfo("")``.
+    assert tz_module.resolve_zone(None) == KOLKATA
 
 
 def test_the_system_zone_name_is_the_one_tzlocal_reports(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -9,10 +9,8 @@ from the story. "Today" is a clock frozen at 2026-02-15 12:00 UTC.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfoNotFoundError
 
 import pytest
 
@@ -20,7 +18,7 @@ from gmail_pdf.bootstrap import ENV_FAKE_MAILBOX, ENV_TESTING
 from gmail_pdf.cli import main as cli_main
 from gmail_pdf.infra import tz as tz_module
 from tests.fakes.fake_time import FixedInstantClock
-from tests.support import sentinels
+from tests.support import sentinels, system_zone
 from tests.support.cli_inprocess import must_not_be_called, use_hook
 from tests.support.mailboxes import RANGE_ARGS, write_edge_mailbox
 
@@ -220,42 +218,15 @@ def test_a_zone_outside_the_iana_set_is_rejected_as_written_in_both_modes(
     assert (code, captured.err, captured.out, created) == (2, ZONE_ERROR + "\n", "", [])
 
 
-def _empty_name() -> str:
-    return ""
-
-
-def _not_an_iana_name() -> str:
-    return "Mars/Olympus"
-
-
-def _raising(error: Exception) -> Callable[[], str]:
-    def lookup() -> str:
-        raise error
-
-    return lookup
-
-
-# Every class ``tzlocal`` can fail with when the system zone is unresolved (PGD-16 AC-4, G6 O1):
-# a registry without a zone key, an unknown name, an unreadable source and a registry value of
-# the wrong type. Each class has its own row, so dropping one from the ``except`` fails a row.
-SYSTEM_ZONE_FAILURES = [
-    pytest.param(_empty_name, id="empty-name"),
-    pytest.param(_not_an_iana_name, id="not-an-iana-name"),
-    pytest.param(_raising(LookupError("no zone key")), id="lookup-error"),
-    pytest.param(_raising(ZoneInfoNotFoundError("no zone")), id="zone-info-not-found"),
-    pytest.param(_raising(ValueError("bad zone")), id="value-error"),
-    pytest.param(_raising(OSError("no zone")), id="os-error"),
-    pytest.param(_raising(AttributeError("no encode")), id="attribute-error"),
-    pytest.param(_raising(TypeError("not a string")), id="type-error"),
-]
-
-
-@pytest.mark.req("AC-4")
-@pytest.mark.parametrize("lookup", SYSTEM_ZONE_FAILURES)
-def test_an_unusable_system_zone_without_tz_gets_the_zone_sentence(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, lookup: Callable[[], str]
+@pytest.mark.req("AC-7")
+def test_a_system_zone_name_zoneinfo_does_not_know_still_gets_the_zone_sentence(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(tz_module.tzlocal, "get_localzone_name", lookup)
+    # Unchanged by PGD-84 (D-124): a name tzlocal reports and zoneinfo does not know is not
+    # "unidentified". Asia/Kolkata is known here, so only this rule keeps the run from going on.
+    monkeypatch.setattr(
+        tz_module.tzlocal, "get_localzone_name", system_zone.reporting(system_zone.NOT_AN_IANA_NAME)
+    )
     monkeypatch.setattr(cli_main, "build_deps", must_not_be_called)
 
     code = cli_main.main(["--start", "2026-01-01", "--end", "2026-01-31"])
@@ -264,17 +235,29 @@ def test_an_unusable_system_zone_without_tz_gets_the_zone_sentence(
     assert (code, captured.err, captured.out) == (2, ZONE_ERROR + "\n", "")
 
 
-@pytest.mark.req("AC-4", "AC-5")
-def test_an_unresolved_system_zone_comes_after_the_date_line(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+@pytest.mark.req("AC-6")
+@pytest.mark.parametrize(
+    ("argv", "line"),
+    [
+        pytest.param(["--start", "x", "--end", "2026-01-31"], START_FORMAT, id="bad-start"),
+        pytest.param(["--start", "2026-03-31", "--end", "2026-01-01"], REVERSED, id="reversed"),
+    ],
+)
+def test_an_unresolved_system_zone_adds_no_zone_line_to_a_date_rejection(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    argv: list[str],
+    line: str,
 ) -> None:
-    monkeypatch.setattr(tz_module.tzlocal, "get_localzone_name", _raising(LookupError("no key")))
+    monkeypatch.setattr(
+        tz_module.tzlocal, "get_localzone_name", system_zone.raising(LookupError("no key"))
+    )
     monkeypatch.setattr(cli_main, "build_deps", must_not_be_called)
 
-    code = cli_main.main(["--start", "x", "--end", "2026-01-31"])
+    code = cli_main.main(argv)
 
     captured = capsys.readouterr()
-    assert (code, captured.err, captured.out) == (2, f"{START_FORMAT}\n{ZONE_ERROR}\n", "")
+    assert (code, captured.err, captured.out) == (2, f"{line}\n", "")
 
 
 @pytest.mark.req("AC-3")
