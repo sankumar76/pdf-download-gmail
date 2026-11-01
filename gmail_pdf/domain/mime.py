@@ -7,7 +7,6 @@ input at all. Walking the part tree, ``message/rfc822`` and naming belong to oth
 
 from __future__ import annotations
 
-import codecs
 import re
 from email.errors import HeaderParseError
 from email.header import decode_header
@@ -19,14 +18,83 @@ PDF_MIME_TYPE = "application/pdf"
 OCTET_STREAM_MIME_TYPE = "application/octet-stream"
 PDF_SUFFIX = ".pdf"
 
+# A name longer than this (``len`` of the string as received) is never decoded: the work is
+# bounded before any pattern or codec runs (PERF-21, PERF-22). The longest legitimate name,
+# 255 characters in 4-byte text as RFC 2047 words, is about 3,730 characters (F0, c.10394).
+MAX_NAME = 4096
+# The only charsets a name is decoded with, in their matching form (see ``_charset_key``). A
+# charset outside this set is never looked up: a lookup of an unseen name costs a failed import
+# and a permanent ``encodings._cache`` entry (PERF-26), and ``punycode`` is quadratic (PERF-21).
+# ``punycode``, ``idna``, ``unicode_escape`` and ``raw_unicode_escape`` must stay out.
+LISTED_CHARSETS = frozenset(
+    {
+        "utf-8",
+        "utf8",
+        "us-ascii",
+        "ascii",
+        "latin1",
+        "latin-1",
+        "iso8859-1",
+        "iso-8859-1",
+        "iso-8859-2",
+        "iso-8859-3",
+        "iso-8859-4",
+        "iso-8859-5",
+        "iso-8859-6",
+        "iso-8859-7",
+        "iso-8859-8",
+        "iso-8859-9",
+        "iso-8859-10",
+        "iso-8859-11",
+        "iso-8859-13",
+        "iso-8859-14",
+        "iso-8859-15",
+        "iso-8859-16",
+        "windows-1250",
+        "windows-1251",
+        "windows-1252",
+        "windows-1253",
+        "windows-1254",
+        "windows-1255",
+        "windows-1256",
+        "windows-1257",
+        "windows-1258",
+        "cp1250",
+        "cp1251",
+        "cp1252",
+        "cp1253",
+        "cp1254",
+        "cp1255",
+        "cp1256",
+        "cp1257",
+        "cp1258",
+        "koi8-r",
+        "koi8-u",
+        "gb2312",
+        "gbk",
+        "gb18030",
+        "big5",
+        "big5-hkscs",
+        "shift-jis",
+        "sjis",
+        "cp932",
+        "euc-jp",
+        "iso-2022-jp",
+        "euc-kr",
+        "ks-c-5601-1987",
+        "iso-2022-kr",
+        "tis-620",
+        "utf-16",
+        "utf-16le",
+        "utf-16be",
+    }
+)
+
 # One RFC 2047 encoded word: =?charset?q-or-b?text?= . Same shape as the one in
 # ``email.header``, but without white space, so a word can be handed to ``decode_header`` alone.
 _ENCODED_WORD = re.compile(r"=\?([^?\s]+)\?[qQbB]\?[^?\s]*\?=")
 # An RFC 2231 value: charset'language'percent-encoded-text (the charset is never empty here).
 _EXTENDED_VALUE = re.compile(r"([^\s'*]+)'[^\s']*'(.*)", re.DOTALL)
-# What can go wrong turning bytes into text: an unknown or non-text charset (LookupError), a
-# NUL or a lone surrogate in the input, a codec that refuses ``errors="replace"`` (ValueError).
-_DECODE_ERRORS = (LookupError, ValueError)
 
 
 def normalise_content_type(value: str) -> str:
@@ -42,8 +110,9 @@ def decode_part_name(name: str) -> str:
     """Decode an RFC 2047 or RFC 2231 encoded file name; never raises, never logs.
 
     Bytes that are invalid in their charset become U+FFFD. A fragment that cannot be decoded
-    (unknown charset, bad base64, unfinished word) is kept exactly as received, and the rest of
-    the name is still decoded. A name with no encoding is returned unchanged.
+    (a charset not in ``LISTED_CHARSETS``, bad base64, unfinished word) is kept exactly as
+    received, and the rest of the name is still decoded. A charset outside the list is never
+    looked up. A name longer than ``MAX_NAME`` characters is returned as received, undecoded.
 
     Args:
         name: A part's ``filename``, possibly holding encoded words or an RFC 2231 value
@@ -53,6 +122,8 @@ def decode_part_name(name: str) -> str:
         The decoded name. White space around an RFC 2231 value is dropped with the value; the
         text of an RFC 2047 name keeps its own white space.
     """
+    if len(name) > MAX_NAME:  # counted as received, before any pattern or codec runs
+        return name
     # Surrounding white space is not part of an RFC 2231 value, so it cannot change the reading.
     extended = _EXTENDED_VALUE.fullmatch(name.strip())
     if extended is not None:
@@ -97,37 +168,54 @@ def _decode_encoded_words(name: str) -> str:
         gap = name[position : match.start()]
         if not (after_word and gap.isspace()):
             pieces.append(gap)
-        pieces.append(_decode_word(match.group()))
+        pieces.append(_decode_word(match))
         position = match.end()
         after_word = True
     pieces.append(name[position:])
     return "".join(pieces)
 
 
-def _decode_word(word: str) -> str:
+def _decode_word(match: re.Match[str]) -> str:
     """Decode one encoded word, or return it as received if it cannot be decoded."""
+    word = match.group()
+    charset = _charset_key(match.group(1))
+    if charset not in LISTED_CHARSETS:  # never reaches ``decode_header`` or a codec lookup
+        return word
     try:
-        ((payload, charset),) = decode_header(word)
+        ((payload, _),) = decode_header(word)
     except HeaderParseError:  # bad base64
         return word
-    # RFC 2231 section 5 allows a language tag after the charset: ``utf-8*en``. The charset is
-    # never None for a word matched above; ``or ""`` only satisfies the type checker.
-    decoded = _decode_bytes(payload, (charset or "").partition("*")[0])
+    decoded = _decode_bytes(payload, charset)
     return word if decoded is None else decoded
 
 
 def _decode_extended(charset: str, escaped: str) -> str | None:
     """Decode the percent-encoded part of an RFC 2231 value; None if that is not possible."""
+    key = _charset_key(charset)
+    if key not in LISTED_CHARSETS:  # never reaches a codec lookup
+        return None
     try:
-        return _decode_bytes(unquote_to_bytes(escaped), charset)
+        return _decode_bytes(unquote_to_bytes(escaped), key)
     except ValueError:  # a lone surrogate cannot be turned into bytes
         return None
 
 
+def _charset_key(charset: str) -> str:
+    """The form in which a charset is matched against ``LISTED_CHARSETS``.
+
+    A language tag after the charset (RFC 2231 section 5: ``utf-8*en``) is removed, the rest is
+    lower-cased and ``_`` is read as ``-``.
+    """
+    return charset.partition("*")[0].lower().replace("_", "-")
+
+
 def _decode_bytes(data: bytes, charset: str) -> str | None:
-    """``data`` decoded with ``charset`` (bad bytes replaced); None if the charset is unusable."""
+    """``data`` decoded with a listed ``charset`` (bad bytes replaced); None if it is missing.
+
+    Every listed name resolves on the supported Pythons; a runtime that lacks a codec (a
+    stripped, frozen build) raises ``LookupError``, and the fragment is then kept as received.
+    """
     try:
-        codecs.lookup(charset)
         return data.decode(charset, errors="replace")
-    except _DECODE_ERRORS:
+    except LookupError:
         return None

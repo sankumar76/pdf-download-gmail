@@ -8,6 +8,11 @@ All names are synthetic.
 from __future__ import annotations
 
 import base64
+import codecs
+import encodings
+import time
+from dataclasses import dataclass, field
+from typing import Any
 
 import pytest
 
@@ -184,6 +189,14 @@ DECODE_ROWS = [
     ("utf-8''plain.pdf", "plain.pdf"),
     ("utf-8''", ""),
     ("utf-8''é.pdf", "é.pdf"),
+    # a charset is matched lower-cased, with ``_`` read as ``-`` and a ``*language`` tag removed
+    ("=?UTF_8?q?a.pdf?=", "a.pdf"),
+    ("=?Utf-8*EN?q?a.pdf?=", "a.pdf"),
+    ("=?ISO_8859_1?q?r=E9sum=E9.pdf?=", "résumé.pdf"),
+    ("=?Windows_1252?q?r=E9.pdf?=", "ré.pdf"),
+    ("UTF_8''a%2Epdf", "a.pdf"),
+    ("ISO_8859_1'en'r%E9sum%E9.pdf", "résumé.pdf"),
+    ("LATIN1''r%E9.pdf", "ré.pdf"),
     # white space around an RFC 2231 value is not part of it (QUA-75, F2)
     (" utf-8''a%2Epdf", "a.pdf"),
     ("utf-8''a%2Epdf ", "a.pdf"),
@@ -308,3 +321,311 @@ def test_an_octet_stream_part_is_judged_on_the_decoded_name(filename: str, expec
 def test_no_name_makes_the_rule_raise(filename: str) -> None:
     assert isinstance(is_pdf_part(part(OCTET, filename)), bool)
     assert isinstance(is_pdf_part(part(PDF, filename)), bool)
+
+
+# ------------------------------------------------------------------ bounds: cap and charset list
+# The 59 charsets the product-owner confirmed (PGD-18 c.10394, F0), in the matching form. The
+# tests pin this exact list: adding a spelling is a product decision, not an edit.
+PO_CHARSETS = (
+    "utf-8",
+    "utf8",
+    "us-ascii",
+    "ascii",
+    "latin1",
+    "latin-1",
+    "iso8859-1",
+    "iso-8859-1",
+    "iso-8859-2",
+    "iso-8859-3",
+    "iso-8859-4",
+    "iso-8859-5",
+    "iso-8859-6",
+    "iso-8859-7",
+    "iso-8859-8",
+    "iso-8859-9",
+    "iso-8859-10",
+    "iso-8859-11",
+    "iso-8859-13",
+    "iso-8859-14",
+    "iso-8859-15",
+    "iso-8859-16",
+    "windows-1250",
+    "windows-1251",
+    "windows-1252",
+    "windows-1253",
+    "windows-1254",
+    "windows-1255",
+    "windows-1256",
+    "windows-1257",
+    "windows-1258",
+    "cp1250",
+    "cp1251",
+    "cp1252",
+    "cp1253",
+    "cp1254",
+    "cp1255",
+    "cp1256",
+    "cp1257",
+    "cp1258",
+    "koi8-r",
+    "koi8-u",
+    "gb2312",
+    "gbk",
+    "gb18030",
+    "big5",
+    "big5-hkscs",
+    "shift-jis",
+    "sjis",
+    "cp932",
+    "euc-jp",
+    "iso-2022-jp",
+    "euc-kr",
+    "ks-c-5601-1987",
+    "iso-2022-kr",
+    "tis-620",
+    "utf-16",
+    "utf-16le",
+    "utf-16be",
+)
+# Codecs that exist in the standard library (or are plausible spellings) but are not listed. The
+# first four must stay out for ever: they are slow (punycode) or turn text into escapes.
+UNLISTED_CHARSETS = (
+    "punycode",
+    "idna",
+    "unicode_escape",
+    "raw_unicode_escape",
+    "unicode-escape",
+    "utf-7",
+    "utf_7",
+    "utf-32",
+    "utf-8-sig",
+    "mbcs",
+    "oem",
+    "cp437",
+    "cp037",
+    "cp949",
+    "cp950",
+    "windows-31j",
+    "windows-874",
+    "x-sjis",
+    "rot13",
+    "base64",
+    "hex",
+    "latin",
+    "l1",
+    "nosuch",
+    "utf-8x",
+    "xutf-8",
+    "a\x00b",
+)
+ENCODINGS_CACHE: dict[str, object] = vars(encodings)["_cache"]
+
+
+@dataclass
+class Calls:
+    """What the spies saw: names given to ``codecs.lookup``, words given to ``decode_header``."""
+
+    lookups: list[str] = field(default_factory=list)
+    words: list[str] = field(default_factory=list)
+
+
+@pytest.fixture
+def calls(monkeypatch: pytest.MonkeyPatch) -> Calls:
+    """Spies on ``codecs.lookup`` and on the ``decode_header`` that ``mime`` uses."""
+    seen = Calls()
+    real_lookup = codecs.lookup
+    real_decode_header = mime.decode_header
+
+    def lookup(name: str) -> codecs.CodecInfo:
+        seen.lookups.append(name)
+        return real_lookup(name)
+
+    def decode_header_spy(value: str) -> list[tuple[Any, Any]]:
+        seen.words.append(value)
+        return real_decode_header(value)
+
+    monkeypatch.setattr(codecs, "lookup", lookup)
+    monkeypatch.setattr(mime, "decode_header", decode_header_spy)
+    return seen
+
+
+def cache_key(charset: str) -> str:
+    """The key ``encodings.search_function`` stores a lookup of ``charset`` under."""
+    return encodings.normalize_encoding(charset)
+
+
+def test_the_charset_list_and_the_cap_are_the_confirmed_values() -> None:
+    assert len(PO_CHARSETS) == len(set(PO_CHARSETS)) == 59
+    assert frozenset(PO_CHARSETS) == mime.LISTED_CHARSETS
+    assert mime.MAX_NAME == 4096
+    assert not mime.LISTED_CHARSETS & {"punycode", "idna", "unicode_escape", "raw_unicode_escape"}
+
+
+@pytest.mark.parametrize("charset", PO_CHARSETS)
+def test_every_listed_charset_resolves_on_this_python(charset: str) -> None:
+    # F0: runs on every CI leg, so the 3.10 and 3.11 legs prove the list there too.
+    assert codecs.lookup(charset).name
+
+
+@pytest.mark.parametrize("charset", PO_CHARSETS)
+def test_a_listed_charset_is_decoded_in_both_forms(charset: str, calls: Calls) -> None:
+    word = f"=?{charset}?q?a?="
+    value = f"{charset}''%41"
+
+    assert decode_part_name(word) != word
+    assert decode_part_name(value) != value
+    assert calls.words == [word]
+
+
+@pytest.mark.parametrize("charset", UNLISTED_CHARSETS)
+def test_an_unlisted_charset_is_never_looked_up_and_stays_as_received(
+    charset: str, calls: Calls, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delitem(ENCODINGS_CACHE, cache_key(charset), raising=False)
+    word = f"=?{charset}?q?abc?="
+    value = f"{charset}''%41%42"
+
+    assert decode_part_name(word) == word
+    assert decode_part_name(value) == value
+    assert is_pdf_part(part(OCTET, word)) is False
+    assert calls.words == []
+    assert calls.lookups == []
+    assert cache_key(charset) not in ENCODINGS_CACHE
+
+
+def test_400_distinct_unlisted_charsets_cause_no_lookup_and_leave_the_codec_cache_alone(
+    calls: Calls,
+) -> None:
+    names = [f"qz{i}x" for i in range(400)]
+    assert not any(cache_key(name) in ENCODINGS_CACHE for name in names)
+    before = dict(ENCODINGS_CACHE)
+
+    for name in names:
+        word = f"=?{name}?q?a?="
+        value = f"{name}''%41"
+        assert decode_part_name(word) == word
+        assert decode_part_name(value) == value
+
+    assert calls.lookups == []
+    assert calls.words == []
+    assert before == ENCODINGS_CACHE
+
+
+def test_a_name_filled_with_distinct_unlisted_charsets_is_left_alone(calls: Calls) -> None:
+    words: list[str] = []
+    size = 0
+    while size + len(word := f"=?qy{len(words)}x?q?a?=") <= mime.MAX_NAME:
+        words.append(word)
+        size += len(word)
+    name = "".join(words)
+    before = dict(ENCODINGS_CACHE)
+
+    assert mime.MAX_NAME - 20 < len(name) <= mime.MAX_NAME  # under the cap, so it is not skipped
+    assert len(words) >= 300
+    assert decode_part_name(name) == name
+    assert calls.lookups == []
+    assert calls.words == []
+    assert before == ENCODINGS_CACHE
+
+
+def test_each_listed_word_reaches_decode_header_once_and_no_codec_lookup_is_made(
+    calls: Calls,
+) -> None:
+    name = "=?utf-8?q?a?= =?LATIN_1?q?b?= =?cp1252*en?q?c?= =?nosuch?q?d?="
+
+    assert decode_part_name(name) == "abc=?nosuch?q?d?="
+    assert calls.words == ["=?utf-8?q?a?=", "=?LATIN_1?q?b?=", "=?cp1252*en?q?c?="]
+    assert calls.lookups == []
+
+
+def _filled(prefix: str, suffix: str, size: int) -> str:
+    return prefix + "a" * (size - len(prefix) - len(suffix)) + suffix
+
+
+def test_a_name_of_exactly_the_cap_is_decoded(calls: Calls) -> None:
+    name = _filled("=?utf-8?q?", "?=", mime.MAX_NAME)
+
+    assert len(name) == mime.MAX_NAME
+    assert decode_part_name(name) == "a" * (mime.MAX_NAME - 12)
+    assert calls.words == [name]
+
+
+def test_a_name_one_over_the_cap_is_returned_as_received(calls: Calls) -> None:
+    name = _filled("=?utf-8?q?", "?=", mime.MAX_NAME + 1)
+
+    assert decode_part_name(name) == name
+    assert calls.words == []
+
+
+def test_the_cap_counts_the_name_as_received_before_white_space_is_stripped() -> None:
+    padded = _filled("=?utf-8?q?", "?= ", mime.MAX_NAME + 1)
+    value = _filled("utf-8''", " ", mime.MAX_NAME + 1)
+
+    assert decode_part_name(padded) == padded
+    assert decode_part_name(value) == value
+
+
+def test_nothing_runs_on_a_name_over_the_cap(calls: Calls, monkeypatch: pytest.MonkeyPatch) -> None:
+    class Forbidden:
+        def __getattr__(self, name: str) -> None:
+            raise AssertionError(f"a pattern was used on a name over the cap: {name}")
+
+    monkeypatch.setattr(mime, "_ENCODED_WORD", Forbidden())
+    monkeypatch.setattr(mime, "_EXTENDED_VALUE", Forbidden())
+    big = mime.MAX_NAME + 1
+
+    for name in (_filled("=?utf-8?q?", "?=", big), _filled("utf-8''", "", big), "=?a?q?" * big):
+        assert decode_part_name(name) == name
+    assert calls.words == []
+    assert calls.lookups == []
+
+
+@pytest.mark.parametrize(
+    ("filename", "expected"),
+    [
+        pytest.param("a" * 5_000 + ".pdf", True, id="plain name over the cap, .pdf"),
+        pytest.param("a" * 5_000 + ".exe", False, id="plain name over the cap, .exe"),
+        pytest.param(" " * 5_000 + "a.pdf", True, id="white space then .pdf over the cap"),
+        pytest.param(_filled("=?utf-8?q?", ".pdf?=", 5_000), False, id="encoded name over the cap"),
+        pytest.param(_filled("utf-8''", "%2Epdf", 5_000), False, id="rfc 2231 name over the cap"),
+        pytest.param(_filled("utf-8''", ".pdf", 5_000), True, id="rfc 2231 plain end over the cap"),
+        pytest.param(_filled("=?utf-8?q?", ".pdf?=", 100), True, id="encoded name under the cap"),
+    ],
+)
+def test_a_name_over_the_cap_takes_the_ordinary_test_on_the_text_as_received(
+    filename: str, expected: bool
+) -> None:
+    assert is_pdf_part(part(OCTET, filename)) is expected
+
+
+# ------------------------------------------------------------------ time: perf marker only
+def _every_listed_charset_in_one_name() -> str:
+    words: list[str] = []
+    while sum(map(len, words)) < mime.MAX_NAME - 40:
+        charset = PO_CHARSETS[len(words) % len(PO_CHARSETS)]
+        words.append(f"=?{charset}?q?a?=")
+    return "".join(words)
+
+
+HOSTILE_NAMES = {
+    "listed charsets cycled, at the cap": _every_listed_charset_in_one_name,
+    "punycode, 1 MB": lambda: "punycode''" + "a" * 1_000_000,
+    "unfinished words, 1 MB": lambda: "=?x?q?a?=" * 110_000,
+    "base64 words, 1 MB": lambda: "=?utf-8?b?QQ==?=" * 60_000,
+    "plain, 1 MB": lambda: "a" * 1_000_000 + ".pdf",
+}
+
+
+@pytest.mark.perf
+@pytest.mark.parametrize("shape", list(HOSTILE_NAMES))
+def test_a_hostile_name_is_judged_well_inside_the_per_message_budget(shape: str) -> None:
+    # NFR-003 gives 50 ms per message; 0.25 s is five times that, to stay clear of CI noise. The
+    # first call warms the codec imports (a cost paid once per process); counts, not time, are
+    # what the rest of the suite pins.
+    name = HOSTILE_NAMES[shape]()
+    is_pdf_part(part(OCTET, name))
+
+    started = time.perf_counter()
+    is_pdf_part(part(OCTET, name))
+
+    assert time.perf_counter() - started < 0.25
