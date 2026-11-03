@@ -197,6 +197,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     redaction.install_logging_redaction()
     redaction.install_excepthooks()
+    console.install_shutdown_flush_guard()
     _keep_retry_records_off_stderr()
     try:
         return _run(argv)
